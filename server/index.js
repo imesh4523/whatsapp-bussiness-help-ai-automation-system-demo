@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import Stripe from 'stripe';
 import db from './db.js';
 import { 
   startWhatsAppSocket, 
@@ -15,6 +16,8 @@ import {
 } from './wa-manager.js';
 
 dotenv.config();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_stripe_key_whatsray_123456');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -569,7 +572,54 @@ app.post('/api/ai-config', authenticateToken, async (req, res) => {
   }
 });
 
+// ── Audit Logging Helper & Endpoint ─────────────────────────────────────────
+async function logAuditEvent(action, details) {
+  try {
+    await db.query(
+      'INSERT INTO audit_logs (action, details) VALUES ($1, $2)',
+      [action, details]
+    );
+    console.log(`[AUDIT] ${action}: ${details}`);
+  } catch (err) {
+    console.error('Audit logging failed:', err.message);
+  }
+}
+
+app.get('/api/admin/audit-logs', async (req, res) => {
+  try {
+    const r = await db.query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100');
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── System Admin Portal API (Requires admin auth header validation) ──────────
+app.get('/api/admin/system-settings', async (req, res) => {
+  try {
+    const keyQuery = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
+    const apiKey = keyQuery.rows.length > 0 ? keyQuery.rows[0].value : '';
+    res.json({ geminiApiKey: apiKey });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/system-settings', async (req, res) => {
+  const { geminiApiKey } = req.body;
+  try {
+    await db.query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('gemini_api_key', $1)
+      ON CONFLICT (key) DO UPDATE SET value = $1
+    `, [geminiApiKey]);
+    await logAuditEvent('Gemini API Key Updated', 'Admin updated global Gemini API Key');
+    res.json({ success: true, message: 'System settings updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Simple validation since this is the dedicated dashboard
 app.get('/api/admin/overview', async (req, res) => {
   try {
@@ -602,11 +652,13 @@ app.get('/api/admin/users', async (req, res) => {
 app.post('/api/admin/users/:id/toggle-status', async (req, res) => {
   const { id } = req.params;
   try {
-    const userRes = await db.query('SELECT status FROM users WHERE id = $1', [id]);
+    const userRes = await db.query('SELECT status, email FROM users WHERE id = $1', [id]);
     if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     
     const nextStatus = userRes.rows[0].status === 'Active' ? 'Suspended' : 'Active';
+    const email = userRes.rows[0].email;
     await db.query('UPDATE users SET status = $1 WHERE id = $2', [nextStatus, id]);
+    await logAuditEvent('User Status Changed', `User status for ${email} (ID ${id}) toggled to ${nextStatus}`);
     
     res.json({ success: true, nextStatus });
   } catch (err) {
@@ -631,7 +683,165 @@ app.post('/api/admin/sessions/:id/terminate', async (req, res) => {
   const { id } = req.params;
   try {
     await disconnectWhatsAppSession(id);
+    await logAuditEvent('WhatsApp Session Terminated', `Terminated session for ID: ${id}`);
     res.json({ success: true, message: 'Session terminated' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Stripe Payments Endpoints ────────────────────────────────────────────────
+app.post('/api/payments/create-checkout-session', authenticateToken, async (req, res) => {
+  const { plan } = req.body;
+  if (!['Premium', 'Enterprise'].includes(plan)) {
+    return res.status(400).json({ error: 'Invalid plan value' });
+  }
+
+  const priceLkr = plan === 'Premium' ? 4990.00 : 12990.00;
+
+  try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      // Mock Stripe mode fallback for testing
+      const mockSessionId = 'cs_test_' + Math.random().toString(36).substring(2, 15);
+      await db.query(
+        `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+         VALUES ($1, $2, $3, 'LKR', $4, 'Pending')`,
+        [req.user.id, mockSessionId, priceLkr, plan]
+      );
+      return res.json({ url: `http://localhost:5173/user/subscription/index?session_id=${mockSessionId}&mock=true` });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'lkr',
+          product_data: {
+            name: `WhatsRay ${plan} Plan`,
+            description: `Access to ${plan === 'Premium' ? '3' : '10'} WhatsApp Sessions, advanced automations, and custom prompts.`,
+          },
+          unit_amount: plan === 'Premium' ? 499000 : 1299000,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `http://localhost:5173/user/subscription/index?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `http://localhost:5173/user/subscription/index?cancelled=true`,
+      client_reference_id: req.user.id.toString(),
+      metadata: {
+        plan: plan,
+        userId: req.user.id.toString()
+      }
+    });
+
+    // Log the transaction
+    await db.query(
+      `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+       VALUES ($1, $2, $3, 'LKR', $4, 'Pending')`,
+      [req.user.id, session.id, priceLkr, plan]
+    );
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Stripe session creation error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/confirm-session', authenticateToken, async (req, res) => {
+  const { sessionId } = req.body;
+  try {
+    const trans = await db.query('SELECT * FROM transactions WHERE stripe_session_id = $1', [sessionId]);
+    if (trans.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const transaction = trans.rows[0];
+    if (transaction.status === 'Pending') {
+      // Upgrade user plan and complete transaction in DB
+      await db.query("UPDATE transactions SET status = 'Completed' WHERE stripe_session_id = $1", [sessionId]);
+      await db.query('UPDATE users SET plan = $1 WHERE id = $2', [transaction.plan, req.user.id]);
+      
+      const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [req.user.id]);
+      return res.json({ success: true, plan: transaction.plan, user: userRes.rows[0] });
+    }
+    
+    res.json({ success: true, plan: transaction.plan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event = req.body;
+
+  try {
+    if (process.env.STRIPE_WEBHOOK_SECRET && sig) {
+      try {
+        event = stripe.webhooks.constructEvent(req.rawBody || JSON.stringify(req.body), sig, process.env.STRIPE_WEBHOOK_SECRET);
+      } catch (err) {
+        console.warn('Stripe webhook verification failed, using payload directly:', err.message);
+      }
+    }
+  } catch (err) {
+    console.error('Webhook error:', err.message);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const userId = session.client_reference_id || session.metadata?.userId;
+    const plan = session.metadata?.plan;
+    const stripeId = session.id;
+    const amount = session.amount_total ? (session.amount_total / 100) : 0;
+    const currency = session.currency ? session.currency.toUpperCase() : 'LKR';
+
+    if (userId && plan) {
+      try {
+        await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, userId]);
+        await db.query(`
+          INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+          VALUES ($1, $2, $3, $4, $5, 'Completed')
+          ON CONFLICT (stripe_session_id) DO UPDATE SET status = 'Completed'
+        `, [userId, stripeId, amount, currency, plan]);
+        await logAuditEvent('Stripe Plan Purchase', `User ID ${userId} upgraded to ${plan} via Stripe session ${stripeId} (Amount: ${currency} ${amount})`);
+        console.log(`Plan upgraded for user ${userId} to ${plan} via Stripe webhook.`);
+      } catch (dbErr) {
+        console.error('Database update failed in stripe webhook:', dbErr.message);
+      }
+    }
+  }
+
+  res.json({ received: true });
+});
+
+// ── Admin Billing & Users Endpoints ──────────────────────────────────────────
+app.get('/api/admin/transactions', async (req, res) => {
+  try {
+    const r = await db.query(`
+      SELECT t.*, u.full_name as user_name, u.email as user_email 
+      FROM transactions t
+      LEFT JOIN users u ON t.user_id = u.id
+      ORDER BY t.created_at DESC
+    `);
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users/:id/plan', async (req, res) => {
+  const { id } = req.params;
+  const { plan } = req.body;
+  if (!['Free', 'Premium', 'Enterprise'].includes(plan)) {
+    return res.status(400).json({ error: 'Invalid plan' });
+  }
+  try {
+    const userRes = await db.query('SELECT email FROM users WHERE id = $1', [id]);
+    const email = userRes.rows.length > 0 ? userRes.rows[0].email : `ID ${id}`;
+    await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, id]);
+    await logAuditEvent('User Plan Overridden', `Admin manually updated User ${email} (ID ${id}) plan to ${plan}`);
+    res.json({ success: true, message: `User plan upgraded to ${plan}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

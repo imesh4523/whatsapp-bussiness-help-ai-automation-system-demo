@@ -44,8 +44,18 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
     console.warn('Failed to fetch user-specific AI config from db, using default config:', dbErr.message);
   }
 
-  // 2. Fetch API Key
-  const apiKey = process.env.GEMINI_API_KEY;
+  // 2. Fetch API Key (check process.env first, fallback to system_settings in DB)
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    try {
+      const dbKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
+      if (dbKeyRes.rows.length > 0 && dbKeyRes.rows[0].value) {
+        apiKey = dbKeyRes.rows[0].value;
+      }
+    } catch (dbKeyErr) {
+      console.warn('Failed to fetch global GEMINI_API_KEY from database system_settings:', dbKeyErr.message);
+    }
+  }
 
   if (!apiKey) {
     console.log('GEMINI_API_KEY is not defined. Simulating human-like response...');
@@ -138,27 +148,43 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
  * Highly realistic fallback responses simulating a help-automation assistant
  */
 function getMockAIResponse(prompt) {
-  const normalized = prompt.toLowerCase();
+  const normalized = prompt.toLowerCase().trim();
   
   if (normalized.includes('hello') || normalized.includes('hi') || normalized.includes('hey')) {
-    return "Hi there! Welcome to WhatsRay Customer Support. How can I help you today? 😊";
+    return "Hi there! Welcome to our store. How can I help you today? 😊";
   }
   
-  if (normalized.includes('price') || normalized.includes('cost') || normalized.includes('how much')) {
-    return "Our linen and silk clothing items range from Rs. 7,500 to Rs. 18,500. We currently have a 10% discount on summer collections! You can check our storefront catalog on wpp.raybeamdigital.com. 👗";
+  if (normalized.includes('price') || normalized.includes('cost') || normalized.includes('how much') || normalized.includes('rate') || normalized.includes('value')) {
+    return "Our premium linen and silk clothing items range from Rs. 7,500 to Rs. 18,500. We currently have a 10% discount on summer collections! You can check our storefront catalog on wpp.raybeamdigital.com. 👗";
   }
   
-  if (normalized.includes('shipping') || normalized.includes('delivery') || normalized.includes('track')) {
+  if (normalized.includes('shipping') || normalized.includes('delivery') || normalized.includes('track') || normalized.includes('deliver') || normalized.includes('where is my')) {
     return "We offer islandwide delivery within Sri Lanka! Standard delivery takes 2-4 business days. Delivery is free for orders over Rs. 10,000. Let me know if you would like me to check a specific order status for you! 🚚";
   }
 
-  if (normalized.includes('payment') || normalized.includes('pay') || normalized.includes('cod')) {
+  if (normalized.includes('payment') || normalized.includes('pay') || normalized.includes('cod') || normalized.includes('bank transfer')) {
     return "We support Bank Transfers, Visa/Mastercard payments, and Cash on Delivery (COD) for all major cities. 💳";
   }
   
-  if (normalized.includes('contact') || normalized.includes('human') || normalized.includes('agent') || normalized.includes('call')) {
+  if (normalized.includes('contact') || normalized.includes('human') || normalized.includes('agent') || normalized.includes('call') || normalized.includes('talk to a')) {
     return "Sure! I can transfer you to our live agent. One of our staff members will message you shortly. Thank you for your patience! 🤝";
   }
 
-  return "Thank you for reaching out! I've logged your query. Our team is checking this, and we will get back to you shortly. Feel free to ask any other questions in the meantime!";
+  if (normalized.includes('discount') || normalized.includes('offer') || normalized.includes('promo') || normalized.includes('coupon')) {
+    return "Yes! We currently have a 10% off promotional discount code for summer wear. Use the code SUMMER10 at checkout! 🏷️";
+  }
+
+  if (normalized.includes('order') || normalized.includes('buy') || normalized.includes('purchase')) {
+    return "You can easily place an order through our online catalog! Just select your items, choose size/color, fill out shipping details, and pay securely. Let me know if you need help with your checkout. 🛍️";
+  }
+
+  if (normalized.includes('location') || normalized.includes('address') || normalized.includes('where are you') || normalized.includes('shop') || normalized.includes('store')) {
+    return "We are based online in Colombo, Sri Lanka! We ship orders islandwide. We do not have a physical walk-in store at the moment, but our online sizing guide is extremely accurate. 📍";
+  }
+
+  if (normalized.includes('return') || normalized.includes('exchange') || normalized.includes('refund') || normalized.includes('size change')) {
+    return "We accept returns and exchanges within 7 days of delivery, provided the tags are intact and items are unworn. Please contact our support team to initiate an exchange! 🔄";
+  }
+
+  return `I understand you're asking about "${prompt}". A support agent is currently checking this for you and will get back to you shortly. In the meantime, feel free to ask about our clothing prices, shipping options, or payment methods!`;
 }

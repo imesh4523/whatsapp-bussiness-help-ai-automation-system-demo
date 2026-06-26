@@ -15,6 +15,36 @@ async function init() {
 
     // Run the SQL schema
     await db.query(schemaSql);
+    
+    // Schema Migrations: add columns if they do not exist
+    console.log('Running schema migrations...');
+    await db.query(`
+      ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS api_key TEXT DEFAULT NULL;
+      
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(255) PRIMARY KEY,
+        value TEXT
+      );
+      
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        stripe_session_id VARCHAR(255) UNIQUE,
+        amount NUMERIC(10,2) NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        plan VARCHAR(50) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        action VARCHAR(255) NOT NULL,
+        details TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
     console.log('Database tables verified/created successfully.');
 
     // Seed default users if they do not exist

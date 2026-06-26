@@ -12,7 +12,9 @@ import {
   Save,
   CheckCircle,
   AlertTriangle,
-  Database
+  Database,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -40,6 +42,11 @@ function AdminDashboard({ admin, onLogout }) {
   });
 
   const [isSaved, setIsSaved] = useState(false);
+
+  const [transactionsList, setTransactionsList] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [isApiKeySaved, setIsApiKeySaved] = useState(false);
 
   // Poll system details and load from DB
   useEffect(() => {
@@ -96,6 +103,66 @@ function AdminDashboard({ admin, onLogout }) {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch lists on active tab changes
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      fetch(`${API_BASE_URL}/admin/transactions`)
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setTransactionsList(data); })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'audit-logs') {
+      fetch(`${API_BASE_URL}/admin/audit-logs`)
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setAuditLogs(data); })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'ai-config') {
+      fetch(`${API_BASE_URL}/admin/system-settings`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.geminiApiKey !== undefined) {
+            setGeminiApiKey(data.geminiApiKey);
+          }
+        })
+        .catch(err => console.warn(err));
+    }
+  }, [activeTab]);
+
+  const handleSaveGeminiKey = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/system-settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ geminiApiKey })
+      });
+      if (res.ok) {
+        setIsApiKeySaved(true);
+        setTimeout(() => setIsApiKeySaved(false), 2000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdatePlan = async (userId, newPlan) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/plan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ plan: newPlan })
+      });
+      if (res.ok) {
+        setUsersList(prev => prev.map(u => u.id === userId ? { ...u, plan: newPlan } : u));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const toggleUserStatus = async (userId) => {
     try {
@@ -203,6 +270,20 @@ function AdminDashboard({ admin, onLogout }) {
             >
               <Cpu className="w-4 h-4" />
               Global AI Config
+            </button>
+            <button 
+              onClick={() => setActiveTab('transactions')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'transactions' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+            >
+              <CreditCard className="w-4 h-4" />
+              Billing & Payments
+            </button>
+            <button 
+              onClick={() => setActiveTab('audit-logs')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'audit-logs' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+            >
+              <FileText className="w-4 h-4" />
+              System Audit Logs
             </button>
           </nav>
         </div>
@@ -380,13 +461,18 @@ function AdminDashboard({ admin, onLogout }) {
                         <td className="py-4 font-bold text-neutral-800">{u.name}</td>
                         <td className="py-4 text-neutral-500">{u.email}</td>
                         <td className="py-4">
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                            u.plan === 'Enterprise' ? 'bg-purple-50 text-purple-600' :
-                            u.plan === 'Premium' ? 'bg-[#00832e]/10 text-[#00832e]' : 'bg-gray-100 text-gray-500'
-                          }`}>{u.plan}</span>
+                          <select
+                            value={u.plan}
+                            onChange={(e) => handleUpdatePlan(u.id, e.target.value)}
+                            className="bg-[#f4f6f8] px-2.5 py-1.5 rounded-xl text-xs font-bold text-neutral-800 border border-gray-200 focus:outline-none"
+                          >
+                            <option value="Free">Free</option>
+                            <option value="Premium">Premium</option>
+                            <option value="Enterprise">Enterprise</option>
+                          </select>
                         </td>
                         <td className="py-4 text-center font-bold text-neutral-800">{u.sessions}</td>
-                        <td className="py-4 text-neutral-500">{u.joined}</td>
+                        <td className="py-4 text-neutral-500">{new Date(u.joined).toLocaleDateString()}</td>
                         <td className="py-4">
                           <span className={`flex items-center gap-1.5 text-xs font-bold ${u.status === 'Active' ? 'text-[#00832e]' : 'text-red-500'}`}>
                             <span className={`w-2 h-2 rounded-full ${u.status === 'Active' ? 'bg-[#00832e]' : 'bg-red-500'}`}></span>
@@ -556,6 +642,32 @@ function AdminDashboard({ admin, onLogout }) {
               <div className="space-y-6">
                 <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
                   <div className="flex items-center gap-2 text-neutral-800">
+                    <Shield className="w-5 h-5 text-[#00832e]" />
+                    <h4 className="text-sm font-black uppercase tracking-wider">Global Gemini API Key</h4>
+                  </div>
+                  <p className="text-xs text-gray-500 font-light leading-relaxed">
+                    Set the global Gemini API Key used by all user bots across the platform. Regular users cannot see or edit this key.
+                  </p>
+                  <form onSubmit={handleSaveGeminiKey} className="space-y-3 pt-2">
+                    <input 
+                      type="password"
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none"
+                    />
+                    <button 
+                      type="submit"
+                      className="w-full bg-black text-white hover:bg-neutral-800 transition-all py-2.5 rounded-xl text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2"
+                    >
+                      {isApiKeySaved ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Save className="w-4 h-4" />}
+                      {isApiKeySaved ? 'Saved API Key!' : 'Save API Key'}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 text-neutral-800">
                     <Cpu className="w-5 h-5 text-[#00832e]" />
                     <h4 className="text-sm font-bold uppercase tracking-wider">Prompt Injector Model</h4>
                   </div>
@@ -573,6 +685,105 @@ function AdminDashboard({ admin, onLogout }) {
                     Overwriting global configurations will refresh the system prompt mapping for all uncustomized user bots on their next incoming webhook message. Please verify parameter syntax.
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. BILLING & TRANSACTIONS VIEW */}
+          {activeTab === 'transactions' && (
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Billing History Logs</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-neutral-400 text-xs font-bold uppercase tracking-widest">
+                      <th className="py-4">Transaction ID</th>
+                      <th className="py-4">User</th>
+                      <th className="py-4">Email</th>
+                      <th className="py-4">Stripe Session ID</th>
+                      <th className="py-4">Plan upgraded</th>
+                      <th className="py-4">Amount</th>
+                      <th className="py-4">Status</th>
+                      <th className="py-4">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactionsList.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="py-8 text-center text-gray-400 font-light">No billing records found.</td>
+                      </tr>
+                    ) : (
+                      transactionsList.map(tx => (
+                        <tr key={tx.id} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
+                          <td className="py-4 font-bold text-neutral-800">#{tx.id}</td>
+                          <td className="py-4 font-bold text-neutral-800">{tx.user_name || 'N/A'}</td>
+                          <td className="py-4 text-neutral-500">{tx.user_email || 'N/A'}</td>
+                          <td className="py-4 font-mono text-xs text-neutral-400">{tx.stripe_session_id}</td>
+                          <td className="py-4">
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-[#00832e]">
+                              {tx.plan}
+                            </span>
+                          </td>
+                          <td className="py-4 font-mono text-neutral-800 font-bold">
+                            රු {parseFloat(tx.amount).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              tx.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                            }`}>{tx.status}</span>
+                          </td>
+                          <td className="py-4 text-neutral-500">
+                            {new Date(tx.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 6. SYSTEM AUDIT LOGS VIEW */}
+          {activeTab === 'audit-logs' && (
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+              <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Administrative Audit Trails</h3>
+                <span className="text-[10px] bg-red-50 text-red-500 font-black uppercase px-2.5 py-1 rounded-full">Secure Log Stream</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-neutral-400 text-xs font-bold uppercase tracking-widest">
+                      <th className="py-4">Log ID</th>
+                      <th className="py-4">Action Event</th>
+                      <th className="py-4">Description details</th>
+                      <th className="py-4">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="py-8 text-center text-gray-400 font-light">No audit log records stream is currently active.</td>
+                      </tr>
+                    ) : (
+                      auditLogs.map(log => (
+                        <tr key={log.id} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
+                          <td className="py-4 font-mono text-xs text-neutral-400">#{log.id}</td>
+                          <td className="py-4 font-bold text-neutral-800">
+                            <span className="px-2.5 py-1 rounded-lg text-xs bg-gray-100 text-neutral-800 font-bold uppercase tracking-wider">
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="py-4 text-neutral-600 font-light">{log.details}</td>
+                          <td className="py-4 text-neutral-500 text-xs font-mono">
+                            {new Date(log.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

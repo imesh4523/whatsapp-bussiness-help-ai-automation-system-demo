@@ -349,6 +349,470 @@ const getMockPage = (tabKey) => {
   };
 };
 
+// ── WhatsApp AI Bot Manager Component ───────────────────────────────────────
+function WhatsAppAIBotManager({ user }) {
+  const [loading, setLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [config, setConfig] = useState({
+    defaultModel: 'Gemini 1.5 Pro',
+    systemPrompt: '',
+    temperature: 0.6,
+    typingDelay: 150,
+    globalAIActive: true
+  });
+
+  const [sandboxMessages, setSandboxMessages] = useState([]);
+  const [newSandboxText, setNewSandboxText] = useState('');
+  const [simulating, setSimulating] = useState(false);
+
+  const fetchAIConfig = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/ai-config`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConfig(data);
+      }
+    } catch (err) {
+      console.error('Failed to load AI config:', err);
+    }
+  };
+
+  const fetchSandboxHistory = async () => {
+    const sandboxChatId = `user_${user.id}_sandbox_user`;
+    try {
+      const res = await fetch(`${API_BASE_URL}/whatsapp/messages/${sandboxChatId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSandboxMessages(data);
+      }
+    } catch (err) {
+      // Sandbox chat JID may not exist yet in DB - ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchAIConfig();
+    fetchSandboxHistory();
+    // Poll sandbox messages to catch automated AI responses
+    const interval = setInterval(fetchSandboxHistory, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSaveConfig = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/ai-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify(config)
+      });
+      if (res.ok) {
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendSandbox = async (e) => {
+    e.preventDefault();
+    if (!newSandboxText.trim()) return;
+
+    const userText = newSandboxText;
+    setNewSandboxText('');
+    setSimulating(true);
+
+    try {
+      // 1. Simulate incoming message from sandbox client
+      await fetch(`${API_BASE_URL}/whatsapp/simulate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ message: userText, customerPhone: 'sandbox_user' })
+      });
+      
+      // Instantly load sandbox history
+      await fetchSandboxHistory();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  return (
+    <div className="dashboard-container">
+      <div className="container-top">
+        <div className="container-top__left">
+          <h5 className="container-top__title">WhatsApp AI Bot Settings</h5>
+          <p className="container-top__desc">Configure automated conversational assistants for customer queries.</p>
+        </div>
+      </div>
+
+      <div className="row gy-4 mt-2">
+        {/* Left Side: Configuration Panel */}
+        <div className="col-lg-8">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+            <form onSubmit={handleSaveConfig} className="space-y-4">
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="label-two required form--label text-xs font-bold uppercase tracking-wider text-gray-400">Default Model</label>
+                  <select 
+                    value={config.defaultModel}
+                    onChange={(e) => setConfig(prev => ({ ...prev, defaultModel: e.target.value }))}
+                    className="form--control form-two w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-black focus:outline-none"
+                  >
+                    <option>Gemini 1.5 Pro</option>
+                    <option>Gemini 1.5 Flash</option>
+                  </select>
+                </div>
+
+                <div className="col-md-6">
+                  <label className="label-two required form--label text-xs font-bold uppercase tracking-wider text-gray-400">Typing Speed Delay (ms/word)</label>
+                  <input 
+                    type="number"
+                    value={config.typingDelay}
+                    onChange={(e) => setConfig(prev => ({ ...prev, typingDelay: parseInt(e.target.value, 10) }))}
+                    className="form--control form-two w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-black focus:outline-none"
+                    min="50"
+                    max="1000"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label-two required form--label text-xs font-bold uppercase tracking-wider text-gray-400">Model Temperature</label>
+                <div className="d-flex align-items-center gap-3">
+                  <input 
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.1"
+                    value={config.temperature}
+                    onChange={(e) => setConfig(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                    className="w-full accent-black cursor-pointer"
+                  />
+                  <span className="font-mono text-xs border px-3 py-1.5 rounded-lg bg-gray-50">{config.temperature}</span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="label-two required form--label text-xs font-bold uppercase tracking-wider text-gray-400">AI Persona & System Prompt</label>
+                <textarea 
+                  rows="6"
+                  value={config.systemPrompt}
+                  onChange={(e) => setConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                  className="form--control form-two w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-black focus:outline-none text-sm font-light leading-relaxed"
+                  placeholder="Instruct the AI on its character, business rules, catalog details, shipping, and refund guidelines..."
+                />
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input 
+                    type="checkbox"
+                    checked={config.globalAIActive}
+                    onChange={(e) => setConfig(prev => ({ ...prev, globalAIActive: e.target.checked }))}
+                    id="globalAIActive"
+                    className="w-4 h-4 accent-black rounded border-gray-200"
+                  />
+                  <label htmlFor="globalAIActive" className="text-xs font-bold uppercase tracking-wider text-gray-600 cursor-pointer mb-0">Activate Auto-Responder globally</label>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={loading}
+                  className="btn btn--base py-3 px-5 flex items-center gap-2"
+                  style={{ background: '#0a938a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                >
+                  <i className="las la-save"></i> {isSaved ? 'Saved!' : 'Save Config'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* Right Side: Chat Sandbox Simulator */}
+        <div className="col-lg-4">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col h-[500px]" style={{ display: 'flex', flexDirection: 'column', height: '500px' }}>
+            <div className="p-4 border-b bg-[#f8fafc]/50 flex justify-between items-center rounded-t-3xl" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-700">AI Chat Sandbox</span>
+              </div>
+              <button 
+                onClick={() => setSandboxMessages([])}
+                className="text-[10px] uppercase font-bold tracking-widest text-red-500 hover:text-red-600 border-none bg-transparent"
+              >
+                Clear
+              </button>
+            </div>
+
+            {/* Sandbox Messages Log */}
+            <div className="flex-grow p-4 space-y-3 bg-[#f8fafc] overflow-y-auto" style={{ flexGrow: 1, overflowY: 'auto' }}>
+              {sandboxMessages.length === 0 ? (
+                <div className="h-full flex flex-col justify-center items-center text-center p-6 space-y-2" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <span className="text-3xl" style={{ fontSize: '32px' }}>🤖</span>
+                  <h6 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Test Your AI Persona</h6>
+                  <p className="text-[11px] text-gray-400 font-light leading-relaxed max-w-xs" style={{ fontSize: '11px', lineHeight: '1.5' }}>
+                    Type any message (e.g. "pricing", "delivery", or "hello") to test the custom prompt instructions and simulated responses.
+                  </p>
+                </div>
+              ) : (
+                sandboxMessages.map((msg, i) => (
+                  <div 
+                    key={msg.id || i}
+                    className={`d-flex ${msg.sender === 'customer' ? 'justify-content-end' : 'justify-content-start'}`}
+                    style={{ display: 'flex', justifyContent: msg.sender === 'customer' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}
+                  >
+                    <div className={`max-w-[75%] p-3 rounded-2xl text-xs leading-relaxed ${
+                      msg.sender === 'customer' 
+                        ? 'bg-dark text-white rounded-tr-none' 
+                        : 'bg-white border border-gray-200 text-neutral-700 rounded-tl-none shadow-sm'
+                    }`} style={{ maxWidth: '75%', borderRadius: '16px', padding: '12px', fontSize: '12px' }}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))
+              )}
+              {simulating && (
+                <div className="d-flex justify-content-start" style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div className="bg-white border border-gray-200 px-3 py-2 rounded-2xl rounded-tl-none text-xs text-gray-400 italic">
+                    Bot is typing...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Sandbox Input */}
+            <form onSubmit={handleSendSandbox} className="p-3 border-t bg-white flex gap-2 rounded-b-3xl" style={{ display: 'flex', gap: '8px' }}>
+              <input 
+                type="text"
+                value={newSandboxText}
+                onChange={(e) => setNewSandboxText(e.target.value)}
+                placeholder="Send message to bot..."
+                className="w-full px-4 py-2 text-xs border border-gray-200 rounded-xl focus:border-black focus:outline-none"
+                style={{ fontSize: '12px', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', flexGrow: 1 }}
+              />
+              <button 
+                type="submit"
+                className="px-3 bg-dark text-white hover:bg-neutral-800 rounded-xl text-xs font-bold uppercase tracking-wider"
+                style={{ fontSize: '11px', background: '#1d1d1f', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px' }}
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── WhatsApp Subscription Manager Component ─────────────────────────────────
+function WhatsAppSubscriptionManager({ user }) {
+  const [currentUser, setCurrentUser] = useState(user);
+  const [loadingPlan, setLoadingPlan] = useState(null);
+
+  useEffect(() => {
+    // Check if redirecting from Stripe Checkout success
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    
+    if (sessionId) {
+      const confirmSession = async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/payments/confirm-session`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+            },
+            body: JSON.stringify({ sessionId })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.user) {
+              setCurrentUser(data.user);
+              // Save updated user to localStorage
+              localStorage.setItem('aura_user', JSON.stringify(data.user));
+              // Clear search params
+              window.history.replaceState(null, '', '/user/subscription/index');
+              alert(`Congratulations! Your account has been upgraded to ${data.plan} plan successfully! 🎉`);
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      confirmSession();
+    }
+  }, []);
+
+  const handleUpgrade = async (plan) => {
+    setLoadingPlan(plan);
+    try {
+      const res = await fetch(`${API_BASE_URL}/payments/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ plan })
+      });
+      if (!res.ok) throw new Error('Payment session initiation failed.');
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const isPlanActive = (planName) => {
+    return currentUser.plan === planName;
+  };
+
+  return (
+    <div className="dashboard-container">
+      <div className="container-top">
+        <div className="container-top__left">
+          <h5 className="container-top__title">Manage Subscription</h5>
+          <p className="container-top__desc">Upgrade or renew your account status and unlock premium capabilities.</p>
+        </div>
+      </div>
+
+      {/* Subscription Status Header */}
+      <div className="bg-[#f0f9ff] border border-blue-100 p-6 rounded-3xl mt-4 flex items-center justify-between flex-wrap gap-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0f9ff', border: '1px solid #e0f2fe', borderRadius: '16px', padding: '24px' }}>
+        <div>
+          <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest" style={{ fontSize: '10px', color: '#0284c7' }}>Active Plan</span>
+          <h3 className="text-xl font-black text-blue-900 mt-1" style={{ fontSize: '20px', fontWeight: 'bold', color: '#0c4a6e' }}>{currentUser.plan} Plan</h3>
+          <p className="text-xs text-blue-600/70 font-light mt-1" style={{ fontSize: '12px', color: '#0284c7' }}>Renewal: 4 weeks from now (auto-renewal via invoice billing)</p>
+        </div>
+        <div className="bg-blue-200/50 text-blue-800 px-4 py-2 rounded-2xl text-xs font-bold" style={{ background: '#bae6fd', color: '#0369a1', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 'bold' }}>
+          ⚡ Status: Active
+        </div>
+      </div>
+
+      {/* Tier Pricing Cards */}
+      <div className="row gy-4 mt-2">
+        {/* Free Plan */}
+        <div className="col-md-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-100" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '380px' }}>
+            {isPlanActive('Free') && <span className="absolute top-0 right-0 bg-[#0a938a] text-white px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl" style={{ position: 'absolute', top: 0, right: 0, background: '#0a938a', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '0 0 0 12px' }}>Current</span>}
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest" style={{ fontSize: '10px', color: '#94a3b8' }}>Starter</span>
+              <h4 className="text-lg font-bold text-neutral-800 mt-1">Free Tier</h4>
+              <h2 className="text-3xl font-black text-neutral-900 mt-3" style={{ fontSize: '28px', fontWeight: '900' }}>රු0 <span className="text-xs font-normal text-gray-400" style={{ fontSize: '12px' }}>/ mo</span></h2>
+              
+              <ul className="mt-4 space-y-3 text-xs font-light text-neutral-600" style={{ paddingLeft: 0, listStyle: 'none' }}>
+                <li className="mb-2">✓ 1 Active WhatsApp Session</li>
+                <li className="mb-2">✓ Standard Customer Inbox</li>
+                <li className="mb-2">✓ Mock AI replies simulator</li>
+                <li className="mb-2 text-gray-300" style={{ color: '#cbd5e1' }}>✗ WooCommerce sync</li>
+                <li className="mb-2 text-gray-300" style={{ color: '#cbd5e1' }}>✗ Custom agent templates</li>
+              </ul>
+            </div>
+            
+            <button 
+              disabled 
+              className="w-full mt-4 py-3 text-xs font-bold uppercase rounded-xl border border-gray-200 text-gray-400 cursor-not-allowed"
+              style={{ fontSize: '11px', borderRadius: '8px', padding: '12px 0' }}
+            >
+              {isPlanActive('Free') ? 'Plan Active' : 'Starter Tier'}
+            </button>
+          </div>
+        </div>
+
+        {/* Premium Plan */}
+        <div className="col-md-4">
+          <div className="bg-white rounded-3xl p-6 border-2 border-emerald-500 shadow-md flex flex-col justify-between relative overflow-hidden h-100" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', border: '2px solid #10b981', minHeight: '380px' }}>
+            {isPlanActive('Premium') && <span className="absolute top-0 right-0 bg-[#0a938a] text-white px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl" style={{ position: 'absolute', top: 0, right: 0, background: '#0a938a', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '0 0 0 12px' }}>Current</span>}
+            <div className="absolute top-3 right-3 bg-emerald-50 text-[#00832e] text-[9px] font-black uppercase px-2 py-0.5 rounded-full" style={{ position: 'absolute', top: '12px', right: isPlanActive('Premium') ? '80px' : '12px', background: '#d1fae5', color: '#065f46', fontSize: '9px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '50px' }}>Popular</div>
+            <div>
+              <span className="text-[10px] font-bold text-[#00832e] uppercase tracking-widest" style={{ fontSize: '10px', color: '#10b981' }}>Growth</span>
+              <h4 className="text-lg font-bold text-neutral-800 mt-1">Premium Plan</h4>
+              <h2 className="text-3xl font-black text-neutral-900 mt-3" style={{ fontSize: '28px', fontWeight: '900' }}>රු4,990 <span className="text-xs font-normal text-gray-400" style={{ fontSize: '12px' }}>/ mo</span></h2>
+              
+              <ul className="mt-4 space-y-3 text-xs font-light text-neutral-600" style={{ paddingLeft: 0, listStyle: 'none' }}>
+                <li className="mb-2">✓ 3 Active WhatsApp Sessions</li>
+                <li className="mb-2">✓ Advanced CRM Customer list</li>
+                <li className="mb-2">✓ Unlimited Gemini AI replies</li>
+                <li className="mb-2">✓ Dynamic templates & quick replies</li>
+                <li className="mb-2 text-gray-300" style={{ color: '#cbd5e1' }}>✗ Multi-agent WooCommerce sync</li>
+              </ul>
+            </div>
+            
+            <button 
+              disabled={isPlanActive('Premium') || isPlanActive('Enterprise') || loadingPlan !== null}
+              onClick={() => handleUpgrade('Premium')}
+              className={`w-full mt-4 py-3 text-xs font-bold uppercase rounded-xl transition-all ${
+                isPlanActive('Premium') 
+                  ? 'bg-emerald-50 text-[#00832e] cursor-not-allowed'
+                  : isPlanActive('Enterprise')
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-dark text-white hover:bg-neutral-800'
+              }`}
+              style={{ fontSize: '11px', borderRadius: '8px', padding: '12px 0', border: 'none', background: (isPlanActive('Premium') || isPlanActive('Enterprise')) ? '#f1f5f9' : '#1d1d1f', color: isPlanActive('Premium') ? '#065f46' : isPlanActive('Enterprise') ? '#94a3b8' : '#fff' }}
+            >
+              {loadingPlan === 'Premium' ? 'Processing...' : isPlanActive('Premium') ? 'Active Plan' : isPlanActive('Enterprise') ? 'Downgrade Restricted' : 'Upgrade to Premium'}
+            </button>
+          </div>
+        </div>
+
+        {/* Enterprise Plan */}
+        <div className="col-md-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-100" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '380px' }}>
+            {isPlanActive('Enterprise') && <span className="absolute top-0 right-0 bg-[#0a938a] text-white px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl" style={{ position: 'absolute', top: 0, right: 0, background: '#0a938a', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '0 0 0 12px' }}>Current</span>}
+            <div>
+              <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest" style={{ fontSize: '10px', color: '#a855f7' }}>Enterprise</span>
+              <h4 className="text-lg font-bold text-neutral-800 mt-1">Enterprise Elite</h4>
+              <h2 className="text-3xl font-black text-neutral-900 mt-3" style={{ fontSize: '28px', fontWeight: '900' }}>රු12,990 <span className="text-xs font-normal text-gray-400" style={{ fontSize: '12px' }}>/ mo</span></h2>
+              
+              <ul className="mt-4 space-y-3 text-xs font-light text-neutral-600" style={{ paddingLeft: 0, listStyle: 'none' }}>
+                <li className="mb-2">✓ 10 Active WhatsApp Sessions</li>
+                <li className="mb-2">✓ WooCommerce store product sync</li>
+                <li className="mb-2">✓ Dedicated AI Custom Agents</li>
+                <li className="mb-2">✓ Higher webhook rate limits</li>
+                <li className="mb-2">✓ 24/7 Priority support hotline</li>
+              </ul>
+            </div>
+            
+            <button 
+              disabled={isPlanActive('Enterprise') || loadingPlan !== null}
+              onClick={() => handleUpgrade('Enterprise')}
+              className={`w-full mt-4 py-3 text-xs font-bold uppercase rounded-xl transition-all ${
+                isPlanActive('Enterprise') 
+                  ? 'bg-purple-50 text-purple-600 cursor-not-allowed'
+                  : 'bg-dark text-white hover:bg-neutral-800'
+              }`}
+              style={{ fontSize: '11px', borderRadius: '8px', padding: '12px 0', border: 'none', background: isPlanActive('Enterprise') ? '#f3e8ff' : '#1d1d1f', color: isPlanActive('Enterprise') ? '#7e22ce' : '#fff' }}
+            >
+              {loadingPlan === 'Enterprise' ? 'Processing...' : isPlanActive('Enterprise') ? 'Active Plan' : 'Upgrade to Enterprise'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── WhatsApp Account Manager Component ──────────────────────────────────────
 function WhatsAppAccountManager() {
   const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'pairing', 'connecting', 'qr', 'connected'
@@ -2417,6 +2881,10 @@ function Dashboard({ user, onLogout }) {
                 <WhatsAppInbox />
               ) : tab === 'orders_list' ? (
                 <WhatsAppOrderManager />
+              ) : tab === 'automation_ai_bot' ? (
+                <WhatsAppAIBotManager user={user} />
+              ) : tab === 'subscription_index' ? (
+                <WhatsAppSubscriptionManager user={user} />
               ) : (
                 <div dangerouslySetInnerHTML={{ __html: currentPage.body || '<h3>Page not found</h3>' }} />
               )}

@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS ai_configs (
   temperature NUMERIC(3,2) DEFAULT 0.60,
   typing_delay INTEGER DEFAULT 150, -- milliseconds per word
   global_ai_active BOOLEAN DEFAULT TRUE,
+  api_key TEXT DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -85,5 +86,17 @@ CREATE TABLE IF NOT EXISTS orders (
   total_amount NUMERIC(10,2) NOT NULL,
   shipping_details JSONB,
   status VARCHAR(50) DEFAULT 'Pending', -- 'Pending', 'Processing', 'Shipped', 'Cancelled'
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 8. Transactions Table (for payment records logs)
+CREATE TABLE IF NOT EXISTS transactions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  stripe_session_id VARCHAR(255) UNIQUE,
+  amount NUMERIC(10,2) NOT NULL,
+  currency VARCHAR(10) NOT NULL,
+  plan VARCHAR(50) NOT NULL,
+  status VARCHAR(50) DEFAULT 'Pending', -- 'Pending', 'Completed', 'Failed'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
