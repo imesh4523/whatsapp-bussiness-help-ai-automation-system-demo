@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
 function Account({ user, onLogout }) {
   const [activeSubTab, setActiveSubTab] = useState('orders'); // 'orders', 'profile'
@@ -8,7 +9,8 @@ function Account({ user, onLogout }) {
   const [cancelReason, setCancelReason] = useState('');
   const [cancellingOrderId, setCancellingOrderId] = useState(null);
 
-  const apiBaseUrl = 'https://aura-api-sn1e.onrender.com/api';
+  const apiBaseUrl = API_BASE_URL;
+
 
   const fetchOrders = async (showLoading = true) => {
     if (showLoading && orders.length === 0) {

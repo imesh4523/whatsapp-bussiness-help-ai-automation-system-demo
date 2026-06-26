@@ -10,7 +10,19 @@ import ProductModal from './components/ProductModal';
 import CartDrawer from './components/CartDrawer';
 import CookieBanner from './components/CookieBanner';
 import Auth from './pages/Auth';
+import AdminAuth from './pages/AdminAuth';
+import AdminDashboard from './pages/AdminDashboard';
 import { mockProducts } from './data/mockProducts';
+import { API_BASE_URL } from './config';
+
+
+const isDashboardRoute = (path) => {
+  return path.startsWith('/user') || path.startsWith('/help') || path.startsWith('/ticket') || path.startsWith('/user-guide');
+};
+
+const isAdminRoute = (path) => {
+  return path === '/main-admin' || path.startsWith('/main-admin/');
+};
 
 function App() {
   const [view, setView] = useState('home');
@@ -21,12 +33,27 @@ function App() {
   const [authModal, setAuthModal] = useState({ isOpen: false, type: 'login' });
   const [products, setProducts] = useState(mockProducts);
   const [loading, setLoading] = useState(true);
+  const [admin, setAdmin] = useState(null);
+
+  const handleAdminLogin = (adminDetails) => {
+    setAdmin(adminDetails);
+    localStorage.setItem('whatsray_admin', JSON.stringify(adminDetails));
+    setView('admin');
+    window.history.pushState(null, '', '/main-admin');
+  };
+
+  const handleAdminLogout = () => {
+    setAdmin(null);
+    localStorage.removeItem('whatsray_admin');
+    setView('home');
+    window.history.pushState(null, '', '/');
+  };
 
   // Fetch products from backend or fallback to mock products
   useEffect(() => {
     async function loadProducts() {
       try {
-        const res = await fetch('https://aura-api-sn1e.onrender.com/api/products');
+        const res = await fetch(`${API_BASE_URL}/products`);
         if (res.ok) {
           const data = await res.json();
           if (data && data.length > 0) {
@@ -42,13 +69,68 @@ function App() {
     loadProducts();
   }, []);
 
-  // Sync user from local storage
+  // Sync user and route path from URL on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('aura_user');
-    if (savedUser) {
+    const savedAdmin = localStorage.getItem('whatsray_admin');
+    const path = window.location.pathname;
+
+    if (savedAdmin) {
+      setAdmin(JSON.parse(savedAdmin));
+      setView('admin');
+      if (!isAdminRoute(path)) {
+        window.history.replaceState(null, '', '/main-admin');
+      }
+    } else if (isAdminRoute(path)) {
+      setView('admin');
+    } else if (savedUser) {
       setUser(JSON.parse(savedUser));
       setView('dashboard');
+      if (!isDashboardRoute(path)) {
+        window.history.replaceState(null, '', '/user/dashboard');
+      }
+    } else {
+      if (isDashboardRoute(path)) {
+        window.history.replaceState(null, '', '/');
+        setView('home');
+        setAuthModal({ isOpen: true, type: 'login' });
+      } else {
+        if (path === '/collections') setView('collections');
+        else if (path === '/about') setView('about');
+        else if (path === '/account') setView('account');
+        else setView('home');
+      }
     }
+  }, []);
+
+  // Listen to browser Back/Forward navigation popstate events
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const savedUser = localStorage.getItem('aura_user');
+      const savedAdmin = localStorage.getItem('whatsray_admin');
+
+      if (savedAdmin || isAdminRoute(path)) {
+        setView('admin');
+        if (savedAdmin) setAdmin(JSON.parse(savedAdmin));
+      } else if (savedUser) {
+        setView('dashboard');
+      } else {
+        if (isDashboardRoute(path)) {
+          window.history.replaceState(null, '', '/');
+          setView('home');
+          setAuthModal({ isOpen: true, type: 'login' });
+        } else {
+          if (path === '/collections') setView('collections');
+          else if (path === '/about') setView('about');
+          else if (path === '/account') setView('account');
+          else setView('home');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const addToCart = (product, quantity, size, color) => {
@@ -107,6 +189,7 @@ function App() {
     }
     setAuthModal({ isOpen: false, type: 'login' });
     setView('dashboard');
+    window.history.pushState(null, '', '/user/dashboard');
   };
 
   const handleLogout = () => {
@@ -114,15 +197,21 @@ function App() {
     localStorage.removeItem('aura_token');
     localStorage.removeItem('aura_user');
     setView('home');
+    window.history.pushState(null, '', '/');
   };
 
   const navigate = (newView) => {
     setView(newView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    let path = '/';
+    if (newView === 'collections') path = '/collections';
+    else if (newView === 'about') path = '/about';
+    else if (newView === 'account') path = '/account';
+    window.history.pushState(null, '', path);
   };
 
   const handleCreateOrder = async (shippingDetails, orderNo) => {
-    // Send order to Render backend if logged in
     try {
       const orderPayload = {
         orderId: orderNo,
@@ -137,7 +226,7 @@ function App() {
         status: 'Pending'
       };
 
-      const res = await fetch('https://aura-api-sn1e.onrender.com/api/orders', {
+      const res = await fetch(`${API_BASE_URL}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,10 +239,8 @@ function App() {
         console.log('Order created successfully in backend.');
       }
     } catch (e) {
-      console.warn('Render backend order sync failed: using local success fallback');
+      console.warn('Order sync failed: using local success fallback');
     }
-    
-    // Clear cart on place order
     clearCart();
   };
 
@@ -193,6 +280,14 @@ function App() {
         );
     }
   };
+
+  if (view === 'admin') {
+    if (admin) {
+      return <AdminDashboard admin={admin} onLogout={handleAdminLogout} />;
+    } else {
+      return <AdminAuth onSuccess={handleAdminLogin} />;
+    }
+  }
 
   if ((view === 'dashboard' || view === 'account') && user) {
     return <Dashboard user={user} onLogout={handleLogout} />;

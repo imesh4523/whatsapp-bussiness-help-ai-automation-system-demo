@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, User } from 'lucide-react';
+import { API_BASE_URL } from '../config';
+
 
 function Auth({ type, onClose, onSwitchType, onSuccess }) {
   const [currentType, setCurrentType] = useState(type); // 'login', 'signup', 'forgot'
@@ -32,25 +34,41 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
       }
     }
 
-    // Simulate API authorization requests
-    // POST /api/auth/login or /api/auth/register
-    setTimeout(() => {
-      setLoading(false);
-      if (currentType === 'login') {
-        onSuccess({
-          name: formData.email.split('@')[0].toUpperCase(),
-          email: formData.email
-        });
-      } else if (currentType === 'signup') {
-        onSuccess({
-          name: formData.fullName,
-          email: formData.email
-        });
-      } else {
+    // Send authentication requests to backend Express server
+    const endpoint = currentType === 'login' ? '/auth/login' : '/auth/register';
+    const payload = currentType === 'login' 
+      ? { email: formData.email, password: formData.password }
+      : { email: formData.email, password: formData.password, fullName: formData.fullName };
+
+    if (currentType === 'forgot') {
+      setTimeout(() => {
+        setLoading(false);
         alert('Reset link has been sent to your email.');
         setCurrentType('login');
-      }
-    }, 1200);
+      }, 8000);
+      return;
+    }
+
+    fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Authentication failed');
+        }
+        onSuccess(data.user, data.token);
+      })
+      .catch((err) => {
+        setError(err.message || 'An error occurred during authentication.');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
   const renderForm = () => {
