@@ -87,3 +87,19 @@
 .animate-fade-in {
   animation: fadeIn 0.4s ease forwards;
 }
+
+@keyframes growBar {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.animate-grow-bar {
+  animation: growBar 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both;
+  transform-origin: center;
+}
+
+/* Arrow paths — static solid green */
+.hw-arc-path {
+  stroke: #22c55e;
+  fill: none;
+}

@@ -148,8 +148,107 @@ function Home({ products, loading, onProductClick, onNavigate }) {
         </div>
       </section>
 
+      {/* 5. How it Works Section - styled like wpp.raybeamdigital.com */}
+      <section className="px-4 md:px-8 py-20 md:py-28 bg-[#f4f6f8]">
+        <div className="max-w-6xl mx-auto">
+
+          {/* Section Header */}
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-3">How it Works?</h2>
+            {/* Animated underline bar */}
+            <div className="flex justify-center mb-5">
+              <div className="h-[3px] w-10 bg-gray-800 rounded animate-grow-bar"></div>
+            </div>
+            <p className="text-gray-500 font-light text-base max-w-xl mx-auto">
+              Understand the process from browsing to delivery in just a few simple steps
+            </p>
+          </div>
+
+          {/* Arrow row — desktop only, sits ABOVE the cards */}
+          <div className="hidden md:block relative w-full" style={{height: '38px'}}>
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 1000 38"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <marker id="hw-arrow" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+                  <polygon points="0 0, 7 2.5, 0 5" fill="#22c55e" />
+                </marker>
+              </defs>
+              {/* Arc 1 — flat, subtle curve */}
+              <path className="hw-arc-path" d="M 178 36 Q 250 8 322 36" strokeWidth="1.6" fill="none" strokeLinecap="round" markerEnd="url(#hw-arrow)" />
+              {/* Arc 2 */}
+              <path className="hw-arc-path" d="M 428 36 Q 500 8 572 36" strokeWidth="1.6" fill="none" strokeLinecap="round" markerEnd="url(#hw-arrow)" />
+              {/* Arc 3 */}
+              <path className="hw-arc-path" d="M 678 36 Q 750 8 822 36" strokeWidth="1.6" fill="none" strokeLinecap="round" markerEnd="url(#hw-arrow)" />
+            </svg>
+          </div>
+
+          {/* 4 Step Cards — sit directly below the arrow row */}
+          <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+
+            {/* Step 1: Browse Collection */}
+            <div className="flex-1 bg-white rounded-2xl p-6 md:p-8 flex flex-col items-start text-left shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300">
+              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-5">
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 6h16M4 10h16M4 14h10" />
+                </svg>
+              </div>
+              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-2">Browse Collection</h3>
+              <p className="text-xs md:text-sm text-gray-500 font-light leading-relaxed">
+                Explore our curated range of premium clothing, filtered by category, style and price.
+              </p>
+            </div>
+
+            {/* Step 2: Select Your Style */}
+            <div className="flex-1 bg-white rounded-2xl p-6 md:p-8 flex flex-col items-start text-left shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300">
+              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-5">
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-2">Select Your Style</h3>
+              <p className="text-xs md:text-sm text-gray-500 font-light leading-relaxed">
+                Pick your preferred size and color, then view the full product details before adding to cart.
+              </p>
+            </div>
+
+            {/* Step 3: Add to Cart & Checkout */}
+            <div className="flex-1 bg-white rounded-2xl p-6 md:p-8 flex flex-col items-start text-left shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300">
+              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-5">
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+              </div>
+              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-2">Add to Cart & Checkout</h3>
+              <p className="text-xs md:text-sm text-gray-500 font-light leading-relaxed">
+                Add items to your cart and fill your shipping details. Cash on Delivery available island-wide.
+              </p>
+            </div>
+
+            {/* Step 4: Receive at Your Door */}
+            <div className="flex-1 bg-white rounded-2xl p-6 md:p-8 flex flex-col items-start text-left shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300">
+              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-5">
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1.28a2 2 0 102.822-.008C13.107 16.99 13 16.51 13 16m-6-1a1 1 0 001 1h1.28a2 2 0 102.822-.008C7.107 16.99 7 16.51 7 16" />
+                </svg>
+              </div>
+              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-2">Receive at Your Door</h3>
+              <p className="text-xs md:text-sm text-gray-500 font-light leading-relaxed">
+                We deliver your order securely to your doorstep within 2-3 working days, anywhere in Sri Lanka.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
     </div>
   );
 }
 
 export default Home;
+
