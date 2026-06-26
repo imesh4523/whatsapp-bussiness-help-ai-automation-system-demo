@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Collections from './pages/Collections';
 import About from './pages/About';
 import Account from './pages/Account';
+import Dashboard from './pages/Dashboard';
 import ProductModal from './components/ProductModal';
 import CartDrawer from './components/CartDrawer';
 import CookieBanner from './components/CookieBanner';
@@ -46,6 +47,7 @@ function App() {
     const savedUser = localStorage.getItem('aura_user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
+      setView('dashboard');
     }
   }, []);
 
@@ -104,6 +106,7 @@ function App() {
       localStorage.setItem('aura_token', 'mock_token_' + Math.random().toString());
     }
     setAuthModal({ isOpen: false, type: 'login' });
+    setView('dashboard');
   };
 
   const handleLogout = () => {
@@ -190,6 +193,10 @@ function App() {
         );
     }
   };
+
+  if ((view === 'dashboard' || view === 'account') && user) {
+    return <Dashboard user={user} onLogout={handleLogout} />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f4f6f8] text-[#111111]">
