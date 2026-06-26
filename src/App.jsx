@@ -1,0 +1,248 @@
+import React, { useState, useEffect } from 'react';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import Home from './pages/Home';
+import Collections from './pages/Collections';
+import About from './pages/About';
+import Account from './pages/Account';
+import ProductModal from './components/ProductModal';
+import CartDrawer from './components/CartDrawer';
+import CookieBanner from './components/CookieBanner';
+import Auth from './pages/Auth';
+import { mockProducts } from './data/mockProducts';
+
+function App() {
+  const [view, setView] = useState('home');
+  const [cart, setCart] = useState([]);
+  const [user, setUser] = useState(null);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [authModal, setAuthModal] = useState({ isOpen: false, type: 'login' });
+  const [products, setProducts] = useState(mockProducts);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch products from backend or fallback to mock products
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await fetch('https://aura-api-sn1e.onrender.com/api/products');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setProducts(data);
+          }
+        }
+      } catch (e) {
+        console.warn('Using fallback mock products because Render backend is offline:', e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
+
+  // Sync user from local storage
+  useEffect(() => {
+    const savedUser = localStorage.getItem('aura_user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const addToCart = (product, quantity, size, color) => {
+    setCart((prevCart) => {
+      const existingItemIndex = prevCart.findIndex(
+        (item) => item.product.id === product.id && item.selectedSize === size && item.selectedColor === color
+      );
+
+      if (existingItemIndex > -1) {
+        const newCart = [...prevCart];
+        newCart[existingItemIndex].quantity += quantity;
+        return newCart;
+      } else {
+        return [...prevCart, { product, quantity, selectedSize: size, selectedColor: color }];
+      }
+    });
+    setIsCartOpen(true);
+  };
+
+  const updateCartQuantity = (productId, size, color, newQty) => {
+    setCart((prevCart) => {
+      const existingIdx = prevCart.findIndex(
+        item => item.product.id === productId && item.selectedSize === size && item.selectedColor === color
+      );
+      if (existingIdx === -1) return prevCart;
+
+      const newCart = [...prevCart];
+      if (newQty <= 0) {
+        newCart.splice(existingIdx, 1);
+      } else {
+        newCart[existingIdx].quantity = newQty;
+      }
+      return newCart;
+    });
+  };
+
+  const removeItemFromCart = (productId, size, color) => {
+    setCart((prevCart) => 
+      prevCart.filter(
+        item => !(item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
+      )
+    );
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const handleLogin = (userDetails, token) => {
+    setUser(userDetails);
+    localStorage.setItem('aura_user', JSON.stringify(userDetails));
+    if (token) {
+      localStorage.setItem('aura_token', token);
+    } else {
+      localStorage.setItem('aura_token', 'mock_token_' + Math.random().toString());
+    }
+    setAuthModal({ isOpen: false, type: 'login' });
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('aura_token');
+    localStorage.removeItem('aura_user');
+    setView('home');
+  };
+
+  const navigate = (newView) => {
+    setView(newView);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCreateOrder = async (shippingDetails, orderNo) => {
+    // Send order to Render backend if logged in
+    try {
+      const orderPayload = {
+        orderId: orderNo,
+        items: cart.map(item => ({
+          product: item.product.id,
+          quantity: item.quantity,
+          selectedSize: item.selectedSize,
+          selectedColor: item.selectedColor
+        })),
+        shippingDetails,
+        totalAmount: cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+        status: 'Pending'
+      };
+
+      const res = await fetch('https://aura-api-sn1e.onrender.com/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify(orderPayload)
+      });
+      
+      if (res.ok) {
+        console.log('Order created successfully in backend.');
+      }
+    } catch (e) {
+      console.warn('Render backend order sync failed: using local success fallback');
+    }
+    
+    // Clear cart on place order
+    clearCart();
+  };
+
+  const renderView = () => {
+    switch (view) {
+      case 'home':
+        return (
+          <Home 
+            products={products} 
+            loading={loading}
+            onProductClick={setSelectedProduct} 
+            onNavigate={navigate}
+          />
+        );
+      case 'collections':
+      case 'new-arrivals':
+        return (
+          <Collections 
+            products={products} 
+            loading={loading}
+            filter={view === 'new-arrivals' ? 'new-arrivals' : 'all'} 
+            onProductClick={setSelectedProduct} 
+          />
+        );
+      case 'about':
+        return <About />;
+      case 'account':
+        return <Account user={user} onLogout={handleLogout} />;
+      default:
+        return (
+          <Home 
+            products={products} 
+            loading={loading}
+            onProductClick={setSelectedProduct} 
+            onNavigate={navigate}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-[#f4f6f8] text-[#111111]">
+      <Header 
+        cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
+        onOpenCart={() => setIsCartOpen(true)}
+        user={user}
+        onLogout={handleLogout}
+        onOpenAuth={(type) => setAuthModal({ isOpen: true, type })}
+        currentView={view}
+        onNavigate={navigate}
+      />
+      
+      <main className="flex-grow pt-8">
+        {renderView()}
+      </main>
+
+      <Footer onNavigate={navigate} />
+
+      {/* Slide-out Cart Drawer */}
+      <CartDrawer 
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cart={cart}
+        updateQuantity={updateCartQuantity}
+        removeItem={removeItemFromCart}
+        onCheckout={handleCreateOrder}
+        onRequireLogin={(type) => setAuthModal({ isOpen: true, type })}
+        user={user}
+      />
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <ProductModal 
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onAddToCart={addToCart}
+        />
+      )}
+
+      {/* Authentication Modal */}
+      {authModal.isOpen && (
+        <Auth 
+          type={authModal.type}
+          onClose={() => setAuthModal({ isOpen: false, type: 'login' })}
+          onSwitchType={(type) => setAuthModal({ isOpen: true, type })}
+          onSuccess={handleLogin}
+        />
+      )}
+
+      <CookieBanner />
+    </div>
+  );
+}
+
+export default App;
