@@ -218,7 +218,7 @@ function Dashboard({ user, onLogout }) {
       <div className="dashboard__inner flex-wrap">
         
         {/* Sidebar Menu */}
-        <div className={`sidebar-menu flex-between ${isSidebarMobileOpen ? 'sidebar-open' : ''}`}>
+        <div className={`sidebar-menu sidebar-collapsed flex-between ${isSidebarMobileOpen ? 'sidebar-open' : ''}`}>
           <div className="sidebar-menu__inner">
             <span className="sidebar-menu__close d-lg-none d-block" onClick={() => setIsSidebarMobileOpen(false)}>
               <i className="fas fa-times"></i>
