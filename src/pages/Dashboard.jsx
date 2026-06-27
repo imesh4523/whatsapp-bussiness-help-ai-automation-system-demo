@@ -3653,13 +3653,15 @@ function TrackCustomerOrders() {
   const [updating, setUpdating] = useState(false);
 
   const COURIER_LOGOS = {
-    'Sri Lanka Post': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Emblem_of_Sri_Lanka.svg/120px-Emblem_of_Sri_Lanka.svg.png',
-    'Citypak (Hayleys)': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Hayleys_logo.svg/320px-Hayleys_logo.svg.png',
-    'Aramex': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Aramex_logo.svg/320px-Aramex_logo.svg.png',
-    'DHL Express': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/DHL_Logo.svg/320px-DHL_Logo.svg.png',
-    'FedEx': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/FedEx_Express_logo.svg/320px-FedEx_Express_logo.svg.png',
-    'Pronto': 'https://cdn-icons-png.flaticon.com/512/726/726458.png'
+    'Sri Lanka Post': 'https://logo.clearbit.com/slpost.gov.lk',
+    'Citypak (Hayleys)': 'https://logo.clearbit.com/citypak.lk',
+    'Aramex': 'https://logo.clearbit.com/aramex.com',
+    'DHL Express': 'https://logo.clearbit.com/dhl.com',
+    'FedEx': 'https://logo.clearbit.com/fedex.com',
+    'Pronto': 'https://logo.clearbit.com/prontolk.com'
   };
+
+  const FALLBACK_TRUCK = 'https://cdn-icons-png.flaticon.com/512/726/726458.png';
 
   useEffect(() => {
     fetchOrders();
@@ -3883,6 +3885,7 @@ function TrackCustomerOrders() {
                 src={logo} 
                 alt={name} 
                 style={{ width: '22px', height: '22px', objectFit: 'contain' }} 
+                onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
               />
               {name}
             </button>
@@ -3936,6 +3939,7 @@ function TrackCustomerOrders() {
                               src={COURIER_LOGOS[o.courier_name]} 
                               alt={o.courier_name} 
                               style={{ width: '18px', height: '18px', objectFit: 'contain' }} 
+                              onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
                             />
                             {o.courier_name}
                           </span>
@@ -3974,6 +3978,7 @@ function TrackCustomerOrders() {
                     src={COURIER_LOGOS[selectedOrder.courier_name]} 
                     alt={selectedOrder.courier_name} 
                     style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+                    onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
                   />
                   <div>
                     <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Package Tracing Log</h4>
@@ -4033,6 +4038,7 @@ function TrackCustomerOrders() {
                   src={COURIER_LOGOS[courierName]} 
                   alt={courierName} 
                   style={{ width: '28px', height: '28px', objectFit: 'contain' }} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
                 />
                 <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Link Logistics Details</h4>
               </div>
@@ -4112,6 +4118,7 @@ function TrackCustomerOrders() {
     </div>
   );
 }
+
 export default Dashboard;
 
 
