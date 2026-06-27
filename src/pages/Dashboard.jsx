@@ -350,7 +350,7 @@ const getMockPage = (tabKey) => {
 };
 
 // ── WhatsApp AI Bot Manager Component ───────────────────────────────────────
-function WhatsAppAIBotManager({ user }) {
+function WhatsAppAIBotManager({ user, activeSessionId }) {
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [config, setConfig] = useState({
@@ -380,10 +380,13 @@ function WhatsAppAIBotManager({ user }) {
   };
 
   const fetchSandboxHistory = async () => {
-    const sandboxChatId = `user_${user.id}_sandbox_user`;
+    const sandboxChatId = `${activeSessionId}_sandbox_user`;
     try {
       const res = await fetch(`${API_BASE_URL}/whatsapp/messages/${sandboxChatId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+          'x-session-id': activeSessionId
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -400,7 +403,7 @@ function WhatsAppAIBotManager({ user }) {
     // Poll sandbox messages to catch automated AI responses
     const interval = setInterval(fetchSandboxHistory, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeSessionId]);
 
   const handleSaveConfig = async (e) => {
     e.preventDefault();
@@ -439,7 +442,8 @@ function WhatsAppAIBotManager({ user }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+          'x-session-id': activeSessionId
         },
         body: JSON.stringify({ message: userText, customerPhone: 'sandbox_user' })
       });
@@ -622,199 +626,18 @@ function WhatsAppAIBotManager({ user }) {
   );
 }
 
-// ── WhatsApp Subscription Manager Component ─────────────────────────────────
-function WhatsAppSubscriptionManager({ user }) {
-  const [currentUser, setCurrentUser] = useState(user);
-  const [loadingPlan, setLoadingPlan] = useState(null);
 
-  useEffect(() => {
-    // Check if redirecting from Stripe Checkout success
-    const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get('session_id');
-    
-    if (sessionId) {
-      const confirmSession = async () => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/payments/confirm-session`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-            },
-            body: JSON.stringify({ sessionId })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.user) {
-              setCurrentUser(data.user);
-              // Save updated user to localStorage
-              localStorage.setItem('aura_user', JSON.stringify(data.user));
-              // Clear search params
-              window.history.replaceState(null, '', '/user/subscription/index');
-              alert(`Congratulations! Your account has been upgraded to ${data.plan} plan successfully! 🎉`);
-            }
-          }
-        } catch (err) {
-          console.error(err);
-        }
-      };
-      confirmSession();
-    }
-  }, []);
-
-  const handleUpgrade = async (plan) => {
-    setLoadingPlan(plan);
-    try {
-      const res = await fetch(`${API_BASE_URL}/payments/create-checkout-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-        },
-        body: JSON.stringify({ plan })
-      });
-      if (!res.ok) throw new Error('Payment session initiation failed.');
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLoadingPlan(null);
-    }
-  };
-
-  const isPlanActive = (planName) => {
-    return currentUser.plan === planName;
-  };
-
-  return (
-    <div className="dashboard-container">
-      <div className="container-top">
-        <div className="container-top__left">
-          <h5 className="container-top__title">Manage Subscription</h5>
-          <p className="container-top__desc">Upgrade or renew your account status and unlock premium capabilities.</p>
-        </div>
-      </div>
-
-      {/* Subscription Status Header */}
-      <div className="bg-[#f0f9ff] border border-blue-100 p-6 rounded-3xl mt-4 flex items-center justify-between flex-wrap gap-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0f9ff', border: '1px solid #e0f2fe', borderRadius: '16px', padding: '24px' }}>
-        <div>
-          <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest" style={{ fontSize: '10px', color: '#0284c7' }}>Active Plan</span>
-          <h3 className="text-xl font-black text-blue-900 mt-1" style={{ fontSize: '20px', fontWeight: 'bold', color: '#0c4a6e' }}>{currentUser.plan} Plan</h3>
-          <p className="text-xs text-blue-600/70 font-light mt-1" style={{ fontSize: '12px', color: '#0284c7' }}>Renewal: 4 weeks from now (auto-renewal via invoice billing)</p>
-        </div>
-        <div className="bg-blue-200/50 text-blue-800 px-4 py-2 rounded-2xl text-xs font-bold" style={{ background: '#bae6fd', color: '#0369a1', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: 'bold' }}>
-          ⚡ Status: Active
-        </div>
-      </div>
-
-      {/* Tier Pricing Cards */}
-      <div className="row gy-4 mt-2">
-        {/* Free Plan */}
-        <div className="col-md-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-100" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '380px' }}>
-            {isPlanActive('Free') && <span className="absolute top-0 right-0 bg-[#0a938a] text-white px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl" style={{ position: 'absolute', top: 0, right: 0, background: '#0a938a', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '0 0 0 12px' }}>Current</span>}
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest" style={{ fontSize: '10px', color: '#94a3b8' }}>Starter</span>
-              <h4 className="text-lg font-bold text-neutral-800 mt-1">Free Tier</h4>
-              <h2 className="text-3xl font-black text-neutral-900 mt-3" style={{ fontSize: '28px', fontWeight: '900' }}>රු0 <span className="text-xs font-normal text-gray-400" style={{ fontSize: '12px' }}>/ mo</span></h2>
-              
-              <ul className="mt-4 space-y-3 text-xs font-light text-neutral-600" style={{ paddingLeft: 0, listStyle: 'none' }}>
-                <li className="mb-2">✓ 1 Active WhatsApp Session</li>
-                <li className="mb-2">✓ Standard Customer Inbox</li>
-                <li className="mb-2">✓ Mock AI replies simulator</li>
-                <li className="mb-2 text-gray-300" style={{ color: '#cbd5e1' }}>✗ WooCommerce sync</li>
-                <li className="mb-2 text-gray-300" style={{ color: '#cbd5e1' }}>✗ Custom agent templates</li>
-              </ul>
-            </div>
-            
-            <button 
-              disabled 
-              className="w-full mt-4 py-3 text-xs font-bold uppercase rounded-xl border border-gray-200 text-gray-400 cursor-not-allowed"
-              style={{ fontSize: '11px', borderRadius: '8px', padding: '12px 0' }}
-            >
-              {isPlanActive('Free') ? 'Plan Active' : 'Starter Tier'}
-            </button>
-          </div>
-        </div>
-
-        {/* Premium Plan */}
-        <div className="col-md-4">
-          <div className="bg-white rounded-3xl p-6 border-2 border-emerald-500 shadow-md flex flex-col justify-between relative overflow-hidden h-100" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', border: '2px solid #10b981', minHeight: '380px' }}>
-            {isPlanActive('Premium') && <span className="absolute top-0 right-0 bg-[#0a938a] text-white px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl" style={{ position: 'absolute', top: 0, right: 0, background: '#0a938a', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '0 0 0 12px' }}>Current</span>}
-            <div className="absolute top-3 right-3 bg-emerald-50 text-[#00832e] text-[9px] font-black uppercase px-2 py-0.5 rounded-full" style={{ position: 'absolute', top: '12px', right: isPlanActive('Premium') ? '80px' : '12px', background: '#d1fae5', color: '#065f46', fontSize: '9px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '50px' }}>Popular</div>
-            <div>
-              <span className="text-[10px] font-bold text-[#00832e] uppercase tracking-widest" style={{ fontSize: '10px', color: '#10b981' }}>Growth</span>
-              <h4 className="text-lg font-bold text-neutral-800 mt-1">Premium Plan</h4>
-              <h2 className="text-3xl font-black text-neutral-900 mt-3" style={{ fontSize: '28px', fontWeight: '900' }}>රු4,990 <span className="text-xs font-normal text-gray-400" style={{ fontSize: '12px' }}>/ mo</span></h2>
-              
-              <ul className="mt-4 space-y-3 text-xs font-light text-neutral-600" style={{ paddingLeft: 0, listStyle: 'none' }}>
-                <li className="mb-2">✓ 3 Active WhatsApp Sessions</li>
-                <li className="mb-2">✓ Advanced CRM Customer list</li>
-                <li className="mb-2">✓ Unlimited Gemini AI replies</li>
-                <li className="mb-2">✓ Dynamic templates & quick replies</li>
-                <li className="mb-2 text-gray-300" style={{ color: '#cbd5e1' }}>✗ Multi-agent WooCommerce sync</li>
-              </ul>
-            </div>
-            
-            <button 
-              disabled={isPlanActive('Premium') || isPlanActive('Enterprise') || loadingPlan !== null}
-              onClick={() => handleUpgrade('Premium')}
-              className={`w-full mt-4 py-3 text-xs font-bold uppercase rounded-xl transition-all ${
-                isPlanActive('Premium') 
-                  ? 'bg-emerald-50 text-[#00832e] cursor-not-allowed'
-                  : isPlanActive('Enterprise')
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-dark text-white hover:bg-neutral-800'
-              }`}
-              style={{ fontSize: '11px', borderRadius: '8px', padding: '12px 0', border: 'none', background: (isPlanActive('Premium') || isPlanActive('Enterprise')) ? '#f1f5f9' : '#1d1d1f', color: isPlanActive('Premium') ? '#065f46' : isPlanActive('Enterprise') ? '#94a3b8' : '#fff' }}
-            >
-              {loadingPlan === 'Premium' ? 'Processing...' : isPlanActive('Premium') ? 'Active Plan' : isPlanActive('Enterprise') ? 'Downgrade Restricted' : 'Upgrade to Premium'}
-            </button>
-          </div>
-        </div>
-
-        {/* Enterprise Plan */}
-        <div className="col-md-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-100" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '380px' }}>
-            {isPlanActive('Enterprise') && <span className="absolute top-0 right-0 bg-[#0a938a] text-white px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl" style={{ position: 'absolute', top: 0, right: 0, background: '#0a938a', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '0 0 0 12px' }}>Current</span>}
-            <div>
-              <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest" style={{ fontSize: '10px', color: '#a855f7' }}>Enterprise</span>
-              <h4 className="text-lg font-bold text-neutral-800 mt-1">Enterprise Elite</h4>
-              <h2 className="text-3xl font-black text-neutral-900 mt-3" style={{ fontSize: '28px', fontWeight: '900' }}>රු12,990 <span className="text-xs font-normal text-gray-400" style={{ fontSize: '12px' }}>/ mo</span></h2>
-              
-              <ul className="mt-4 space-y-3 text-xs font-light text-neutral-600" style={{ paddingLeft: 0, listStyle: 'none' }}>
-                <li className="mb-2">✓ 10 Active WhatsApp Sessions</li>
-                <li className="mb-2">✓ WooCommerce store product sync</li>
-                <li className="mb-2">✓ Dedicated AI Custom Agents</li>
-                <li className="mb-2">✓ Higher webhook rate limits</li>
-                <li className="mb-2">✓ 24/7 Priority support hotline</li>
-              </ul>
-            </div>
-            
-            <button 
-              disabled={isPlanActive('Enterprise') || loadingPlan !== null}
-              onClick={() => handleUpgrade('Enterprise')}
-              className={`w-full mt-4 py-3 text-xs font-bold uppercase rounded-xl transition-all ${
-                isPlanActive('Enterprise') 
-                  ? 'bg-purple-50 text-purple-600 cursor-not-allowed'
-                  : 'bg-dark text-white hover:bg-neutral-800'
-              }`}
-              style={{ fontSize: '11px', borderRadius: '8px', padding: '12px 0', border: 'none', background: isPlanActive('Enterprise') ? '#f3e8ff' : '#1d1d1f', color: isPlanActive('Enterprise') ? '#7e22ce' : '#fff' }}
-            >
-              {loadingPlan === 'Enterprise' ? 'Processing...' : isPlanActive('Enterprise') ? 'Active Plan' : 'Upgrade to Enterprise'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── WhatsApp Account Manager Component ──────────────────────────────────────
-function WhatsAppAccountManager() {
+function WhatsAppAccountManager({ activeSessionId, onSessionsUpdated, user }) {
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [renamingSessionId, setRenamingSessionId] = useState(null);
+  const [renameVal, setRenameVal] = useState('');
+  
+  // Linking flow state
+  const [isLinking, setIsLinking] = useState(false);
+  const [linkingSessionId, setLinkingSessionId] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'pairing', 'connecting', 'qr', 'connected'
   const [authMethod, setAuthMethod] = useState('qr'); // 'qr', 'phone'
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -823,14 +646,36 @@ function WhatsAppAccountManager() {
   const [qrUrl, setQrUrl] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Fetch all user sessions
+  const fetchSessions = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
   useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  // Poll connection status of the linking session if active
+  useEffect(() => {
+    if (!isLinking || !linkingSessionId) return;
     let active = true;
+
     const checkStatus = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/whatsapp/status`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-          }
+        const res = await fetch(`${API_BASE_URL}/whatsapp/status?sessionId=${linkingSessionId}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
         });
         if (!res.ok) return;
         const data = await res.json();
@@ -838,7 +683,11 @@ function WhatsAppAccountManager() {
         
         if (data.status === 'Connected') {
           setConnectionStatus('connected');
-          setPhoneNumber(data.phone || '');
+          setIsLinking(false);
+          setLinkingSessionId(null);
+          fetchSessions();
+          if (onSessionsUpdated) onSessionsUpdated();
+          alert('WhatsApp Session connected successfully! 🎉');
         } else if (data.status === 'Pairing') {
           setConnectionStatus('pairing');
           setPairingCode(data.pairingCode || '');
@@ -856,7 +705,7 @@ function WhatsAppAccountManager() {
           setQrUrl('');
         }
       } catch (err) {
-        console.warn('Status check failed:', err.message);
+        console.warn(err);
       }
     };
 
@@ -866,7 +715,27 @@ function WhatsAppAccountManager() {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [isLinking, linkingSessionId]);
+
+  const handleStartLinking = async () => {
+    // Enforce limits
+    const plan = user.plan || 'Free';
+    let maxSessions = 1;
+    if (plan === 'Premium') maxSessions = 3;
+    if (plan === 'Enterprise') maxSessions = 10;
+
+    if (sessions.length >= maxSessions) {
+      alert(`Limit Reached: You have reached the maximum number of WhatsApp sessions (${maxSessions}) allowed for your ${plan} plan. Upgrade your plan to link more accounts.`);
+      return;
+    }
+
+    setIsLinking(true);
+    setConnectionStatus('disconnected');
+    setQrCodeGenerated(false);
+    setQrUrl('');
+    setPairingCode('');
+    setLinkingSessionId(null);
+  };
 
   const handleLinkSession = async (method, phone = null) => {
     setLoading(true);
@@ -877,13 +746,14 @@ function WhatsAppAccountManager() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
         },
-        body: JSON.stringify({ authMethod: method, phoneNumber: phone })
+        body: JSON.stringify({ authMethod: method, phoneNumber: phone, sessionId: linkingSessionId })
       });
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.error || 'Failed to request links');
       }
       const data = await res.json();
+      setLinkingSessionId(data.sessionId);
       if (data.status === 'Pairing') {
         setConnectionStatus('pairing');
         setPairingCode(data.pairingCode || '');
@@ -896,6 +766,7 @@ function WhatsAppAccountManager() {
       }
     } catch (err) {
       alert(err.message);
+      setIsLinking(false);
     } finally {
       setLoading(false);
     }
@@ -907,131 +778,237 @@ function WhatsAppAccountManager() {
     handleLinkSession('phone', phoneNumber);
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect WhatsApp session?')) return;
-    setLoading(true);
+  const handleRename = async (sessionId) => {
+    if (!renameVal.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ session_name: renameVal })
+      });
+      if (res.ok) {
+        setRenamingSessionId(null);
+        setRenameVal('');
+        fetchSessions();
+        if (onSessionsUpdated) onSessionsUpdated();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDisconnect = async (sessionId) => {
+    if (!confirm('Are you sure you want to disconnect this WhatsApp session?')) return;
     try {
       const res = await fetch(`${API_BASE_URL}/whatsapp/disconnect`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+          'x-session-id': sessionId
         }
       });
       if (res.ok) {
-        setConnectionStatus('disconnected');
-        setPairingCode('');
-        setQrUrl('');
-        setQrCodeGenerated(false);
+        fetchSessions();
+        if (onSessionsUpdated) onSessionsUpdated();
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 
+  const plan = user.plan || 'Free';
+  let maxSessions = 1;
+  if (plan === 'Premium') maxSessions = 3;
+  if (plan === 'Enterprise') maxSessions = 10;
+
   return (
     <div className="dashboard-container">
-      <div className="container-top">
+      <div className="container-top flex-between" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="container-top__left">
           <h5 className="container-top__title">Manage WhatsApp Accounts</h5>
-          <p className="container-top__desc">Connect and manage your WhatsApp Business sessions seamlessly.</p>
+          <p className="container-top__desc">Link up to {maxSessions} WhatsApp sessions for your {plan} plan, customize labels, and switch accounts.</p>
         </div>
-        {connectionStatus === 'connected' && (
-          <div className="container-top__right">
-            <button onClick={handleDisconnect} className="btn btn-sm btn--danger px-3 py-2 flex items-center gap-2">
-              <i className="las la-sign-out-alt"></i> Disconnect Account
+        <div className="container-top__right">
+          {!isLinking && (
+            <button 
+              disabled={sessions.length >= maxSessions}
+              onClick={handleStartLinking} 
+              className={`btn btn-sm btn-shadow flex items-center gap-2 ${sessions.length >= maxSessions ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-black text-white hover:bg-neutral-800'}`}
+              style={{ padding: '10px 20px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+            >
+              <i className="las la-plus-circle"></i> Connect New Session
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Linked Accounts List */}
+      <div className="dashboard-container__body p-4 bg-white rounded-3xl border border-gray-100 shadow-sm mt-4">
+        {loadingSessions ? (
+          <div className="text-center py-6 text-gray-400"><i className="las la-spinner la-spin"></i> Loading linked accounts...</div>
+        ) : sessions.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 font-light">
+            <p className="mb-4">No connected WhatsApp accounts found. Let's link your first business number!</p>
+            <button onClick={handleStartLinking} className="btn btn-sm bg-[#00832e] text-white hover:bg-[#007027] px-4 py-2 rounded-xl text-xs font-bold uppercase" style={{ background: '#00832e', border: 'none', color: 'white', fontWeight: 'bold', padding: '8px 16px', borderRadius: '8px' }}>
+              Get Started
+            </button>
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <table className="table custom--table" style={{ borderCollapse: 'separate', borderSpacing: '0 8px', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th className="text-xs font-bold uppercase tracking-wider text-gray-400" style={{ padding: '8px 16px' }}>Account Label</th>
+                  <th className="text-xs font-bold uppercase tracking-wider text-gray-400" style={{ padding: '8px 16px' }}>Phone Number</th>
+                  <th className="text-xs font-bold uppercase tracking-wider text-gray-400" style={{ padding: '8px 16px' }}>Connection Status</th>
+                  <th className="text-xs font-bold uppercase tracking-wider text-gray-400 text-end" style={{ padding: '8px 16px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map(s => {
+                  const isActive = s.id === activeSessionId;
+                  return (
+                    <tr key={s.id} className="bg-[#f8fafc]/50 rounded-2xl" style={{ verticalAlign: 'middle', background: '#f8fafc' }}>
+                      <td style={{ border: 'none', padding: '16px' }}>
+                        {renamingSessionId === s.id ? (
+                          <div className="d-flex align-items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input 
+                              type="text" 
+                              value={renameVal} 
+                              onChange={(e) => setRenameVal(e.target.value)}
+                              className="form-control form-control-sm border border-gray-300 rounded-lg px-2 py-1 text-xs" 
+                              style={{ width: '150px' }}
+                            />
+                            <button onClick={() => handleRename(s.id)} className="btn btn-xs bg-emerald-500 text-white rounded-lg px-2 py-1" style={{ background: '#10b981', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}><i className="las la-check"></i></button>
+                            <button onClick={() => setRenamingSessionId(null)} className="btn btn-xs bg-gray-400 text-white rounded-lg px-2 py-1" style={{ background: '#94a3b8', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}><i className="las la-times"></i></button>
+                          </div>
+                        ) : (
+                          <div className="d-flex align-items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="font-bold text-neutral-800 text-sm" style={{ fontWeight: 'bold', fontSize: '14px' }}>{s.session_name}</span>
+                            {isActive && <span className="badge bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: '#d1fae5', color: '#065f46', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px' }}>Selected</span>}
+                            <button 
+                              onClick={() => { setRenamingSessionId(s.id); setRenameVal(s.session_name); }} 
+                              className="btn btn-link text-gray-400 hover:text-gray-600 p-0"
+                              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                            >
+                              <i className="las la-edit"></i>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ border: 'none', padding: '16px', fontFamily: 'monospace' }}>
+                        {s.phone ? formatPhone(s.phone) : '—'}
+                      </td>
+                      <td style={{ border: 'none', padding: '16px' }}>
+                        <span className={`badge text-[10px] font-bold px-3 py-1.5 rounded-full ${
+                          s.status === 'Connected' ? 'bg-emerald-50 text-[#00832e] border border-emerald-100' :
+                          s.status === 'Pairing' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                          'bg-red-50 text-red-500 border border-red-100'
+                        }`} style={{
+                          padding: '6px 12px',
+                          borderRadius: '50px',
+                          fontSize: '10px',
+                          fontWeight: 'bold',
+                          background: s.status === 'Connected' ? '#d1fae5' : s.status === 'Pairing' ? '#fef3c7' : '#fee2e2',
+                          color: s.status === 'Connected' ? '#065f46' : s.status === 'Pairing' ? '#b45309' : '#991b1b'
+                        }}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="text-end" style={{ border: 'none', padding: '16px', textAlign: 'right' }}>
+                        <div className="d-flex justify-content-end gap-2" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                          {!isActive && (
+                            <button 
+                              onClick={() => {
+                                localStorage.setItem('whatsray_active_session_id', s.id);
+                                window.location.reload();
+                              }}
+                              className="btn btn-xs bg-black text-white hover:bg-neutral-800 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider"
+                              style={{ background: '#000', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                            >
+                              Select Active
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => handleDisconnect(s.id)}
+                            className="btn btn-xs bg-red-50 text-red-500 hover:bg-red-100 border border-red-100 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider"
+                            style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
-      <div className="dashboard-container__body p-4 bg-white rounded-3xl border border-gray-100 shadow-sm mt-4">
-        {connectionStatus === 'connected' ? (
-          <div className="p-6 text-center max-w-md mx-auto space-y-6">
-            <div className="inline-flex p-4 bg-emerald-50 rounded-full text-[#00832e]">
-              <i className="las la-check-circle" style={{ fontSize: '48px' }}></i>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-neutral-800">Connected</h3>
-              <p className="text-sm text-gray-500 font-light">WhatsApp Account linked and active daemon running.</p>
-            </div>
-            
-            <div className="bg-[#f4f6f8] p-4 rounded-2xl space-y-2 text-left text-xs font-semibold text-neutral-600">
-              <div className="flex justify-between border-b border-gray-200 pb-2">
-                <span>Phone Number:</span>
-                <span className="font-mono text-neutral-800">{phoneNumber || 'Connected Account'}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-2">
-                <span>Session Type:</span>
-                <span className="text-neutral-800">Direct Socket Node.js Daemon (Baileys)</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-2">
-                <span>Security Engine:</span>
-                <span className="text-emerald-600 flex items-center gap-1"><i className="las la-shield-alt"></i> AES-256 Encrypted</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Uptime:</span>
-                <span className="text-neutral-800">Online & Active</span>
-              </div>
-            </div>
+      {/* Account Link Handshake Interface */}
+      {isLinking && (
+        <div className="dashboard-container__body p-6 bg-white rounded-3xl border border-gray-100 shadow-sm mt-6 animate-fade-in">
+          <div className="flex justify-between items-center mb-6" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h4 className="text-lg font-bold text-neutral-800" style={{ margin: 0 }}>Authentication Handshake</h4>
+            <button onClick={() => setIsLinking(false)} className="btn btn-sm bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-lg px-3 py-1 text-xs" style={{ background: '#f1f5f9', border: 'none', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}>
+              Cancel Connection
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-4">
-            <div className="space-y-6">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <div className="space-y-6" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div className="space-y-2">
-                <h4 className="text-lg font-bold text-neutral-800">Link WhatsApp Account</h4>
-                <p className="text-sm text-gray-400 font-light leading-relaxed">
-                  Link your WhatsApp account directly using a dynamic QR Code scan or Phone Number pairing code. This session runs in a secure sandbox container with AES-256 database protection.
+                <p className="text-sm text-gray-400 font-light leading-relaxed" style={{ color: '#64748b', fontSize: '13px', lineHeight: '1.6' }}>
+                  Scan the generated QR Code using your WhatsApp app Linked Devices screen, or generate an 8-character numeric pairing code directly.
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-sm">1</div>
+              <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="flex gap-4" style={{ display: 'flex', gap: '16px' }}>
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-sm" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50px', background: '#f1f5f9', fontWeight: 'bold' }}>1</div>
                   <div>
-                    <h5 className="text-sm font-bold text-neutral-700">Open WhatsApp on your phone</h5>
-                    <p className="text-xs text-gray-400 font-light">Tap Menu or Settings and select Linked Devices.</p>
+                    <h5 className="text-sm font-bold text-neutral-700" style={{ margin: 0 }}>Open WhatsApp on your phone</h5>
+                    <p className="text-xs text-gray-400 font-light" style={{ margin: '4px 0 0 0', color: '#94a3b8' }}>Tap Menu or Settings and select Linked Devices.</p>
                   </div>
                 </div>
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-sm">2</div>
+                <div className="flex gap-4" style={{ display: 'flex', gap: '16px' }}>
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-sm" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50px', background: '#f1f5f9', fontWeight: 'bold' }}>2</div>
                   <div>
-                    <h5 className="text-sm font-bold text-neutral-700">Scan QR or Link with Phone Number</h5>
-                    <p className="text-xs text-gray-400 font-light">Choose your preferred authentication method on the right tabs.</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-sm">3</div>
-                  <div>
-                    <h5 className="text-sm font-bold text-neutral-700">Start Automations</h5>
-                    <p className="text-xs text-gray-400 font-light">AI Agents and scheduled marketing campaigns will automatically start responding.</p>
+                    <h5 className="text-sm font-bold text-neutral-700" style={{ margin: 0 }}>Pair your device</h5>
+                    <p className="text-xs text-gray-400 font-light" style={{ margin: '4px 0 0 0', color: '#94a3b8' }}>Scan the QR code on the right, or choose Phone Link mode.</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="border border-gray-100 rounded-3xl p-6 shadow-sm bg-[#f8fafc]/50">
-              <div className="flex border-b border-gray-200 mb-6">
+            <div className="border border-gray-100 rounded-3xl p-6 shadow-sm bg-[#f8fafc]/50" style={{ border: '1px solid #f1f5f9', borderRadius: '24px', padding: '24px', background: '#f8fafc' }}>
+              <div className="flex border-b border-gray-200 mb-6" style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '24px' }}>
                 <button 
                   onClick={() => { setAuthMethod('qr'); setPairingCode(''); }}
-                  className={`flex-1 pb-3 text-sm font-bold tracking-wider uppercase border-b-2 transition-all ${authMethod === 'qr' ? 'border-[#00832e] text-[#00832e]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  className={`flex-1 pb-3 text-sm font-bold tracking-wider uppercase border-b-2 transition-all`}
+                  style={{ flex: 1, background: 'none', border: 'none', borderBottom: authMethod === 'qr' ? '2px solid #00832e' : '2px solid transparent', color: authMethod === 'qr' ? '#00832e' : '#94a3b8', paddingBottom: '12px', fontWeight: 'bold', cursor: 'pointer' }}
                 >
                   <i className="las la-qrcode me-1"></i> QR Code Scan
                 </button>
                 <button 
                   onClick={() => { setAuthMethod('phone'); setQrCodeGenerated(false); }}
-                  className={`flex-1 pb-3 text-sm font-bold tracking-wider uppercase border-b-2 transition-all ${authMethod === 'phone' ? 'border-[#00832e] text-[#00832e]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  className={`flex-1 pb-3 text-sm font-bold tracking-wider uppercase border-b-2 transition-all`}
+                  style={{ flex: 1, background: 'none', border: 'none', borderBottom: authMethod === 'phone' ? '2px solid #00832e' : '2px solid transparent', color: authMethod === 'phone' ? '#00832e' : '#94a3b8', paddingBottom: '12px', fontWeight: 'bold', cursor: 'pointer' }}
                 >
                   <i className="las la-phone me-1"></i> Phone Pairing Code
                 </button>
               </div>
 
               {authMethod === 'qr' && (
-                <div className="text-center p-4 space-y-6">
+                <div className="text-center p-4 space-y-6" style={{ textAlign: 'center' }}>
                   {qrCodeGenerated && qrUrl ? (
-                    <div className="space-y-4">
-                      <div className="relative inline-flex p-4 bg-white border border-gray-200 rounded-2xl shadow-md">
+                    <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="relative inline-flex p-4 bg-white border border-gray-200 rounded-2xl shadow-md" style={{ display: 'inline-flex', padding: '16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', margin: '0 auto' }}>
                         <img 
                           src={qrUrl} 
                           alt="WhatsApp Linking QR Code" 
@@ -1039,21 +1016,22 @@ function WhatsAppAccountManager() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <p className="text-xs text-neutral-600 font-bold uppercase tracking-wider animate-pulse flex items-center justify-center gap-1.5">
+                        <p className="text-xs text-neutral-600 font-bold uppercase tracking-wider animate-pulse flex items-center justify-center gap-1.5" style={{ fontSize: '11px', color: '#00832e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           <i className="las la-spinner la-spin text-success"></i> Waiting for phone scan...
                         </p>
                       </div>
                     </div>
                   ) : (
-                    <div className="py-8 space-y-4">
-                      <div className="p-4 bg-[#00832e]/5 text-[#00832e] inline-flex rounded-full">
+                    <div className="py-8 space-y-4" style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+                      <div className="p-4 bg-[#00832e]/5 text-[#00832e] inline-flex rounded-full" style={{ padding: '16px', borderRadius: '50px', background: '#ecfdf5', color: '#00832e' }}>
                         <i className="las la-mobile-alt" style={{ fontSize: '32px' }}></i>
                       </div>
-                      <p className="text-xs text-gray-500 font-light max-w-xs mx-auto">Generate a single-use WhatsApp Web handshake QR code to bind your session.</p>
+                      <p className="text-xs text-gray-500 font-light max-w-xs mx-auto" style={{ fontSize: '12px', color: '#64748b', maxWidth: '280px' }}>Generate a single-use WhatsApp Web handshake QR code to bind your session.</p>
                       <button 
                         disabled={loading}
                         onClick={() => handleLinkSession('qr')} 
                         className="btn btn-sm btn-shadow bg-black text-white hover:bg-neutral-800 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest"
+                        style={{ background: '#000', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
                       >
                         {loading ? 'Generating...' : 'Generate QR Code'}
                       </button>
@@ -1065,22 +1043,22 @@ function WhatsAppAccountManager() {
               {authMethod === 'phone' && (
                 <div className="p-4 space-y-6">
                   {connectionStatus === 'pairing' ? (
-                    <div className="text-center space-y-4">
-                      <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider">Your Pairing Code</p>
-                      <div className="font-mono text-3xl font-black text-neutral-900 bg-white border border-gray-200 py-4 px-6 rounded-2xl inline-block tracking-widest shadow-inner">
+                    <div className="text-center space-y-4" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider" style={{ fontSize: '11px', color: '#94a3b8' }}>Your Pairing Code</p>
+                      <div className="font-mono text-3xl font-black text-neutral-900 bg-white border border-gray-200 py-4 px-6 rounded-2xl inline-block tracking-widest shadow-inner" style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b', background: '#fff', border: '1px solid #e2e8f0', padding: '16px 24px', borderRadius: '16px', display: 'inline-block', letterSpacing: '4px' }}>
                         {pairingCode}
                       </div>
-                      <div className="space-y-1 text-left text-xs font-light text-gray-500 max-w-xs mx-auto bg-neutral-50 p-4 rounded-xl border border-gray-100">
-                        <p className="font-bold text-neutral-600 mb-1">How to enter code:</p>
-                        <p>1. Open Linked Devices on your phone.</p>
-                        <p>2. Select "Link with Phone Number instead".</p>
-                        <p>3. Enter the 8-digit code shown above.</p>
+                      <div className="space-y-1 text-left text-xs font-light text-gray-500 max-w-xs mx-auto bg-neutral-50 p-4 rounded-xl border border-gray-100" style={{ textAlign: 'left', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', fontSize: '12px', color: '#64748b' }}>
+                        <p className="font-bold text-neutral-600 mb-1" style={{ fontWeight: 'bold', margin: '0 0 8px 0', color: '#1e293b' }}>How to enter code:</p>
+                        <p style={{ margin: '4px 0' }}>1. Open Linked Devices on your phone.</p>
+                        <p style={{ margin: '4px 0' }}>2. Select "Link with Phone Number instead".</p>
+                        <p style={{ margin: '4px 0' }}>3. Enter the 8-digit code shown above.</p>
                       </div>
                     </div>
                   ) : (
-                    <form onSubmit={handleRequestPairingCode} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Phone Number (with Country Code)</label>
+                    <form onSubmit={handleRequestPairingCode} className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="space-y-1" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400" style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'bold' }}>Phone Number (with Country Code)</label>
                         <input 
                           required
                           type="tel"
@@ -1088,12 +1066,14 @@ function WhatsAppAccountManager() {
                           onChange={(e) => setPhoneNumber(e.target.value)}
                           placeholder="e.g. +94771234567"
                           className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                          style={{ width: '100%', padding: '12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
                         />
                       </div>
                       <button 
                         disabled={loading}
                         type="submit"
                         className="w-full bg-black text-white hover:bg-neutral-800 transition-all py-3 rounded-xl text-xs font-bold tracking-widest uppercase"
+                        style={{ width: '100%', background: '#000', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
                       >
                         {loading ? 'Requesting...' : 'Request Pairing Code'}
                       </button>
@@ -1101,11 +1081,10 @@ function WhatsAppAccountManager() {
                   )}
                 </div>
               )}
-
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1121,7 +1100,7 @@ function formatPhone(raw) {
 }
 
 // ── WhatsApp Interactive Inbox Component ─────────────────────────────────────
-function WhatsAppInbox() {
+function WhatsAppInbox({ activeSessionId }) {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1156,7 +1135,10 @@ function WhatsAppInbox() {
       try {
         // First check connection
         const statusRes = await fetch(`${API_BASE_URL}/whatsapp/status`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+            'x-session-id': activeSessionId
+          }
         });
         if (!statusRes.ok) return;
         const statusData = await statusRes.json();
@@ -1166,7 +1148,10 @@ function WhatsAppInbox() {
 
         if (statusData.status === 'Connected') {
           const chatsRes = await fetch(`${API_BASE_URL}/whatsapp/chats`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+            headers: { 
+              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+              'x-session-id': activeSessionId
+            }
           });
           if (chatsRes.ok) {
             const chatsData = await chatsRes.json();
@@ -1186,7 +1171,7 @@ function WhatsAppInbox() {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [activeSessionId]);
 
   // Poll messages for active chat
   useEffect(() => {
@@ -1196,7 +1181,10 @@ function WhatsAppInbox() {
     const fetchMessages = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/whatsapp/messages/${activeChatId}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+            'x-session-id': activeSessionId
+          }
         });
         if (res.ok) {
           const data = await res.json();
@@ -1213,7 +1201,7 @@ function WhatsAppInbox() {
       active = false;
       clearInterval(interval);
     };
-  }, [activeChatId]);
+  }, [activeChatId, activeSessionId]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -1234,7 +1222,10 @@ function WhatsAppInbox() {
       try {
         const res = await fetch(`${API_BASE_URL}/whatsapp/send-media`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` },
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+            'x-session-id': activeSessionId
+          },
           body: form
         });
         if (res.ok) {
@@ -1251,7 +1242,8 @@ function WhatsAppInbox() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+          'x-session-id': activeSessionId
         },
         body: JSON.stringify({ chatId: activeChatId, text: textToSend })
       });
@@ -1276,7 +1268,8 @@ function WhatsAppInbox() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+          'x-session-id': activeSessionId
         },
         body: JSON.stringify({ message: msg, customerPhone: simPhone })
       });
@@ -1295,7 +1288,8 @@ function WhatsAppInbox() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+          'x-session-id': activeSessionId
         },
         body: JSON.stringify({ phone: clean })
       });
@@ -1598,7 +1592,8 @@ function WhatsAppInbox() {
                             method: 'PATCH',
                             headers: {
                               'Content-Type': 'application/json',
-                              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+                              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+                              'x-session-id': activeSessionId
                             },
                             body: JSON.stringify({ label: newLabel })
                           });
@@ -1628,7 +1623,8 @@ function WhatsAppInbox() {
                             method: 'PATCH',
                             headers: {
                               'Content-Type': 'application/json',
-                              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+                              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+                              'x-session-id': activeSessionId
                             },
                             body: JSON.stringify({ label: newLabel })
                           });
@@ -1658,7 +1654,8 @@ function WhatsAppInbox() {
                             method: 'PATCH',
                             headers: {
                               'Content-Type': 'application/json',
-                              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+                              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+                              'x-session-id': activeSessionId
                             },
                             body: JSON.stringify({ label: newLabel })
                           });
@@ -2039,6 +2036,43 @@ function Dashboard({ user, onLogout }) {
       setTabState(newTab);
     }
   };
+
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('whatsray_active_session_id') || '');
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  const fetchSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/whatsapp/sessions`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data);
+        if (data.length > 0) {
+          const exists = data.some(s => s.id === activeSessionId);
+          if (!exists) {
+            setActiveSessionId(data[0].id);
+            localStorage.setItem('whatsray_active_session_id', data[0].id);
+          }
+        } else {
+          setActiveSessionId('');
+          localStorage.removeItem('whatsray_active_session_id');
+        }
+      }
+    } catch (err) {
+      console.error('Fetch sessions failed:', err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchSessions();
+    }
+  }, [user]);
   
   const [openDropdowns, setOpenDropdowns] = useState({
     contacts: false,
@@ -2841,7 +2875,33 @@ function Dashboard({ user, onLogout }) {
                   <h3 className="title">{currentPage.title ? currentPage.title.replace('WhatsRay - ', '') : 'Dashboard'}</h3>
                 </div>
 
-                <div className="dashboard-header__right">
+                <div className="dashboard-header__right" style={{ display: 'flex', alignItems: 'center' }}>
+                  {/* WhatsApp Active Session Selector Dropdown */}
+                  {sessions.length > 0 && (
+                    <div className="user-info" style={{ marginRight: '16px' }}>
+                      <div className="user-info__right">
+                        <div className="user-info__button" style={{ cursor: 'pointer', padding: '8px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center' }}>
+                          <span className="icon" style={{ marginRight: '8px', color: '#00832e', display: 'flex', alignItems: 'center' }}><i className="fa-brands fa-whatsapp fa-xl"></i></span>
+                          <select 
+                            value={activeSessionId} 
+                            onChange={(e) => {
+                              setActiveSessionId(e.target.value);
+                              localStorage.setItem('whatsray_active_session_id', e.target.value);
+                              window.location.reload();
+                            }}
+                            style={{ border: 'none', background: 'transparent', fontSize: '12px', fontWeight: 'bold', outline: 'none', color: '#1e293b', paddingRight: '20px', cursor: 'pointer' }}
+                          >
+                            {sessions.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.session_name} ({s.phone ? formatPhone(s.phone) : 'Linking...'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="user-info">
                     <div className="user-info__right" onClick={() => setIsProfileOpen(!isProfileOpen)}>
                       <div className="user-info__button" tabIndex="-1">
@@ -2876,15 +2936,14 @@ function Dashboard({ user, onLogout }) {
             {/* Page content injected from scraped HTML / mockups */}
             <div className="dashboard-body">
               {tab === 'whatsapp_account' ? (
-                <WhatsAppAccountManager />
+                <WhatsAppAccountManager activeSessionId={activeSessionId} onSessionsUpdated={fetchSessions} user={user} />
               ) : tab === 'inbox' ? (
-                <WhatsAppInbox />
+                <WhatsAppInbox activeSessionId={activeSessionId} />
               ) : tab === 'orders_list' ? (
                 <WhatsAppOrderManager />
               ) : tab === 'automation_ai_bot' ? (
-                <WhatsAppAIBotManager user={user} />
-              ) : tab === 'subscription_index' ? (
-                <WhatsAppSubscriptionManager user={user} />
+                <WhatsAppAIBotManager user={user} activeSessionId={activeSessionId} />
+
               ) : (
                 <div dangerouslySetInnerHTML={{ __html: currentPage.body || '<h3>Page not found</h3>' }} />
               )}

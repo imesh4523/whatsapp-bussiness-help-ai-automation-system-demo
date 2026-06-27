@@ -42,6 +42,29 @@ function AdminDashboard({ admin, onLogout }) {
   });
 
   const [isSaved, setIsSaved] = useState(false);
+  const [renamingSessionId, setRenamingSessionId] = useState(null);
+  const [renameVal, setRenameVal] = useState('');
+
+  const renameSessionAdmin = async (sessionId) => {
+    if (!renameVal.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/whatsapp/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ session_name: renameVal })
+      });
+      if (res.ok) {
+        setRenamingSessionId(null);
+        setRenameVal('');
+        if (window.fetchSessionsAdmin) window.fetchSessionsAdmin();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const [transactionsList, setTransactionsList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -90,6 +113,8 @@ function AdminDashboard({ admin, onLogout }) {
         })
         .catch(err => console.warn(err));
     };
+
+    window.fetchSessionsAdmin = fetchSessions;
 
     fetchOverview();
     fetchUsers();
@@ -163,6 +188,8 @@ function AdminDashboard({ admin, onLogout }) {
       console.error(e);
     }
   };
+
+
 
   const toggleUserStatus = async (userId) => {
     try {
@@ -271,6 +298,7 @@ function AdminDashboard({ admin, onLogout }) {
               <Cpu className="w-4 h-4" />
               Global AI Config
             </button>
+
             <button 
               onClick={() => setActiveTab('transactions')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'transactions' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
@@ -333,13 +361,13 @@ function AdminDashboard({ admin, onLogout }) {
           {activeTab === 'overview' && (
             <div className="space-y-8">
               {/* Stat Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
                   <div className="flex justify-between items-start mb-4">
                     <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Total Active Users</span>
                     <div className="p-3 rounded-2xl bg-emerald-50 text-[#00832e]"><Users className="w-5 h-5" /></div>
                   </div>
-                  <h2 className="text-3xl font-black text-neutral-900 tracking-tight">{metrics.totalUsers}</h2>
+                  <h2 className="text-2xl font-black text-neutral-900 tracking-tight">{metrics.totalUsers}</h2>
                   <p className="text-[10px] text-emerald-600 font-bold uppercase mt-2">Active portal users</p>
                 </div>
 
@@ -348,8 +376,8 @@ function AdminDashboard({ admin, onLogout }) {
                     <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Linked WhatsApps</span>
                     <div className="p-3 rounded-2xl bg-[#00832e]/10 text-[#00832e]"><Smartphone className="w-5 h-5" /></div>
                   </div>
-                  <h2 className="text-3xl font-black text-neutral-900 tracking-tight">{metrics.totalSessions}</h2>
-                  <p className="text-[10px] text-emerald-600 font-bold uppercase mt-2">WhatsApp sessions configured</p>
+                  <h2 className="text-2xl font-black text-neutral-900 tracking-tight">{metrics.totalSessions}</h2>
+                  <p className="text-[10px] text-emerald-600 font-bold uppercase mt-2">WhatsApp configurations</p>
                 </div>
 
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
@@ -357,17 +385,35 @@ function AdminDashboard({ admin, onLogout }) {
                     <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">AI Responder Calls</span>
                     <div className="p-3 rounded-2xl bg-blue-50 text-blue-600"><Cpu className="w-5 h-5" /></div>
                   </div>
-                  <h2 className="text-3xl font-black text-neutral-900 tracking-tight">{metrics.activeSessions}</h2>
-                  <p className="text-[10px] text-blue-600 font-bold uppercase mt-2">Connected active sockets</p>
+                  <h2 className="text-2xl font-black text-neutral-900 tracking-tight">{metrics.activeSessions}</h2>
+                  <p className="text-[10px] text-blue-600 font-bold uppercase mt-2">Active linked sockets</p>
                 </div>
 
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
                   <div className="flex justify-between items-start mb-4">
-                    <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Database Uptime</span>
+                    <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Process Memory</span>
                     <div className="p-3 rounded-2xl bg-purple-50 text-purple-600"><Database className="w-5 h-5" /></div>
                   </div>
-                  <h2 className="text-3xl font-black text-neutral-900 tracking-tight">{metrics.memoryUsage}</h2>
-                  <p className="text-[10px] text-purple-600 font-bold uppercase mt-2">Process Heap Uptime: {metrics.uptime}</p>
+                  <h2 className="text-2xl font-black text-neutral-900 tracking-tight">{metrics.memoryUsage}</h2>
+                  <p className="text-[10px] text-purple-600 font-bold uppercase mt-2">Heap: {metrics.uptime}</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Monthly MRR</span>
+                    <div className="p-3 rounded-2xl bg-amber-50 text-amber-600"><CreditCard className="w-5 h-5" /></div>
+                  </div>
+                  <h2 className="text-2xl font-black text-neutral-900 tracking-tight">රු {(metrics.mrr || 0).toLocaleString()}</h2>
+                  <p className="text-[10px] text-amber-600 font-bold uppercase mt-2">Monthly Recurring Revenue</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="text-neutral-400 text-xs font-bold uppercase tracking-widest">ARPU Stats</span>
+                    <div className="p-3 rounded-2xl bg-teal-50 text-teal-600"><Shield className="w-5 h-5" /></div>
+                  </div>
+                  <h2 className="text-2xl font-black text-neutral-900 tracking-tight">රු {Math.round(metrics.arpu || 0).toLocaleString()}</h2>
+                  <p className="text-[10px] text-teal-600 font-bold uppercase mt-2">Average User Yield</p>
                 </div>
               </div>
 
@@ -407,19 +453,57 @@ function AdminDashboard({ admin, onLogout }) {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <Shield className="w-4 h-4 text-[#00832e]" />
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Database Security Panel</h3>
+                <div className="space-y-6">
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-4 h-4 text-[#00832e]" />
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Tier Distribution</h3>
                     </div>
-                    <p className="text-xs text-gray-500 leading-relaxed font-light mb-4">
-                      All connected clients session keys are isolated and encrypted via Node.js internal Crypto engine. Credentials stored in Mongo DB remain secure through continuous salting.
-                    </p>
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
+                          <span>Free Starter</span>
+                          <span>{metrics.distribution?.Free || 0} users</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                          <div className="bg-gray-400 h-full rounded-full" style={{ width: `${metrics.totalUsers > 0 ? ((metrics.distribution?.Free || 0) / metrics.totalUsers) * 100 : 0}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs font-bold text-emerald-600 mb-1">
+                          <span>Premium Growth</span>
+                          <span>{metrics.distribution?.Premium || 0} users</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${metrics.totalUsers > 0 ? ((metrics.distribution?.Premium || 0) / metrics.totalUsers) * 100 : 0}%` }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs font-bold text-purple-600 mb-1">
+                          <span>Enterprise Elite</span>
+                          <span>{metrics.distribution?.Enterprise || 0} users</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                          <div className="bg-purple-500 h-full rounded-full" style={{ width: `${metrics.totalUsers > 0 ? ((metrics.distribution?.Enterprise || 0) / metrics.totalUsers) * 100 : 0}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-[#f4f6f8] p-4 rounded-2xl flex items-center justify-between text-xs">
-                    <span className="font-bold text-gray-500 uppercase tracking-widest text-[9px]">Encryption Key</span>
-                    <span className="font-mono bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-neutral-700">AES-256-GCM</span>
+
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Shield className="w-4 h-4 text-[#00832e]" />
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Database Security Panel</h3>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed font-light mb-4">
+                        All connected clients session keys are isolated and encrypted via Node.js internal Crypto engine. Credentials stored in Mongo DB remain secure through continuous salting.
+                      </p>
+                    </div>
+                    <div className="bg-[#f4f6f8] p-4 rounded-2xl flex items-center justify-between text-xs">
+                      <span className="font-bold text-gray-500 uppercase tracking-widest text-[9px]">Encryption Key</span>
+                      <span className="font-mono bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-neutral-700">AES-256-GCM</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -519,9 +603,34 @@ function AdminDashboard({ admin, onLogout }) {
                   <tbody>
                     {activeSessions.map(s => (
                       <tr key={s.id} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
-                        <td className="py-4 font-mono text-xs text-neutral-400">{s.id}</td>
+                        <td className="py-4">
+                          {renamingSessionId === s.id ? (
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="text" 
+                                value={renameVal} 
+                                onChange={(e) => setRenameVal(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-2 py-1 text-xs text-neutral-800" 
+                                style={{ width: '150px' }}
+                              />
+                              <button onClick={() => renameSessionAdmin(s.id)} className="bg-[#00832e] text-white rounded-lg px-2 py-1 text-xs border-none cursor-pointer"><i className="fa-solid fa-check"></i></button>
+                              <button onClick={() => setRenamingSessionId(null)} className="bg-gray-400 text-white rounded-lg px-2 py-1 text-xs border-none cursor-pointer"><i className="fa-solid fa-xmark"></i></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-neutral-800">{s.session_name || 'WhatsApp Account'}</span>
+                              <button 
+                                onClick={() => { setRenamingSessionId(s.id); setRenameVal(s.session_name || 'WhatsApp Account'); }} 
+                                className="text-gray-400 hover:text-gray-600 p-0 border-none bg-transparent cursor-pointer"
+                              >
+                                <i className="fa-solid fa-pen text-[10px]"></i>
+                              </button>
+                            </div>
+                          )}
+                          <div className="font-mono text-[10px] text-neutral-400 mt-0.5">{s.id}</div>
+                        </td>
                         <td className="py-4 font-bold text-neutral-800">{s.userId}</td>
-                        <td className="py-4 font-mono text-neutral-800">{s.phone}</td>
+                        <td className="py-4 font-mono text-neutral-800">{s.phone || '—'}</td>
                         <td className="py-4 text-neutral-500">{s.library}</td>
                         <td className="py-4 text-neutral-500">{s.uptime}</td>
                         <td className="py-4 font-mono text-xs">{s.memory}</td>
@@ -787,6 +896,8 @@ function AdminDashboard({ admin, onLogout }) {
               </div>
             </div>
           )}
+
+
 
         </main>
       </div>

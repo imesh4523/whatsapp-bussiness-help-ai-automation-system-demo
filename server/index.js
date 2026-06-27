@@ -244,25 +244,122 @@ app.patch('/api/orders/:id/status', authenticateToken, async (req, res) => {
 });
 
 // ── WhatsApp Session Endpoints ───────────────────────────────────────────────
-app.get('/api/whatsapp/status', authenticateToken, async (req, res) => {
-  const sessionId = `user_${req.user.id}`;
+
+// Helper / Middleware to resolve WhatsApp session ID from request headers, query, or body
+async function resolveWhatsAppSession(req, res, next) {
+  let sessionId = req.headers['x-session-id'] || req.query.sessionId || req.body.sessionId;
+  
+  if (!sessionId) {
+    try {
+      const dbRes = await db.query(
+        'SELECT id FROM whatsapp_sessions WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1',
+        [req.user.id]
+      );
+      if (dbRes.rows.length > 0) {
+        sessionId = dbRes.rows[0].id;
+      } else {
+        sessionId = `user_${req.user.id}`;
+      }
+    } catch (err) {
+      return res.status(500).json({ error: 'Database error resolving session ID' });
+    }
+  } else {
+    try {
+      const check = await db.query(
+        'SELECT id FROM whatsapp_sessions WHERE id = $1 AND user_id = $2',
+        [sessionId, req.user.id]
+      );
+      if (check.rows.length === 0 && sessionId !== `user_${req.user.id}`) {
+        return res.status(403).json({ error: 'Access denied: Session not found or does not belong to you' });
+      }
+    } catch (err) {
+      return res.status(500).json({ error: 'Database error validating session ID' });
+    }
+  }
+  
+  req.whatsappSessionId = sessionId;
+  next();
+}
+
+app.get('/api/whatsapp/sessions', authenticateToken, async (req, res) => {
+  try {
+    const sessionsRes = await db.query(
+      'SELECT id, session_name, phone, library, status, uptime, memory, created_at FROM whatsapp_sessions WHERE user_id = $1 ORDER BY created_at ASC',
+      [req.user.id]
+    );
+    res.json(sessionsRes.rows);
+  } catch (err) {
+    console.error('Fetch whatsapp sessions error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/whatsapp/sessions/:sessionId', authenticateToken, async (req, res) => {
+  const { sessionId } = req.params;
+  const { session_name } = req.body;
+  
+  if (!session_name || !session_name.trim()) {
+    return res.status(400).json({ error: 'Session name is required' });
+  }
+  
+  try {
+    const result = await db.query(
+      'UPDATE whatsapp_sessions SET session_name = $1 WHERE id = $2 AND user_id = $3 RETURNING id, session_name',
+      [session_name.trim(), sessionId, req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found or access denied' });
+    }
+    res.json({ success: true, session: result.rows[0] });
+  } catch (err) {
+    console.error('Rename session error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/whatsapp/status', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const sessionId = req.whatsappSessionId;
   const status = await getSessionStatus(sessionId);
   res.json(status);
 });
 
 app.post('/api/whatsapp/link', authenticateToken, async (req, res) => {
-  const { authMethod, phoneNumber } = req.body;
-  const sessionId = `user_${req.user.id}`;
+  const { authMethod, phoneNumber, sessionId: inputSessionId } = req.body;
   
   try {
-    // If linking via pairing code, phone number is required
+    let sessionId = inputSessionId;
+    
+    if (!sessionId) {
+      // Check limits
+      const countRes = await db.query('SELECT COUNT(*) FROM whatsapp_sessions WHERE user_id = $1', [req.user.id]);
+      const activeCount = parseInt(countRes.rows[0].count);
+      
+      const userRes = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+      const plan = userRes.rows[0]?.plan || 'Free';
+      let maxSessions = 1;
+      if (plan === 'Premium') maxSessions = 3;
+      if (plan === 'Enterprise') maxSessions = 10;
+      
+      if (activeCount >= maxSessions) {
+        return res.status(400).json({ 
+          error: `You have reached the maximum number of WhatsApp sessions (${maxSessions}) allowed for your ${plan} plan.` 
+        });
+      }
+      
+      sessionId = `session_${req.user.id}_${Date.now()}`;
+    } else {
+      const check = await db.query('SELECT id FROM whatsapp_sessions WHERE id = $1 AND user_id = $2', [sessionId, req.user.id]);
+      if (check.rows.length === 0 && sessionId !== `user_${req.user.id}`) {
+        return res.status(403).json({ error: 'Invalid session ID provided.' });
+      }
+    }
+    
     const phone = authMethod === 'phone' ? phoneNumber : null;
     const { retrievedPairingCode } = await startWhatsAppSocket(sessionId, req.user.id, phone);
     
-    // Allow brief time for QR / Pairing updates
     setTimeout(async () => {
       const currentStatus = await getSessionStatus(sessionId);
-      res.json(currentStatus);
+      res.json({ ...currentStatus, sessionId });
     }, 1500);
   } catch (err) {
     console.error('WhatsApp link error:', err.message);
@@ -270,8 +367,8 @@ app.post('/api/whatsapp/link', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/whatsapp/disconnect', authenticateToken, async (req, res) => {
-  const sessionId = `user_${req.user.id}`;
+app.post('/api/whatsapp/disconnect', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const sessionId = req.whatsappSessionId;
   try {
     await disconnectWhatsAppSession(sessionId);
     res.json({ success: true, message: 'WhatsApp session disconnected.' });
@@ -281,9 +378,9 @@ app.post('/api/whatsapp/disconnect', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/whatsapp/simulate', authenticateToken, async (req, res) => {
+app.post('/api/whatsapp/simulate', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const { message, customerPhone } = req.body;
-  const sessionId = `user_${req.user.id}`;
+  const sessionId = req.whatsappSessionId;
   const cleanPhone = customerPhone || 'simulated_client';
   
   try {
@@ -295,12 +392,10 @@ app.post('/api/whatsapp/simulate', authenticateToken, async (req, res) => {
 });
 
 // ── Active Chats & Message history ───────────────────────────────────────────
-app.get('/api/whatsapp/chats', authenticateToken, async (req, res) => {
-  const sessionId = `user_${req.user.id}`;
+app.get('/api/whatsapp/chats', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const sessionId = req.whatsappSessionId;
   try {
     const chatsRes = await db.query(
-      // Exclude WhatsApp group chats: group JIDs produce very long numeric IDs (16-18 digits)
-      // while real phone numbers are max 15 digits (E.164 standard)
       `SELECT * FROM chats 
        WHERE session_id = $1 
          AND LENGTH(sender_phone) <= 15
@@ -314,23 +409,21 @@ app.get('/api/whatsapp/chats', authenticateToken, async (req, res) => {
 });
 
 // ── Update contact phone number (correct LID/wrong JID numbers) ───────────────
-app.patch('/api/whatsapp/chats/:chatId/phone', authenticateToken, async (req, res) => {
+app.patch('/api/whatsapp/chats/:chatId/phone', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const { chatId } = req.params;
   const { phone } = req.body;
-  const sessionId = `user_${req.user.id}`;
+  const sessionId = req.whatsappSessionId;
 
   if (!phone || !phone.trim()) {
     return res.status(400).json({ error: 'Phone number is required' });
   }
 
-  // Clean: digits only, max 15 chars (E.164)
   const cleanPhone = phone.replace(/\D/g, '').substring(0, 15);
   if (cleanPhone.length < 7) {
     return res.status(400).json({ error: 'Invalid phone number' });
   }
 
   try {
-    // Security: only allow updating chats belonging to this user's session
     const check = await db.query('SELECT id FROM chats WHERE id = $1 AND session_id = $2', [chatId, sessionId]);
     if (check.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied' });
@@ -344,17 +437,16 @@ app.patch('/api/whatsapp/chats/:chatId/phone', authenticateToken, async (req, re
 });
 
 // ── Update contact status label (Confirmed, Cancelled, Interested) ───────────
-app.patch('/api/whatsapp/chats/:chatId/label', authenticateToken, async (req, res) => {
+app.patch('/api/whatsapp/chats/:chatId/label', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const { chatId } = req.params;
-  const { label } = req.body; // 'None', 'Confirmed', 'Cancelled', 'Interested'
-  const sessionId = `user_${req.user.id}`;
+  const { label } = req.body;
+  const sessionId = req.whatsappSessionId;
 
   if (!label) {
     return res.status(400).json({ error: 'Label is required' });
   }
 
   try {
-    // Security: only allow updating chats belonging to this user's session
     const check = await db.query('SELECT id FROM chats WHERE id = $1 AND session_id = $2', [chatId, sessionId]);
     if (check.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied' });
@@ -367,11 +459,10 @@ app.patch('/api/whatsapp/chats/:chatId/label', authenticateToken, async (req, re
   }
 });
 
-app.get('/api/whatsapp/messages/:chatId', authenticateToken, async (req, res) => {
+app.get('/api/whatsapp/messages/:chatId', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const { chatId } = req.params;
+  const sessionId = req.whatsappSessionId;
   try {
-    // Security check: ensure chat belongs to user's session
-    const sessionId = `user_${req.user.id}`;
     const checkChat = await db.query('SELECT * FROM chats WHERE id = $1 AND session_id = $2', [chatId, sessionId]);
     if (checkChat.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied' });
@@ -387,23 +478,19 @@ app.get('/api/whatsapp/messages/:chatId', authenticateToken, async (req, res) =>
   }
 });
 
-app.post('/api/whatsapp/send-message', authenticateToken, async (req, res) => {
+app.post('/api/whatsapp/send-message', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const { chatId, text } = req.body;
+  const sessionId = req.whatsappSessionId;
   try {
-    // 1. Save outgoing message to DB
     await db.query(
       'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
       [chatId, text, 'agent']
     );
     
-    // Update last message in chat list
     await db.query('UPDATE chats SET last_message = $1, unread_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [text, chatId]);
     
-    // Send via active Baileys socket
-    const sessionId = `user_${req.user.id}`;
     const sock = getActiveSocket(sessionId);
     if (sock) {
-      // Fetch remote_jid and ephemeral_expiration from DB to ensure correct recipient JID and disappearing message settings are used
       const chatQuery = await db.query('SELECT remote_jid, sender_phone, ephemeral_expiration FROM chats WHERE id = $1', [chatId]);
       let recipientJid;
       let ephemeralExpiration = 0;
@@ -434,14 +521,14 @@ app.post('/api/whatsapp/send-message', authenticateToken, async (req, res) => {
 });
 
 // ── Send Media (image / video / document) ─────────────────────────────
-app.post('/api/whatsapp/send-media', authenticateToken, upload.single('file'), async (req, res) => {
+app.post('/api/whatsapp/send-media', authenticateToken, upload.single('file'), resolveWhatsAppSession, async (req, res) => {
   const { chatId, caption } = req.body;
   const file = req.file;
 
   if (!file) return res.status(400).json({ error: 'No file uploaded' });
   if (!chatId)  return res.status(400).json({ error: 'chatId is required' });
 
-  const sessionId = `user_${req.user.id}`;
+  const sessionId = req.whatsappSessionId;
 
   try {
     // Security: verify chat belongs to user
@@ -572,6 +659,33 @@ app.post('/api/ai-config', authenticateToken, async (req, res) => {
   }
 });
 
+// ── Plans Configuration Endpoints ──────────────────────────────────────────
+app.get('/api/plans', async (req, res) => {
+  try {
+    const plansRes = await db.query('SELECT * FROM plans ORDER BY price ASC');
+    res.json(plansRes.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/plans/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, price, features, disabledFeatures } = req.body;
+  try {
+    await db.query(
+      `UPDATE plans 
+       SET name = $1, price = $2, features = $3, disabled_features = $4 
+       WHERE id = $5`,
+      [name, parseFloat(price), JSON.stringify(features), JSON.stringify(disabledFeatures), id]
+    );
+    await logAuditEvent('Plan Updated', `Admin updated plan ${id} (${name}) details: price set to රු ${price}`);
+    res.json({ success: true, message: `Plan ${id} updated successfully.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Audit Logging Helper & Endpoint ─────────────────────────────────────────
 async function logAuditEvent(action, details) {
   try {
@@ -627,13 +741,43 @@ app.get('/api/admin/overview', async (req, res) => {
     const sessionsCount = await db.query('SELECT count(*) FROM whatsapp_sessions');
     const activeRes = await db.query("SELECT count(*) FROM whatsapp_sessions WHERE status = 'Connected'");
     
+    // User plan counts
+    const freeRes = await db.query("SELECT count(*) FROM users WHERE plan = 'Free'");
+    const premiumRes = await db.query("SELECT count(*) FROM users WHERE plan = 'Premium'");
+    const enterpriseRes = await db.query("SELECT count(*) FROM users WHERE plan = 'Enterprise'");
+    
+    const freeCount = parseInt(freeRes.rows[0].count);
+    const premiumCount = parseInt(premiumRes.rows[0].count);
+    const enterpriseCount = parseInt(enterpriseRes.rows[0].count);
+
+    // Fetch plan prices to compute MRR dynamically
+    const plansQuery = await db.query("SELECT id, price FROM plans");
+    const prices = {};
+    plansQuery.rows.forEach(p => {
+      prices[p.id] = parseFloat(p.price);
+    });
+
+    const premiumPrice = prices['Premium'] || 4990.00;
+    const enterprisePrice = prices['Enterprise'] || 12990.00;
+
+    const calculatedMRR = (premiumCount * premiumPrice) + (enterpriseCount * enterprisePrice);
+    const totalUsers = parseInt(usersCount.rows[0].count);
+    const calculatedARPU = totalUsers > 0 ? (calculatedMRR / totalUsers) : 0;
+
     res.json({
-      totalUsers: parseInt(usersCount.rows[0].count),
+      totalUsers,
       totalSessions: parseInt(sessionsCount.rows[0].count),
       activeSessions: parseInt(activeRes.rows[0].count),
       nodeHealth: 'Healthy',
       memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`,
-      uptime: `${Math.round(process.uptime())}s`
+      uptime: `${Math.round(process.uptime())}s`,
+      distribution: {
+        Free: freeCount,
+        Premium: premiumCount,
+        Enterprise: enterpriseCount
+      },
+      mrr: calculatedMRR,
+      arpu: calculatedARPU
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -693,13 +837,15 @@ app.post('/api/admin/sessions/:id/terminate', async (req, res) => {
 // ── Stripe Payments Endpoints ────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', authenticateToken, async (req, res) => {
   const { plan } = req.body;
-  if (!['Premium', 'Enterprise'].includes(plan)) {
-    return res.status(400).json({ error: 'Invalid plan value' });
-  }
-
-  const priceLkr = plan === 'Premium' ? 4990.00 : 12990.00;
-
   try {
+    const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [plan]);
+    if (planRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid plan value' });
+    }
+    const planRow = planRes.rows[0];
+    const priceLkr = parseFloat(planRow.price);
+    const amountCents = Math.round(priceLkr * 100);
+
     if (!process.env.STRIPE_SECRET_KEY) {
       // Mock Stripe mode fallback for testing
       const mockSessionId = 'cs_test_' + Math.random().toString(36).substring(2, 15);
@@ -717,10 +863,10 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
         price_data: {
           currency: 'lkr',
           product_data: {
-            name: `WhatsRay ${plan} Plan`,
-            description: `Access to ${plan === 'Premium' ? '3' : '10'} WhatsApp Sessions, advanced automations, and custom prompts.`,
+            name: `WhatsRay ${planRow.name}`,
+            description: `Access to features of the ${planRow.name}.`,
           },
-          unit_amount: plan === 'Premium' ? 499000 : 1299000,
+          unit_amount: amountCents,
         },
         quantity: 1,
       }],
@@ -843,6 +989,93 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
     await logAuditEvent('User Plan Overridden', `Admin manually updated User ${email} (ID ${id}) plan to ${plan}`);
     res.json({ success: true, message: `User plan upgraded to ${plan}` });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin endpoint: list all WhatsApp sessions across all users
+app.get('/api/admin/whatsapp/sessions', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+
+  try {
+    const sessionsRes = await db.query(`
+      SELECT ws.id, ws.session_name, ws.phone, ws.status, ws.library, ws.uptime, ws.memory, ws.created_at,
+             u.full_name as user_name, u.email as user_email
+      FROM whatsapp_sessions ws
+      LEFT JOIN users u ON ws.user_id = u.id
+      ORDER BY ws.created_at DESC
+    `);
+    res.json(sessionsRes.rows);
+  } catch (err) {
+    console.error('Fetch admin whatsapp sessions error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Admin endpoint: update session name / status for any user
+app.patch('/api/admin/whatsapp/sessions/:sessionId', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+
+  const { sessionId } = req.params;
+  const { session_name, status } = req.body;
+
+  try {
+    let updateFields = [];
+    let values = [];
+    let placeholderIdx = 1;
+
+    if (session_name !== undefined) {
+      updateFields.push(`session_name = $${placeholderIdx}`);
+      values.push(session_name);
+      placeholderIdx++;
+    }
+
+    if (status !== undefined) {
+      updateFields.push(`status = $${placeholderIdx}`);
+      values.push(status);
+      placeholderIdx++;
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(sessionId);
+    const query = `UPDATE whatsapp_sessions SET ${updateFields.join(', ')} WHERE id = $${placeholderIdx} RETURNING *`;
+    const result = await db.query(query, values);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    await logAuditEvent('Admin Session Update', `Admin updated WhatsApp session ${sessionId}: ${JSON.stringify(req.body)}`);
+    res.json({ success: true, session: result.rows[0] });
+  } catch (err) {
+    console.error('Admin update session error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Admin endpoint: force disconnect session
+app.post('/api/admin/whatsapp/sessions/:sessionId/disconnect', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+
+  const { sessionId } = req.params;
+  try {
+    await disconnectWhatsAppSession(sessionId);
+    await logAuditEvent('Admin Session Terminated', `Admin force-disconnected session ${sessionId}`);
+    res.json({ success: true, message: 'WhatsApp session disconnected by Administrator.' });
+  } catch (err) {
+    console.error('Admin disconnect session error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

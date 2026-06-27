@@ -20,6 +20,7 @@ async function init() {
     console.log('Running schema migrations...');
     await db.query(`
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS api_key TEXT DEFAULT NULL;
+      ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS session_name VARCHAR(255) DEFAULT 'WhatsApp Account';
       
       CREATE TABLE IF NOT EXISTS system_settings (
         key VARCHAR(255) PRIMARY KEY,
@@ -42,6 +43,14 @@ async function init() {
         action VARCHAR(255) NOT NULL,
         details TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS plans (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        price NUMERIC(10,2) NOT NULL,
+        features JSONB NOT NULL,
+        disabled_features JSONB NOT NULL
       );
     `);
     
@@ -131,6 +140,62 @@ async function init() {
         await db.query(
           'INSERT INTO products (name, price, description, category, image_url, sizes, colors) VALUES ($1, $2, $3, $4, $5, $6, $7)',
           [p.name, p.price, p.description, p.category, p.image_url || null, p.sizes, p.colors]
+        );
+      }
+    }
+
+    // Seed default pricing plans if empty
+    const planCheck = await db.query('SELECT count(*) FROM plans');
+    if (parseInt(planCheck.rows[0].count) === 0) {
+      console.log('Seeding pricing plans...');
+      const defaultPlans = [
+        {
+          id: 'Free',
+          name: 'Free Tier',
+          price: 0.00,
+          features: JSON.stringify([
+            "✓ 1 Active WhatsApp Session",
+            "✓ Standard Customer Inbox",
+            "✓ Mock AI replies simulator"
+          ]),
+          disabled_features: JSON.stringify([
+            "✗ WooCommerce sync",
+            "✗ Custom agent templates"
+          ])
+        },
+        {
+          id: 'Premium',
+          name: 'Premium Plan',
+          price: 4990.00,
+          features: JSON.stringify([
+            "✓ 3 Active WhatsApp Sessions",
+            "✓ Advanced CRM Customer list",
+            "✓ Unlimited Gemini AI replies",
+            "✓ Dynamic templates & quick replies"
+          ]),
+          disabled_features: JSON.stringify([
+            "✗ Multi-agent WooCommerce sync"
+          ])
+        },
+        {
+          id: 'Enterprise',
+          name: 'Enterprise Elite',
+          price: 12990.00,
+          features: JSON.stringify([
+            "✓ 10 Active WhatsApp Sessions",
+            "✓ WooCommerce store product sync",
+            "✓ Dedicated AI Custom Agents",
+            "✓ Higher webhook rate limits",
+            "✓ 24/7 Priority support hotline"
+          ]),
+          disabled_features: JSON.stringify([])
+        }
+      ];
+
+      for (const plan of defaultPlans) {
+        await db.query(
+          'INSERT INTO plans (id, name, price, features, disabled_features) VALUES ($1, $2, $3, $4, $5)',
+          [plan.id, plan.name, plan.price, plan.features, plan.disabled_features]
         );
       }
     }
