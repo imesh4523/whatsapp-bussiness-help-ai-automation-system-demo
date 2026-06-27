@@ -2896,7 +2896,19 @@ function Dashboard({ user, onLogout }) {
                               localStorage.setItem('whatsray_active_session_id', e.target.value);
                               window.location.reload();
                             }}
-                            style={{ border: 'none', background: 'transparent', fontSize: '12px', fontWeight: 'bold', outline: 'none', color: '#1e293b', paddingRight: '20px', cursor: 'pointer' }}
+                            style={{ 
+                              border: 'none', 
+                              background: 'transparent', 
+                              fontSize: '12px', 
+                              fontWeight: 'bold', 
+                              outline: 'none', 
+                              color: '#1e293b', 
+                              cursor: 'pointer',
+                              appearance: 'none',
+                              WebkitAppearance: 'none',
+                              MozAppearance: 'none',
+                              paddingRight: '0px'
+                            }}
                           >
                             {sessions.map(s => (
                               <option key={s.id} value={s.id}>
@@ -2904,6 +2916,7 @@ function Dashboard({ user, onLogout }) {
                               </option>
                             ))}
                           </select>
+                          <i className="fa-solid fa-chevron-down" style={{ fontSize: '10px', marginLeft: '6px', color: '#64748b', pointerEvents: 'none' }}></i>
                         </div>
                       </div>
                     </div>
