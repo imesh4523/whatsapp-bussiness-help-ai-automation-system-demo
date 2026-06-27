@@ -138,6 +138,26 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\n\n[ORDER PLACEMENT GUIDELINES]\nIf the customer expresses buying/ordering intent:\n1. Politely request their Recipient Name and Delivery Address.\n2. Ask if they prefer Cash on Delivery (COD) or Bank Transfer.\n3. Keep the conversation extremely natural, warm, and like a real human assistant.\n4. Once you have finalized the order details (item name, size, recipient name, delivery address, payment preference, total price), summarize it to the user. Do not trigger the summary until you have gathered all these fields!`;
     }
 
+    // Fetch latest customer order tracking details to feed into AI memory context
+    if (userId) {
+      try {
+        const orderRes = await db.query(
+          "SELECT * FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2 OR shipping_details->>'phone' ILIKE $3) ORDER BY created_at DESC LIMIT 1",
+          [userId, senderPhone, `%${senderPhone.slice(-9)}`]
+        );
+        if (orderRes.rows.length > 0) {
+          const order = orderRes.rows[0];
+          if (order.tracking_number) {
+            systemPrompt += `\n\n[CUSTOMER ORDER TRACKING INFORMATION]\nOrder ID: ${order.id}\nCourier: ${order.courier_name}\nTracking Number: ${order.tracking_number}\nTracking Status: ${order.tracking_status}\nLast Log Update: ${order.tracking_history && order.tracking_history.length > 0 ? order.tracking_history[order.tracking_history.length - 1].details : 'In Transit'}\nLocation: ${order.tracking_history && order.tracking_history.length > 0 ? order.tracking_history[order.tracking_history.length - 1].location : 'Sorting Depot'}\n\nINSTRUCTIONS: If the customer asks about their delivery status, tracking info, where the parcel is, or status, retrieve these details and reply warmly in a human-like tone in Sinhala or English.`;
+          } else {
+            systemPrompt += `\n\n[CUSTOMER ORDER TRACKING INFORMATION]\nOrder ID: ${order.id}\nOrder Status: ${order.status}\nCourier Tracking: Not assigned or dispatched yet.`;
+          }
+        }
+      } catch (trackErr) {
+        console.warn('Failed to load tracking details for AI:', trackErr.message);
+      }
+    }
+
     const payload = {
       contents: [
         {

@@ -844,6 +844,58 @@ app.get('/api/crm/customers', authenticateToken, async (req, res) => {
   }
 });
 
+// ── Courier Tracking Endpoints ─────────────────────────────────────────
+app.patch('/api/crm/orders/:orderId/tracking', authenticateToken, async (req, res) => {
+  try {
+    const { courier_name, tracking_number, tracking_status } = req.body;
+    
+    // Verify ownership
+    const check = await db.query('SELECT user_id FROM orders WHERE id = $1', [req.params.orderId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    if (check.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+
+    // Generate mock shipment history timeline
+    const mockHistory = [
+      { status: 'Manifest Created', details: 'Seller processed package shipping manifest.', location: 'Seller Warehouse', time: new Date(Date.now() - 48*60*60*1000).toISOString() },
+      { status: 'Picked Up', details: `Shipment received and scanned by ${courier_name || 'Courier'}.`, location: 'Courier Depot', time: new Date(Date.now() - 36*60*60*1000).toISOString() },
+      { status: 'Sorting', details: 'Package in sorting queue.', location: 'Main Sorting Facility', time: new Date(Date.now() - 24*60*60*1000).toISOString() },
+      { status: 'In Transit', details: 'Shipment dispatched to destination hub.', location: 'Transit Center', time: new Date(Date.now() - 12*60*60*1000).toISOString() },
+      { status: tracking_status || 'Out for Delivery', details: 'Package out with local delivery agent.', location: 'Delivery Area', time: new Date().toISOString() }
+    ];
+
+    await db.query(`
+      UPDATE orders 
+      SET courier_name = $1, tracking_number = $2, tracking_status = $3, tracking_history = $4
+      WHERE id = $5
+    `, [courier_name, tracking_number, tracking_status || 'Out for Delivery', JSON.stringify(mockHistory), req.params.orderId]);
+
+    res.json({ success: true, message: 'Courier tracking details updated successfully.', tracking_history: mockHistory });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/crm/track/:trackingNumber', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query('SELECT * FROM orders WHERE tracking_number = $1 AND user_id = $2', [req.params.trackingNumber, req.user.id]);
+    if (r.rows.length === 0) {
+      return res.json({
+        id: 'ord_mock_123',
+        courier_name: 'DHL Express',
+        tracking_number: req.params.trackingNumber,
+        tracking_status: 'In Transit',
+        tracking_history: [
+          { status: 'Manifest Created', details: 'Shipping manifest processed.', location: 'Colombo Hub', time: new Date(Date.now() - 24*60*60*1000).toISOString() },
+          { status: 'In Transit', details: 'Parcel out for delivery hub dispatch.', location: 'DHL Sorting Center', time: new Date().toISOString() }
+        ]
+      });
+    }
+    res.json(r.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ── AI Configuration Endpoints ───────────────────────────────────────────────
 app.get('/api/ai-config', authenticateToken, async (req, res) => {

@@ -2862,6 +2862,14 @@ function Dashboard({ user, onLogout }) {
                 </a>
               </li>
 
+              {/* Track Customer Orders */}
+              <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
+                <a href="/user/crm/track-orders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); }}>
+                  <span className="icon"><i className="las la-truck-loading" /></span>
+                  <span className="text">Track Customer Orders</span>
+                </a>
+              </li>
+
               <li className="sidebar-menu-list__title"><span className="text">BILLING &amp; PROFILE</span></li>
 
               {/* Whatsapp Accounts */}
@@ -3075,6 +3083,8 @@ function Dashboard({ user, onLogout }) {
                 <ManageCustomers user={user} />
               ) : tab === 'crm_orders' ? (
                 <ManageOrders user={user} />
+              ) : tab === 'track_orders' ? (
+                <TrackCustomerOrders user={user} />
               ) : (
                 <div dangerouslySetInnerHTML={{
                   __html: (currentPage.body || '<h3>Page not found</h3>')
@@ -3698,5 +3708,298 @@ function ManageOrders() {
   );
 }
 
+
+// ── Component: TrackCustomerOrders (CRM tab) ─────────────────────────
+function TrackCustomerOrders() {
+  const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [courierName, setCourierName] = useState('Sri Lanka Post');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingStatus, setTrackingStatus] = useState('Out for Delivery');
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data);
+        if (data.length > 0) {
+          setSelectedOrder(data[0]);
+          setCourierName(data[0].courier_name || 'Sri Lanka Post');
+          setTrackingNumber(data[0].tracking_number || '');
+          setTrackingStatus(data[0].tracking_status || 'Out for Delivery');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLinkTracking = async (e) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    setUpdating(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders/${selectedOrder.id}/tracking`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({
+          courier_name: courierName,
+          tracking_number: trackingNumber,
+          tracking_status: trackingStatus
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const updated = orders.map(o => o.id === selectedOrder.id ? { 
+          ...o, 
+          courier_name: courierName, 
+          tracking_number: trackingNumber, 
+          tracking_status: trackingStatus,
+          tracking_history: data.tracking_history 
+        } : o);
+        setOrders(updated);
+        const orderMatch = updated.find(o => o.id === selectedOrder.id);
+        setSelectedOrder(orderMatch);
+        alert('Courier Tracking details linked successfully!');
+      } else {
+        alert('Failed to update tracking details.');
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const selectOrder = (order) => {
+    setSelectedOrder(order);
+    setCourierName(order.courier_name || 'Sri Lanka Post');
+    setTrackingNumber(order.tracking_number || '');
+    setTrackingStatus(order.tracking_status || 'Out for Delivery');
+  };
+
+  if (loading) {
+    return <div className="p-6 text-center text-gray-500">Loading Tracking Workspace...</div>;
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '24px', alignItems: 'start' }}>
+        
+        {/* Left side: Orders list and History tracker log */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* Orders Table */}
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Select Order to Track</h3>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>Click any order to configure and preview tracking details.</p>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold' }}>
+                    <th style={{ padding: '10px 12px' }}>Order ID</th>
+                    <th style={{ padding: '10px 12px' }}>Recipient Name</th>
+                    <th style={{ padding: '10px 12px' }}>Courier Service</th>
+                    <th style={{ padding: '10px 12px' }}>Tracking Number</th>
+                    <th style={{ padding: '10px 12px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((o) => (
+                    <tr 
+                      key={o.id} 
+                      onClick={() => selectOrder(o)}
+                      style={{ 
+                        borderBottom: '1px solid #f1f5f9', 
+                        fontSize: '13px', 
+                        cursor: 'pointer',
+                        backgroundColor: selectedOrder?.id === o.id ? '#f8fafc' : 'transparent',
+                        fontWeight: selectedOrder?.id === o.id ? '600' : 'normal'
+                      }}
+                    >
+                      <td style={{ padding: '12px 12px', color: '#0f172a' }}>{o.id}</td>
+                      <td style={{ padding: '12px 12px', color: '#475569' }}>{o.shipping_details?.name}</td>
+                      <td style={{ padding: '12px 12px', color: '#475569' }}>
+                        {o.courier_name ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <i className="las la-truck" style={{ color: '#0f172a' }}></i> {o.courier_name}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td style={{ padding: '12px 12px', fontFamily: 'monospace', color: '#475569' }}>{o.tracking_number || '—'}</td>
+                      <td style={{ padding: '12px 12px' }}>
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          backgroundColor: o.tracking_status === 'Delivered' ? '#dcfce7' : '#e0f2fe',
+                          color: o.tracking_status === 'Delivered' ? '#15803d' : '#0369a1'
+                        }}>
+                          {o.tracking_status || 'Pending'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Shipment Progress Logs Timeline */}
+          {selectedOrder && selectedOrder.tracking_number && (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
+                <div>
+                  <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Courier Shipment Status</h4>
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>{selectedOrder.courier_name} — <strong>{selectedOrder.tracking_number}</strong></span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff'
+                  }}>
+                    {selectedOrder.tracking_status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress steps */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', paddingLeft: '24px', borderLeft: '2px solid #e2e8f0', marginLeft: '12px' }}>
+                {selectedOrder.tracking_history && selectedOrder.tracking_history.map((log, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    
+                    <div style={{
+                      position: 'absolute',
+                      left: '-33px',
+                      top: '2px',
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '50%',
+                      backgroundColor: idx === selectedOrder.tracking_history.length - 1 ? '#000000' : '#cbd5e1',
+                      border: '3px solid #ffffff',
+                      boxShadow: '0 0 0 2px ' + (idx === selectedOrder.tracking_history.length - 1 ? '#000000' : '#e2e8f0')
+                    }}></div>
+
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{log.status}</div>
+                    <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>{log.details}</div>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                      <span><i className="las la-map-marker"></i> {log.location}</span>
+                      <span><i className="las la-clock"></i> {new Date(log.time).toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* Right side: Tracking Linker Form */}
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+          <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Link Courier Details</h4>
+          
+          {selectedOrder ? (
+            <form onSubmit={handleLinkTracking} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ fontSize: '13px', color: '#64748b' }}>
+                Order Selected: <strong>{selectedOrder.id}</strong>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Select Courier Service</label>
+                <select
+                  value={courierName}
+                  onChange={(e) => setCourierName(e.target.value)}
+                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
+                >
+                  <option value="Sri Lanka Post">Sri Lanka Post</option>
+                  <option value="Citypak (Hayleys)">Citypak (Hayleys)</option>
+                  <option value="Aramex">Aramex</option>
+                  <option value="DHL Express">DHL Express</option>
+                  <option value="FedEx">FedEx</option>
+                  <option value="Pronto">Pronto</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Tracking Number</label>
+                <input
+                  type="text"
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  placeholder="e.g. SLP8592039201"
+                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%' }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Tracking Status</label>
+                <select
+                  value={trackingStatus}
+                  onChange={(e) => setTrackingStatus(e.target.value)}
+                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
+                >
+                  <option value="Sorting Hub">Sorting Hub</option>
+                  <option value="In Transit">In Transit</option>
+                  <option value="Out for Delivery">Out for Delivery</option>
+                  <option value="Delivered">Delivered</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={updating}
+                style={{
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  cursor: updating ? 'not-allowed' : 'pointer',
+                  width: '100%',
+                  marginTop: '8px'
+                }}
+              >
+                {updating ? 'Updating Tracking...' : 'Link & Simulate Tracking'}
+              </button>
+            </form>
+          ) : (
+            <div style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
+              No order selected. Select an order to link courier details.
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 export default Dashboard;
+
 

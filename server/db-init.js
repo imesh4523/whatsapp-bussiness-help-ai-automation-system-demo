@@ -72,6 +72,11 @@ async function init() {
         status VARCHAR(50) DEFAULT 'Pending',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_name VARCHAR(100);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(100);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_status VARCHAR(100) DEFAULT 'Pending';
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_history JSONB DEFAULT '[]'::JSONB;
     `);
     
     console.log('Database tables verified/created successfully.');
