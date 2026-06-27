@@ -1049,9 +1049,10 @@ function WhatsAppAccountManager({ activeSessionId, onSessionsUpdated, user }) {
                       <button 
                         disabled={loading}
                         onClick={() => handleLinkSession('qr')} 
-                        className="btn btn-sm btn-shadow bg-black text-white hover:bg-neutral-800 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest"
-                        style={{ background: '#000', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                        className="btn btn-sm btn-shadow bg-black hover:bg-neutral-800 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest qr-button-text-white"
+                        style={{ background: '#000', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
                       >
+                        <style>{`.qr-button-text-white { color: #ffffff !important; }`}</style>
                         {loading ? 'Generating...' : 'Generate QR Code'}
                       </button>
                     </div>
