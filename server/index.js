@@ -5,6 +5,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import Stripe from 'stripe';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import db from './db.js';
 import { 
   startWhatsAppSocket, 
@@ -24,6 +27,10 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Multer: memory storage for media uploads (no disk write needed)
 const upload = multer({
@@ -607,6 +614,233 @@ app.get('/api/quick-replies', authenticateToken, async (req, res) => {
       { id: 4, shortcut: '/bye',     text: 'Thanks for contacting us. Have a great day! 🙏' },
       { id: 5, shortcut: '/hours',   text: 'We are open Mon-Fri 9AM - 6PM (Sri Lanka time).' }
     ]);
+  }
+});
+
+
+// ── Business Profile Knowledge Upload Endpoints ──────────────────────
+app.get('/api/business-profile', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query('SELECT * FROM business_profiles WHERE user_id = $1', [req.user.id]);
+    if (r.rows.length === 0) {
+      return res.json({
+        business_name: '',
+        description: '',
+        address: '',
+        sizes_info: '',
+        logo_url: null,
+        photo_urls: []
+      });
+    }
+    res.json(r.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/business-profile', authenticateToken, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'photos', maxCount: 10 }]), async (req, res) => {
+  try {
+    const { business_name, description, address, sizes_info } = req.body;
+    
+    // 1. Fetch current profile
+    const currentRes = await db.query('SELECT * FROM business_profiles WHERE user_id = $1', [req.user.id]);
+    let logo_url = currentRes.rows.length > 0 ? currentRes.rows[0].logo_url : null;
+    let photo_urls = currentRes.rows.length > 0 && currentRes.rows[0].photo_urls ? currentRes.rows[0].photo_urls : [];
+
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // 2. Handle single logo upload
+    if (req.files && req.files.logo && req.files.logo[0]) {
+      const file = req.files.logo[0];
+      const filename = `logo-${req.user.id}-${Date.now()}${path.extname(file.originalname)}`;
+      fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+      logo_url = `/uploads/${filename}`;
+    }
+
+    // 3. Handle multiple photos upload
+    if (req.files && req.files.photos) {
+      for (const file of req.files.photos) {
+        const filename = `photo-${req.user.id}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+        fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+        photo_urls.push(`/uploads/${filename}`);
+      }
+    }
+
+    // 4. Handle photos deletion if requested
+    if (req.body.deleted_photos) {
+      const deletedList = JSON.parse(req.body.deleted_photos);
+      photo_urls = photo_urls.filter(url => !deletedList.includes(url));
+      // Delete physical files
+      for (const url of deletedList) {
+        try {
+          const filePath = path.join(__dirname, url);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch (e) {
+          console.warn('Failed to delete physical photo:', e.message);
+        }
+      }
+    }
+
+    // 5. Save to database
+    await db.query(`
+      INSERT INTO business_profiles (user_id, business_name, description, address, sizes_info, logo_url, photo_urls)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (user_id) DO UPDATE 
+      SET business_name = $2, description = $3, address = $4, sizes_info = $5, logo_url = $6, photo_urls = $7
+    `, [req.user.id, business_name, description, address, sizes_info, logo_url, photo_urls]);
+
+    res.json({ success: true, message: 'Business profile updated successfully.', profile: { business_name, description, address, sizes_info, logo_url, photo_urls } });
+  } catch (err) {
+    console.error('Update business profile error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Dashboard Statistics Endpoint ────────────────────────────────────
+app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
+  try {
+    // 1. Calculate total earned: sum of total_amount of confirmed/completed orders for this user
+    const earnedRes = await db.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE user_id = $1 AND (status = 'Confirmed' OR status = 'Completed')", [req.user.id]);
+    const total_earned = parseFloat(earnedRes.rows[0].total);
+
+    // 2. Count total contacts/chats
+    const contactsRes = await db.query(`
+      SELECT COUNT(*) as total FROM chats c
+      JOIN whatsapp_sessions ws ON c.session_id = ws.id
+      WHERE ws.user_id = $1
+    `, [req.user.id]);
+    const total_contacts = parseInt(contactsRes.rows[0].total);
+
+    // 3. Count total tags
+    const tagsRes = await db.query(`
+      SELECT COUNT(DISTINCT label) as total FROM chats c
+      JOIN whatsapp_sessions ws ON c.session_id = ws.id
+      WHERE ws.user_id = $1 AND label IS NOT NULL AND label != 'None'
+    `, [req.user.id]);
+    const total_tags = parseInt(tagsRes.rows[0].total);
+
+    // 4. Count total lists
+    const total_lists = total_tags > 0 ? total_tags + 1 : 1;
+
+    // 5. Count active flows & AI Bots
+    const configRes = await db.query('SELECT global_ai_active FROM ai_configs WHERE user_id = $1', [req.user.id]);
+    const active_flows = configRes.rows.length > 0 && configRes.rows[0].global_ai_active ? 1 : 0;
+    const ai_bots = 1;
+
+    // 6. Total deposits from transactions
+    const depositsRes = await db.query("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = $1 AND status = 'Completed'", [req.user.id]);
+    const total_deposits = parseFloat(depositsRes.rows[0].total);
+
+    res.json({
+      total_earned,
+      total_contacts,
+      total_tags,
+      total_lists,
+      active_flows,
+      ai_bots,
+      total_deposits,
+      total_withdrawals: 0.00
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CRM Orders CRUD Endpoints ─────────────────────────────────────────
+app.get('/api/crm/orders', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/crm/orders', authenticateToken, async (req, res) => {
+  try {
+    const { items, total_amount, shipping_details, status } = req.body;
+    const orderId = `ord_${Date.now()}_${Math.round(Math.random() * 1000)}`;
+    
+    await db.query(
+      'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
+      [orderId, req.user.id, JSON.stringify(items || []), total_amount || 0, JSON.stringify(shipping_details || {}), status || 'Pending']
+    );
+
+    res.json({ success: true, message: 'Order created successfully.', orderId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/crm/orders/:orderId', authenticateToken, async (req, res) => {
+  try {
+    const { status, shipping_details, items, total_amount } = req.body;
+    
+    // Load current order to verify ownership
+    const check = await db.query('SELECT user_id FROM orders WHERE id = $1', [req.params.orderId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    if (check.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+
+    let updateFields = [];
+    let params = [req.params.orderId];
+    
+    if (status !== undefined) {
+      updateFields.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+    if (shipping_details !== undefined) {
+      updateFields.push(`shipping_details = $${params.length + 1}`);
+      params.push(JSON.stringify(shipping_details));
+    }
+    if (items !== undefined) {
+      updateFields.push(`items = $${params.length + 1}`);
+      params.push(JSON.stringify(items));
+    }
+    if (total_amount !== undefined) {
+      updateFields.push(`total_amount = $${params.length + 1}`);
+      params.push(total_amount);
+    }
+
+    if (updateFields.length > 0) {
+      await db.query(`UPDATE orders SET ${updateFields.join(', ')} WHERE id = $1`, params);
+    }
+
+    res.json({ success: true, message: 'Order updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/crm/orders/:orderId', authenticateToken, async (req, res) => {
+  try {
+    const check = await db.query('SELECT user_id FROM orders WHERE id = $1', [req.params.orderId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    if (check.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+
+    await db.query('DELETE FROM orders WHERE id = $1', [req.params.orderId]);
+    res.json({ success: true, message: 'Order deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CRM Customers Endpoint (Confirmed or Pending Delivery chats) ───────
+app.get('/api/crm/customers', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query(`
+      SELECT DISTINCT c.* FROM chats c
+      JOIN whatsapp_sessions ws ON c.session_id = ws.id
+      LEFT JOIN orders o ON o.user_id = ws.user_id AND (o.shipping_details->>'phone' = c.sender_phone OR c.last_message ILIKE '%confirm%')
+      WHERE ws.user_id = $1 AND (c.label IN ('Confirmed', 'Interested') OR o.id IS NOT NULL)
+      ORDER BY c.updated_at DESC
+    `, [req.user.id]);
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -1,7 +1,13 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import db from './db.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Generate AI reply using Gemini API (with local fallback if key is missing)
@@ -18,6 +24,8 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
     temperature: 0.6,
     typingDelay: 150
   };
+
+  let businessProfile = null;
 
   try {
     const wsRes = await db.query(
@@ -39,9 +47,15 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
           typingDelay: row.typing_delay
         };
       }
+
+      // Fetch business profile
+      const bpRes = await db.query('SELECT * FROM business_profiles WHERE user_id = $1', [userId]);
+      if (bpRes.rows.length > 0) {
+        businessProfile = bpRes.rows[0];
+      }
     }
   } catch (dbErr) {
-    console.warn('Failed to fetch user-specific AI config from db, using default config:', dbErr.message);
+    console.warn('Failed to fetch user-specific AI config or profile from db, using default config:', dbErr.message);
   }
 
   // 2. Fetch API Key (check process.env first, fallback to system_settings in DB)
@@ -93,11 +107,43 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       console.warn('Could not load chat history for context:', histErr.message);
     }
 
+    // 4. Load knowledge files (sizing charts/photos) to send to Gemini as inlineData
+    const imageParts = [];
+    if (businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
+      // Top 5 photos maximum
+      const photos = businessProfile.photo_urls.slice(0, 5);
+      for (const photoUrl of photos) {
+        try {
+          const filename = photoUrl.replace('/uploads/', '');
+          const filePath = path.join(__dirname, 'uploads', filename);
+          if (fs.existsSync(filePath)) {
+            const fileBuffer = fs.readFileSync(filePath);
+            const mimeType = photoUrl.endsWith('.png') ? 'image/png' : 'image/jpeg';
+            imageParts.push({
+              inlineData: {
+                mimeType,
+                data: fileBuffer.toString('base64')
+              }
+            });
+          }
+        } catch (imgErr) {
+          console.warn('Failed to load knowledge base photo for prompt:', imgErr.message);
+        }
+      }
+    }
+
+    // 5. Expand System Prompt with Business Details & Sizing rules
+    let systemPrompt = config.systemPrompt;
+    if (businessProfile) {
+      systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\n\n[ORDER PLACEMENT GUIDELINES]\nIf the customer expresses buying/ordering intent:\n1. Politely request their Recipient Name and Delivery Address.\n2. Ask if they prefer Cash on Delivery (COD) or Bank Transfer.\n3. Keep the conversation extremely natural, warm, and like a real human assistant.\n4. Once you have finalized the order details (item name, size, recipient name, delivery address, payment preference, total price), summarize it to the user. Do not trigger the summary until you have gathered all these fields!`;
+    }
+
     const payload = {
       contents: [
         {
           role: 'user',
           parts: [
+            ...imageParts,
             {
               text: `Here is the conversation history:\n${historyContext}\n\nCustomer: ${messageText}\nAssistant:`
             }
@@ -107,7 +153,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       systemInstruction: {
         parts: [
           {
-            text: config.systemPrompt
+            text: systemPrompt
           }
         ]
       },

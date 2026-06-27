@@ -2053,6 +2053,30 @@ function Dashboard({ user, onLogout }) {
   const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('whatsray_active_session_id') || '');
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
+  const [stats, setStats] = useState({
+    total_earned: 0,
+    total_contacts: 0,
+    total_tags: 0,
+    total_lists: 0,
+    active_flows: 0,
+    ai_bots: 0,
+    total_deposits: 0,
+    total_withdrawals: 0
+  });
+
+  const fetchDashboardStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/dashboard-stats`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch dashboard stats:', err);
+    }
+  };
 
   const fetchSessions = async () => {
     setLoadingSessions(true);
@@ -2084,6 +2108,7 @@ function Dashboard({ user, onLogout }) {
   useEffect(() => {
     if (user) {
       fetchSessions();
+      fetchDashboardStats();
     }
   }, [user]);
   
@@ -2819,6 +2844,24 @@ function Dashboard({ user, onLogout }) {
                 </a>
               </li>
 
+              <li className="sidebar-menu-list__title"><span className="text">CRM &amp; ORDERS</span></li>
+
+              {/* Manage Customers */}
+              <li className={`sidebar-menu-list__item ${tab === 'crm_customers' ? 'active' : ''}`}>
+                <a href="/user/crm/customers" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('crm_customers'); }}>
+                  <span className="icon"><i className="las la-users-cog" /></span>
+                  <span className="text">Manage Customers</span>
+                </a>
+              </li>
+
+              {/* Manage Orders */}
+              <li className={`sidebar-menu-list__item ${tab === 'crm_orders' ? 'active' : ''}`}>
+                <a href="/user/crm/orders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('crm_orders'); }}>
+                  <span className="icon"><i className="las la-shopping-cart" /></span>
+                  <span className="text">Manage Orders</span>
+                </a>
+              </li>
+
               <li className="sidebar-menu-list__title"><span className="text">BILLING &amp; PROFILE</span></li>
 
               {/* Whatsapp Accounts */}
@@ -2826,6 +2869,14 @@ function Dashboard({ user, onLogout }) {
                 <a href="/user/whatsapp-account" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('whatsapp_account'); }}>
                   <span className="icon"><i className="las la-phone" /></span>
                   <span className="text">Whatsapp Accounts</span>
+                </a>
+              </li>
+
+              {/* Business Profile */}
+              <li className={`sidebar-menu-list__item ${tab === 'business_profile' ? 'active' : ''}`}>
+                <a href="/user/business-profile" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('business_profile'); }}>
+                  <span className="icon"><i className="las la-store" /></span>
+                  <span className="text">Business Profile</span>
                 </a>
               </li>
 
@@ -3018,9 +3069,25 @@ function Dashboard({ user, onLogout }) {
                 <WhatsAppOrderManager />
               ) : tab === 'automation_ai_bot' ? (
                 <WhatsAppAIBotManager user={user} activeSessionId={activeSessionId} />
-
+              ) : tab === 'business_profile' ? (
+                <BusinessProfile user={user} />
+              ) : tab === 'crm_customers' ? (
+                <ManageCustomers user={user} />
+              ) : tab === 'crm_orders' ? (
+                <ManageOrders user={user} />
               ) : (
-                <div dangerouslySetInnerHTML={{ __html: (currentPage.body || '<h3>Page not found</h3>').replace('__USER_PLAN__', user?.plan || 'Free') }} />
+                <div dangerouslySetInnerHTML={{
+                  __html: (currentPage.body || '<h3>Page not found</h3>')
+                    .replace('__USER_PLAN__', user?.plan || 'Free')
+                    .replace('__TOTAL_EARNED__', (stats?.total_earned ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                    .replace('__TOTAL_DEPOSITS__', (stats?.total_deposits ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                    .replace('__TOTAL_WITHDRAWALS__', (stats?.total_withdrawals ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                    .replace('__TOTAL_CONTACTS__', (stats?.total_contacts ?? 0).toString())
+                    .replace('__TOTAL_TAGS__', (stats?.total_tags ?? 0).toString())
+                    .replace('__TOTAL_LISTS__', (stats?.total_lists ?? 0).toString())
+                    .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
+                    .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
+                }} />
               )}
             </div>
 
@@ -3032,4 +3099,604 @@ function Dashboard({ user, onLogout }) {
   );
 }
 
+
+// ── Component: BusinessProfile (CRM tab) ─────────────────────────────
+function BusinessProfile() {
+  const [profile, setProfile] = useState({
+    business_name: '',
+    description: '',
+    address: '',
+    sizes_info: '',
+    logo_url: null,
+    photo_urls: []
+  });
+  const [logoFile, setLogoFile] = useState(null);
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [deletedPhotos, setDeletedPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState({ type: '', message: '' });
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/business-profile`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      const formData = new FormData();
+      formData.append('business_name', profile.business_name || '');
+      formData.append('description', profile.description || '');
+      formData.append('address', profile.address || '');
+      formData.append('sizes_info', profile.sizes_info || '');
+      
+      if (logoFile) {
+        formData.append('logo', logoFile);
+      }
+      for (const file of photoFiles) {
+        formData.append('photos', file);
+      }
+      if (deletedPhotos.length > 0) {
+        formData.append('deleted_photos', JSON.stringify(deletedPhotos));
+      }
+
+      const res = await fetch(`${API_BASE_URL}/business-profile`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data.profile);
+        setLogoFile(null);
+        setPhotoFiles([]);
+        setDeletedPhotos([]);
+        setStatus({ type: 'success', message: 'Profile updated successfully!' });
+      } else {
+        const err = await res.json();
+        setStatus({ type: 'error', message: err.error || 'Failed to update profile.' });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 text-center text-gray-500">Loading Business Profile...</div>;
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Business Profile & AI Knowledge Base</h3>
+        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>
+          Upload your brand details, logo, and sizing chart photos. The AI model reads this data to reply to customer questions accurately.
+        </p>
+
+        {status.message && (
+          <div style={{
+            padding: '12px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '14px',
+            backgroundColor: status.type === 'success' ? '#f0fdf4' : '#fef2f2',
+            color: status.type === 'success' ? '#166534' : '#991b1b',
+            border: `1px solid ${status.type === 'success' ? '#bbf7d0' : '#fecaca'}`
+          }}>
+            {status.message}
+          </div>
+        )}
+
+        <form onSubmit={handleSave} className="space-y-6">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Business Name</label>
+            <input
+              type="text"
+              value={profile.business_name || ''}
+              onChange={(e) => setProfile({ ...profile, business_name: e.target.value })}
+              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px' }}
+              placeholder="e.g. Elegant Fashion Store"
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>About / Description (Instructs the AI's Tone & Identity)</label>
+            <textarea
+              value={profile.description || ''}
+              onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '100px', resize: 'vertical' }}
+              placeholder="Describe your brand products, specialties, store policies, etc."
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Physical Store / Shipping Address</label>
+            <input
+              type="text"
+              value={profile.address || ''}
+              onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px' }}
+              placeholder="e.g. No. 12, Colombo Rd, Galle"
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Sizes Info & Stock Dimensions (Sizing specifications)</label>
+            <textarea
+              value={profile.sizes_info || ''}
+              onChange={(e) => setProfile({ ...profile, sizes_info: e.target.value })}
+              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '100px', resize: 'vertical' }}
+              placeholder="e.g. S size fits waist 28-30. M fits 31-33. Length is 42 inches for all sizes."
+            />
+          </div>
+
+          {/* Logo Upload */}
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '24px', marginBottom: '24px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', display: 'block', marginBottom: '12px' }}>Brand Logo</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ width: '80px', height: '80px', borderRadius: '12px', border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: '#f8fafc' }}>
+                {logoFile ? (
+                  <img src={URL.createObjectURL(logoFile)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : profile.logo_url ? (
+                  <img src={`${API_BASE_URL.replace('/api', '')}${profile.logo_url}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <i className="las la-store" style={{ fontSize: '32px', color: '#94a3b8' }} />
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setLogoFile(e.target.files[0])}
+                style={{ fontSize: '13px' }}
+              />
+            </div>
+          </div>
+
+          {/* Sizing Charts / Product Photos Upload */}
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '24px', marginBottom: '24px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', display: 'block', marginBottom: '4px' }}>Knowledge Base Photos (Size charts, item maps)</label>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>Upload up to 10 sizing/product photos. AI bot refers to these images to assist customers.</p>
+            
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setPhotoFiles(Array.from(e.target.files))}
+              style={{ fontSize: '13px', marginBottom: '16px', display: 'block' }}
+            />
+
+            {/* List current photos */}
+            {profile.photo_urls && profile.photo_urls.length > 0 && (
+              <div style={{ display: 'flex', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '12px' }}>
+                {profile.photo_urls.map((url, idx) => (
+                  <div key={idx} style={{ position: 'relative', width: '100px', height: '100px', borderRadius: '8px', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                    <img src={`${API_BASE_URL.replace('/api', '')}${url}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeletedPhotos([...deletedPhotos, url]);
+                        setProfile({ ...profile, photo_urls: profile.photo_urls.filter(u => u !== url) });
+                      }}
+                      style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: '#ffffff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '24px', textAlign: 'right' }}>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                backgroundColor: '#000000',
+                color: '#ffffff',
+                border: 'none',
+                padding: '10px 24px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.7 : 1
+              }}
+            >
+              {saving ? 'Saving Profile...' : 'Save Knowledge Profile'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Component: ManageCustomers (CRM tab) ─────────────────────────────
+function ManageCustomers() {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/customers`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomers(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 text-center text-gray-500">Loading Customers CRM...</div>;
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Active CRM Customers</h3>
+        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>
+          Automatically filtered chats for customers labeled as **Confirmed** or **Interested**.
+        </p>
+
+        {customers.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+            <i className="las la-users-cog" style={{ fontSize: '48px', marginBottom: '12px', display: 'block' }} />
+            No confirmed or interested customers found.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '13px', fontWeight: 'bold' }}>
+                  <th style={{ padding: '12px 16px' }}>Customer Name</th>
+                  <th style={{ padding: '12px 16px' }}>Phone Number</th>
+                  <th style={{ padding: '12px 16px' }}>Status Label</th>
+                  <th style={{ padding: '12px 16px' }}>Last Message</th>
+                  <th style={{ padding: '12px 16px' }}>Last Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
+                    <td style={{ padding: '16px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <img
+                        src={c.profile_pic_url || 'https://via.placeholder.com/40'}
+                        style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                      <span style={{ fontWeight: '600', color: '#1e293b' }}>{c.sender_name}</span>
+                    </td>
+                    <td style={{ padding: '16px 16px', color: '#475569' }}>{c.sender_phone}</td>
+                    <td style={{ padding: '16px 16px' }}>
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        backgroundColor: c.label === 'Confirmed' ? '#dcfce7' : '#fef9c3',
+                        color: c.label === 'Confirmed' ? '#166534' : '#854d0e'
+                      }}>
+                        {c.label || 'Interested'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 16px', color: '#64748b', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.last_message || '—'}
+                    </td>
+                    <td style={{ padding: '16px 16px', color: '#94a3b8' }}>
+                      {new Date(c.updated_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Component: ManageOrders (CRM tab) ─────────────────────────────
+function ManageOrders() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [logoUrl, setLogoUrl] = useState('');
+  const [copiedOrderId, setCopiedOrderId] = useState('');
+
+  useEffect(() => {
+    fetchOrders();
+    fetchLogo();
+  }, []);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLogo = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/business-profile`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.logo_url) {
+          setLogoUrl(`${API_BASE_URL.replace('/api', '')}${data.logo_url}`);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load brand logo for receipt:', err.message);
+    }
+  };
+
+  const updateStatus = async (orderId, newStatus) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        setOrders(orders.filter(o => o.id !== orderId));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const copyDetails = (order) => {
+    const details = `Order ID: ${order.id}\nRecipient: ${order.shipping_details?.name || 'Customer'}\nPhone: ${order.shipping_details?.phone || ''}\nAddress: ${order.shipping_details?.address || ''}\nPayment Method: ${order.shipping_details?.payment_method || 'COD'}\nTotal Amount: රු${parseFloat(order.total_amount).toFixed(2)}`;
+    navigator.clipboard.writeText(details);
+    setCopiedOrderId(order.id);
+    setTimeout(() => setCopiedOrderId(''), 2000);
+  };
+
+  const printReceipt = (order) => {
+    const printWindow = window.open('', '_blank', 'width=600,height=800');
+    
+    const itemsHtml = order.items.map(item => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px dashed #cccccc;">${item.name}</td>
+        <td style="padding: 8px 0; text-align: center; border-bottom: 1px dashed #cccccc;">${item.qty || 1}</td>
+        <td style="padding: 8px 0; text-align: right; border-bottom: 1px dashed #cccccc;">රු${parseFloat(item.price || order.total_amount).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const logoHtml = logoUrl 
+      ? `<img src="${logoUrl}" style="max-height: 70px; object-fit: contain; margin-bottom: 10px; display: block;" />`
+      : `<h2 style="margin: 0; font-family: sans-serif; letter-spacing: 1px;">RECEIPT</h2>`;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Order Receipt - ${order.id}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; padding: 20px; color: #000000; line-height: 1.4; }
+            .receipt-box { max-width: 400px; margin: 0 auto; border: 2px dashed #000000; padding: 20px; }
+            .header { text-align: center; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; }
+            .details { margin-bottom: 20px; font-size: 14px; }
+            .totals { border-top: 1px dashed #000000; padding-top: 10px; margin-top: 10px; }
+            .totals-row { display: flex; justify-content: space-between; font-weight: bold; }
+            .footer { text-align: center; margin-top: 30px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-box">
+            <div class="header">
+              ${logoHtml}
+              <div style="font-size: 12px; margin-top: 5px;">Thank you for shopping with us!</div>
+            </div>
+            
+            <div class="details">
+              <strong>Order ID:</strong> ${order.id}<br>
+              <strong>Date:</strong> ${new Date(order.created_at).toLocaleString()}<br>
+              <hr style="border: 0; border-top: 1px dashed #000000; margin: 10px 0;">
+              <strong>Recipient:</strong> ${order.shipping_details?.name || 'WhatsApp Customer'}<br>
+              <strong>Phone:</strong> ${order.shipping_details?.phone || ''}<br>
+              <strong>Address:</strong> ${order.shipping_details?.address || ''}<br>
+              <strong>Payment:</strong> ${order.shipping_details?.payment_method || 'COD'}<br>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+              <thead>
+                <tr>
+                  <th style="text-align: left; border-bottom: 1px solid #000000; padding-bottom: 5px;">Item</th>
+                  <th style="text-align: center; border-bottom: 1px solid #000000; padding-bottom: 5px;">Qty</th>
+                  <th style="text-align: right; border-bottom: 1px solid #000000; padding-bottom: 5px;">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div class="totals-row" style="font-size: 16px;">
+                <span>GRAND TOTAL</span>
+                <span>රු${parseFloat(order.total_amount).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div class="footer">
+              *** END OF RECEIPT ***
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  if (loading) {
+    return <div className="p-6 text-center text-gray-500">Loading Orders CRM...</div>;
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Manage WhatsApp Orders</h3>
+        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>
+          View, copy, and print receipts/shipping labels for orders automatically extracted from customer chats.
+        </p>
+
+        {orders.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+            <i className="las la-shopping-cart" style={{ fontSize: '48px', marginBottom: '12px', display: 'block' }} />
+            No customer orders found.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '13px', fontWeight: 'bold' }}>
+                  <th style={{ padding: '12px 16px' }}>Order ID</th>
+                  <th style={{ padding: '12px 16px' }}>Recipient Name</th>
+                  <th style={{ padding: '12px 16px' }}>Address</th>
+                  <th style={{ padding: '12px 16px' }}>Payment</th>
+                  <th style={{ padding: '12px 16px' }}>Total Amount</th>
+                  <th style={{ padding: '12px 16px' }}>Status</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((o) => (
+                  <tr key={o.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
+                    <td style={{ padding: '16px 16px', fontWeight: '600', color: '#000000' }}>{o.id}</td>
+                    <td style={{ padding: '16px 16px' }}>
+                      <div style={{ fontWeight: '500', color: '#1e293b' }}>{o.shipping_details?.name}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>{o.shipping_details?.phone}</div>
+                    </td>
+                    <td style={{ padding: '16px 16px', color: '#475569', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.shipping_details?.address}>
+                      {o.shipping_details?.address}
+                    </td>
+                    <td style={{ padding: '16px 16px', fontWeight: '600', color: '#475569' }}>
+                      {o.shipping_details?.payment_method || 'COD'}
+                    </td>
+                    <td style={{ padding: '16px 16px', fontWeight: 'bold', color: '#0f172a' }}>
+                      රු{parseFloat(o.total_amount).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '16px 16px' }}>
+                      <select
+                        value={o.status}
+                        onChange={(e) => updateStatus(o.id, e.target.value)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          backgroundColor: o.status === 'Confirmed' ? '#dcfce7' : o.status === 'Cancelled' ? '#fee2e2' : '#f1f5f9',
+                          color: o.status === 'Confirmed' ? '#166534' : o.status === 'Cancelled' ? '#991b1b' : '#334155'
+                        }}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="Shipped">Shipped</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '16px 16px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => copyDetails(o)}
+                        style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <i className="las la-copy"></i> {copiedOrderId === o.id ? 'Copied' : 'Copy'}
+                      </button>
+                      
+                      <button
+                        onClick={() => printReceipt(o)}
+                        style={{ padding: '8px 12px', border: 'none', borderRadius: '8px', backgroundColor: '#000000', color: '#ffffff', cursor: 'pointer', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <i className="las la-print"></i> Print
+                      </button>
+
+                      <button
+                        onClick={() => deleteOrder(o.id)}
+                        style={{ padding: '8px', border: 'none', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#991b1b', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        <i className="las la-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default Dashboard;
+

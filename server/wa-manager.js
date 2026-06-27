@@ -310,6 +310,7 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
               [chatId, aiReply, 'bot']
             );
             await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [aiReply, chatId]);
+            await checkAndExtractOrder(userId, sessionId, senderPhone);
             
             console.log(`AI Replied on session ${sessionId}: ${aiReply}`);
           } catch (sendErr) {
@@ -427,9 +428,120 @@ export async function triggerMockIncomingMessage(userId, sessionId, customerPhon
       );
       await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [aiReply, chatId]);
       
+      const wsRes = await db.query('SELECT ws.user_id FROM chats c JOIN whatsapp_sessions ws ON c.session_id = ws.id WHERE c.id = $1', [chatId]);
+      if (wsRes.rows.length > 0) {
+        await checkAndExtractOrder(wsRes.rows[0].user_id, 'whatsray_agent', customerPhone);
+      }
+
       console.log(`[SIMULATOR] AI auto-replied to ${customerPhone}: ${aiReply}`);
     } catch (err) {
       console.error('[SIMULATOR] Failed to process AI response:', err.message);
     }
   }, 2000);
+}
+
+// ── CRM Order Auto-Extractor helper using Gemini ─────────────────────
+async function checkAndExtractOrder(userId, sessionPhone, senderPhone) {
+  try {
+    const chatRes = await db.query(
+      'SELECT id, sender_name FROM chats WHERE session_id = $1 AND sender_phone = $2',
+      [sessionPhone, senderPhone]
+    );
+    if (chatRes.rows.length === 0) return;
+    const chatId = chatRes.rows[0].id;
+    const customerName = chatRes.rows[0].sender_name;
+
+    const msgRes = await db.query(
+      'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 15',
+      [chatId]
+    );
+    const messages = msgRes.rows.reverse();
+    const chatHistory = messages.map(m => `${m.sender === 'customer' ? 'Customer' : 'Assistant'}: ${m.text}`).join('\n');
+
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      const dbKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
+      if (dbKeyRes.rows.length > 0) apiKey = dbKeyRes.rows[0].value;
+    }
+    if (!apiKey) return;
+
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const prompt = `Analyze this chat history and determine if an order was just fully finalized and confirmed.
+Finalized means:
+1. Customer provided recipient name, address, and payment method choice (COD/Cash on Delivery or Bank Transfer).
+2. The order has been finalized and confirmed by the assistant or customer.
+
+If NOT fully finalized, return exactly: NONE
+If it is fully finalized, extract details and return a strict JSON block.
+JSON format:
+{
+  "confirmed": true,
+  "recipient_name": "extracted name or empty",
+  "phone": "${senderPhone}",
+  "address": "extracted delivery address",
+  "payment_method": "COD" or "Bank Transfer",
+  "items": [
+    { "name": "item name", "qty": 1, "price": 0 }
+  ],
+  "total_amount": 0
+}
+Strictly output JSON or NONE. No markup, no markdown formatting.
+
+Chat history:
+${chatHistory}`;
+
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
+        const orderData = JSON.parse(textResult);
+        if (orderData && orderData.confirmed) {
+          // Check for duplicate in last 5 minutes
+          const dupCheck = await db.query(
+            "SELECT id FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2) AND created_at > NOW() - INTERVAL '5 minutes'",
+            [userId, senderPhone]
+          );
+          if (dupCheck.rows.length === 0) {
+            const orderId = `ord_${Date.now()}_${Math.round(Math.random() * 1000)}`;
+            const shippingDetails = {
+              name: orderData.recipient_name || customerName,
+              phone: senderPhone,
+              address: orderData.address,
+              payment_method: orderData.payment_method
+            };
+            
+            let amount = parseFloat(orderData.total_amount) || 0;
+            if (amount === 0) {
+              amount = 7500.00; // default estimated item value
+            }
+
+            const items = orderData.items && orderData.items.length > 0 ? orderData.items : [{ name: 'Standard Product', qty: 1, price: amount }];
+
+            await db.query(
+              'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
+              [orderId, userId, JSON.stringify(items), amount, JSON.stringify(shippingDetails), 'Confirmed']
+            );
+
+            // Update chat label to 'Confirmed'
+            await db.query("UPDATE chats SET label = 'Confirmed' WHERE id = $1", [chatId]);
+            console.log(`[AUTO-CRM] Order ${orderId} automatically created for customer ${senderPhone} (Amount: Rs. ${amount})`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[AUTO-CRM] Order extraction failed:', err.message);
+  }
 }

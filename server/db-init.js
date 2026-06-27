@@ -52,6 +52,26 @@ async function init() {
         features JSONB NOT NULL,
         disabled_features JSONB NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS business_profiles (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        business_name VARCHAR(255),
+        description TEXT,
+        address TEXT,
+        sizes_info TEXT,
+        logo_url VARCHAR(500),
+        photo_urls TEXT[] DEFAULT '{}'::TEXT[]
+      );
+
+      CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR(100) PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        items JSONB NOT NULL,
+        total_amount NUMERIC(10,2) NOT NULL,
+        shipping_details JSONB,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     
     console.log('Database tables verified/created successfully.');
