@@ -3421,6 +3421,8 @@ function Dashboard({ user, setUser, onLogout }) {
       '.dashboard .sidebar-menu:hover .sidebar-menu-list__title{display:block!important;}',
       'body .sidebar-menu .sidebar-logo{display:flex!important; opacity:1!important; visibility:visible!important;}',
       'body .sidebar-menu .sidebar-logo img{display:block!important; max-height:48px!important; object-fit:contain!important; margin:0 auto!important; opacity:1!important; visibility:visible!important;}',
+      'body .sidebar-menu .brand-text{display:none!important;}',
+      'body .sidebar-menu:hover .brand-text{display:block!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-logo__link::after{display:none!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-menu-list__item.has-dropdown>.sidebar-menu-list__link::after{display:block!important;}',
       // Inbox whatsapp-empty-screen
@@ -4407,7 +4409,7 @@ function Dashboard({ user, setUser, onLogout }) {
             <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', padding: '20px 10px', textAlign: 'center' }}>
               <a href="/user/dashboard" className="sidebar-logo__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', textDecoration: 'none', width: '100%' }}>
                 <img src="/agentbunny-logo.png" alt="logo" style={{ height: '48px', width: '48px', objectFit: 'contain' }} />
-                <span className="brand-text" style={{ fontSize: '15px', fontWeight: '900', color: '#00832e', letterSpacing: '0.5px', textTransform: 'uppercase', display: isSidebarHovered ? 'block' : 'none' }}>AgentBunny</span>
+                <span className="brand-text" style={{ fontSize: '15px', fontWeight: '900', color: '#00832e', letterSpacing: '0.5px', textTransform: 'uppercase' }}>AgentBunny</span>
               </a>
             </div>
 
