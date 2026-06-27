@@ -2047,6 +2047,7 @@ function Dashboard({ user, onLogout }) {
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('whatsray_active_session_id') || '');
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
 
   const fetchSessions = async () => {
     setLoadingSessions(true);
@@ -2885,40 +2886,89 @@ function Dashboard({ user, onLogout }) {
                 <div className="dashboard-header__right" style={{ display: 'flex', alignItems: 'center' }}>
                   {/* WhatsApp Active Session Selector Dropdown */}
                   {sessions.length > 0 && (
-                    <div className="user-info" style={{ marginRight: '16px' }}>
-                      <div className="user-info__right">
-                        <div className="user-info__button" style={{ cursor: 'pointer', padding: '8px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center' }}>
+                    <div className="user-info" style={{ marginRight: '16px', position: 'relative' }}>
+                      <div className="user-info__right" onClick={() => setIsSessionDropdownOpen(!isSessionDropdownOpen)}>
+                        <div className="user-info__button" style={{ cursor: 'pointer', padding: '8px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
                           <span className="icon" style={{ marginRight: '8px', color: '#00832e', display: 'flex', alignItems: 'center' }}><i className="fa-brands fa-whatsapp fa-xl"></i></span>
-                          <select 
-                            value={activeSessionId} 
-                            onChange={(e) => {
-                              setActiveSessionId(e.target.value);
-                              localStorage.setItem('whatsray_active_session_id', e.target.value);
-                              window.location.reload();
-                            }}
-                            style={{ 
-                              border: 'none', 
-                              background: 'transparent', 
-                              fontSize: '12px', 
-                              fontWeight: 'bold', 
-                              outline: 'none', 
-                              color: '#1e293b', 
-                              cursor: 'pointer',
-                              appearance: 'none',
-                              WebkitAppearance: 'none',
-                              MozAppearance: 'none',
-                              paddingRight: '0px'
-                            }}
-                          >
-                            {sessions.map(s => (
-                              <option key={s.id} value={s.id}>
-                                {s.session_name} ({s.phone ? formatPhone(s.phone) : 'Linking...'})
-                              </option>
-                            ))}
-                          </select>
-                          <i className="fa-solid fa-chevron-down" style={{ fontSize: '10px', marginLeft: '6px', color: '#64748b', pointerEvents: 'none' }}></i>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', paddingRight: '4px' }}>
+                            {sessions.find(s => s.id === activeSessionId)?.session_name || 'WhatsApp Account'}
+                            {sessions.find(s => s.id === activeSessionId)?.phone && ` (${formatPhone(sessions.find(s => s.id === activeSessionId).phone)})`}
+                          </span>
+                          <i className="fa-solid fa-chevron-down" style={{ fontSize: '10px', marginLeft: '6px', color: '#64748b', transform: isSessionDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}></i>
                         </div>
                       </div>
+
+                      {/* Custom Rounded iOS-Style Dropdown Menu */}
+                      {isSessionDropdownOpen && (
+                        <>
+                          <div 
+                            onClick={() => setIsSessionDropdownOpen(false)} 
+                            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+                          />
+                          
+                          <div 
+                            className="animate-fade-in"
+                            style={{ 
+                              position: 'absolute', 
+                              top: '115%', 
+                              left: 0, 
+                              minWidth: '240px', 
+                              backgroundColor: '#ffffff', 
+                              borderRadius: '16px', 
+                              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
+                              border: '1px solid #f1f5f9', 
+                              padding: '8px', 
+                              zIndex: 1000,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px'
+                            }}
+                          >
+                            <div style={{ padding: '6px 12px', fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Switch Account
+                            </div>
+                            {sessions.map(s => {
+                              const isActive = s.id === activeSessionId;
+                              return (
+                                <button
+                                  key={s.id}
+                                  onClick={() => {
+                                    setActiveSessionId(s.id);
+                                    localStorage.setItem('whatsray_active_session_id', s.id);
+                                    setIsSessionDropdownOpen(false);
+                                    window.location.reload();
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: isActive ? '#f1f5f9' : 'transparent',
+                                    borderRadius: '10px',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    transition: 'background 0.2s',
+                                  }}
+                                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+                                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                >
+                                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>{s.session_name}</span>
+                                    {s.phone && <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', marginTop: '2px' }}>{formatPhone(s.phone)}</span>}
+                                  </div>
+                                  {isActive && (
+                                    <span style={{ color: '#00832e', display: 'flex', alignItems: 'center' }}>
+                                      <i className="fa-solid fa-check text-xs"></i>
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
