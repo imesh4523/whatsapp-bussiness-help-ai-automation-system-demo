@@ -77,6 +77,26 @@ async function init() {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(100);
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_status VARCHAR(100) DEFAULT 'Pending';
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_history JSONB DEFAULT '[]'::JSONB;
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255) DEFAULT NULL;
+      
+      CREATE TABLE IF NOT EXISTS user_payment_methods (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        stripe_payment_method_id VARCHAR(255) UNIQUE NOT NULL,
+        card_brand VARCHAR(50),
+        card_last4 VARCHAR(10),
+        card_fingerprint VARCHAR(255) NOT NULL,
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      CREATE TABLE IF NOT EXISTS trial_claims (
+        id SERIAL PRIMARY KEY,
+        card_fingerprint VARCHAR(255) UNIQUE NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        claimed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     
     console.log('Database tables verified/created successfully.');

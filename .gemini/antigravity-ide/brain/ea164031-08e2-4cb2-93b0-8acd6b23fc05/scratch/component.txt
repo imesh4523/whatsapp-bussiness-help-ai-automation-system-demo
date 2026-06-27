@@ -1,0 +1,478 @@
+// ── Component: TrackCustomerOrders (CRM tab) ─────────────────────────
+function TrackCustomerOrders() {
+  const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [courierName, setCourierName] = useState('Sri Lanka Post');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingStatus, setTrackingStatus] = useState('Out for Delivery');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCourier, setFilterCourier] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  const COURIER_LOGOS = {
+    'Sri Lanka Post': 'https://logo.clearbit.com/slpost.gov.lk',
+    'Citypak (Hayleys)': 'https://logo.clearbit.com/citypak.lk',
+    'Aramex': 'https://logo.clearbit.com/aramex.com',
+    'DHL Express': 'https://logo.clearbit.com/dhl.com',
+    'FedEx': 'https://logo.clearbit.com/fedex.com',
+    'Pronto': 'https://logo.clearbit.com/prontolk.com'
+  };
+
+  const FALLBACK_TRUCK = 'https://cdn-icons-png.flaticon.com/512/726/726458.png';
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data);
+        if (data.length > 0) {
+          setSelectedOrder(data[0]);
+          setCourierName(data[0].courier_name || 'Sri Lanka Post');
+          setTrackingNumber(data[0].tracking_number || '');
+          setTrackingStatus(data[0].tracking_status || 'Out for Delivery');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLinkTracking = async (e) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    setUpdating(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders/${selectedOrder.id}/tracking`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({
+          courier_name: courierName,
+          tracking_number: trackingNumber,
+          tracking_status: trackingStatus
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const updated = orders.map(o => o.id === selectedOrder.id ? { 
+          ...o, 
+          courier_name: courierName, 
+          tracking_number: trackingNumber, 
+          tracking_status: trackingStatus,
+          tracking_history: data.tracking_history 
+        } : o);
+        setOrders(updated);
+        const orderMatch = updated.find(o => o.id === selectedOrder.id);
+        setSelectedOrder(orderMatch);
+        alert('Courier Tracking details linked successfully!');
+      } else {
+        alert('Failed to update tracking details.');
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const selectOrder = (order) => {
+    setSelectedOrder(order);
+    setCourierName(order.courier_name || 'Sri Lanka Post');
+    setTrackingNumber(order.tracking_number || '');
+    setTrackingStatus(order.tracking_status || 'Out for Delivery');
+  };
+
+  const filteredOrders = orders.filter(o => {
+    // 1. Filter by Courier selection
+    if (filterCourier !== 'All') {
+      if (o.courier_name !== filterCourier) return false;
+    }
+    // 2. Filter by search query
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      o.id.toLowerCase().includes(query) ||
+      (o.shipping_details?.name && o.shipping_details.name.toLowerCase().includes(query)) ||
+      (o.tracking_number && o.tracking_number.toLowerCase().includes(query))
+    );
+  });
+
+  if (loading) {
+    return (
+      <div className="dashboard-container">
+        <div className="p-8 text-center">
+          <i className="las la-spinner la-spin text-[#00832e]" style={{ fontSize: '32px' }}></i>
+          <p className="mt-2 text-sm text-gray-500">Loading tracking workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+      
+      {/* 1. Header & Live Search Bar */}
+      <div style={{ 
+        backgroundColor: '#ffffff', 
+        borderRadius: '16px', 
+        padding: '24px', 
+        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+        marginBottom: '20px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '20px'
+      }}>
+        <div>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Courier Integrations & Customer Order Tracker</h3>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Search and trace packages across active logistics providers.</p>
+        </div>
+
+        {/* Courier selector in the middle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Filter Courier:</span>
+          <select
+            value={filterCourier}
+            onChange={(e) => setFilterCourier(e.target.value)}
+            style={{ 
+              padding: '8px 12px', 
+              border: '1px solid #cbd5e1', 
+              borderRadius: '8px', 
+              fontSize: '12px', 
+              backgroundColor: '#ffffff',
+              fontWeight: '600',
+              color: '#0f172a',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="All">All Logistics Providers</option>
+            {Object.keys(COURIER_LOGOS).map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ position: 'relative', width: '280px' }}>
+          <input
+            type="text"
+            placeholder="Search Order ID, Name, Track #"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ 
+              padding: '8px 16px 8px 36px', 
+              border: '1px solid #cbd5e1', 
+              borderRadius: '24px', 
+              fontSize: '12px', 
+              width: '100%',
+              backgroundColor: '#f8fafc'
+            }}
+          />
+          <i className="las la-search" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}></i>
+        </div>
+      </div>
+
+      {/* Courier Badges with Real Logos */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '12px', 
+        overflowX: 'auto', 
+        paddingBottom: '16px', 
+        marginBottom: '24px',
+        borderBottom: '1px solid #f1f5f9'
+      }}>
+        <button
+          onClick={() => setFilterCourier('All')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '12px',
+            border: filterCourier === 'All' ? '2px solid #00832e' : '1px solid #e2e8f0',
+            backgroundColor: filterCourier === 'All' ? '#f0fdf4' : '#ffffff',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            color: filterCourier === 'All' ? '#166534' : '#475569',
+            transition: 'all 0.2s',
+            boxShadow: filterCourier === 'All' ? '0 4px 6px -1px rgba(0,131,46,0.1)' : 'none'
+          }}
+        >
+          <i className="las la-globe" style={{ fontSize: '16px' }}></i> All Couriers
+        </button>
+
+        {Object.entries(COURIER_LOGOS).map(([name, logo]) => {
+          const isActive = filterCourier === name;
+          return (
+            <button
+              key={name}
+              onClick={() => setFilterCourier(name)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                border: isActive ? '2px solid #00832e' : '1px solid #e2e8f0',
+                backgroundColor: isActive ? '#f0fdf4' : '#ffffff',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                color: isActive ? '#166534' : '#475569',
+                transition: 'all 0.2s',
+                boxShadow: isActive ? '0 4px 6px -1px rgba(0,131,46,0.1)' : 'none'
+              }}
+            >
+              <img 
+                src={logo} 
+                alt={name} 
+                style={{ width: '22px', height: '22px', objectFit: 'contain' }} 
+                onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
+              />
+              {name}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 2. Main 2-Column workspace */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '24px', alignItems: 'start' }}>
+        
+        {/* Left side: Orders Selector list */}
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+          <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Shipments Register</h4>
+          
+          {filteredOrders.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+              <i className="las la-truck-loading" style={{ fontSize: '48px', marginBottom: '8px', display: 'block' }}></i>
+              No matching orders found.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold' }}>
+                    <th style={{ padding: '12px' }}>Order ID</th>
+                    <th style={{ padding: '12px' }}>Recipient Name</th>
+                    <th style={{ padding: '12px' }}>Logistics Service</th>
+                    <th style={{ padding: '12px' }}>Tracking Number</th>
+                    <th style={{ padding: '12px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((o) => (
+                    <tr 
+                      key={o.id} 
+                      onClick={() => selectOrder(o)}
+                      style={{ 
+                        borderBottom: '1px solid #f1f5f9', 
+                        fontSize: '13px', 
+                        cursor: 'pointer',
+                        backgroundColor: selectedOrder?.id === o.id ? '#f8fafc' : 'transparent',
+                        fontWeight: selectedOrder?.id === o.id ? '600' : 'normal'
+                      }}
+                    >
+                      <td style={{ padding: '14px 12px', color: '#0f172a' }}>{o.id}</td>
+                      <td style={{ padding: '14px 12px', color: '#475569' }}>{o.shipping_details?.name}</td>
+                      <td style={{ padding: '14px 12px', color: '#475569' }}>
+                        {o.courier_name ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <img 
+                              src={COURIER_LOGOS[o.courier_name]} 
+                              alt={o.courier_name} 
+                              style={{ width: '18px', height: '18px', objectFit: 'contain' }} 
+                              onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
+                            />
+                            {o.courier_name}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td style={{ padding: '14px 12px', fontFamily: 'monospace', color: '#475569' }}>{o.tracking_number || '—'}</td>
+                      <td style={{ padding: '14px 12px' }}>
+                        <span style={{
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          backgroundColor: o.tracking_status === 'Delivered' ? '#dcfce7' : '#e0f2fe',
+                          color: o.tracking_status === 'Delivered' ? '#15803d' : '#0369a1'
+                        }}>
+                          {o.tracking_status || 'Pending'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Right side: Tracing Timeline and Link form */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* Section 1: Live Timeline Tracing (PROMINENT - TOP OF RIGHT SIDEBAR) */}
+          {selectedOrder && selectedOrder.tracking_number ? (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img 
+                    src={COURIER_LOGOS[selectedOrder.courier_name]} 
+                    alt={selectedOrder.courier_name} 
+                    style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+                    onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
+                  />
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Package Tracing Log</h4>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>{selectedOrder.courier_name} — <strong>{selectedOrder.tracking_number}</strong></span>
+                  </div>
+                </div>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  backgroundColor: '#00832e',
+                  color: '#ffffff'
+                }}>
+                  {selectedOrder.tracking_status}
+                </span>
+              </div>
+
+              {/* Progress steps */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', position: 'relative', paddingLeft: '20px', borderLeft: '2px solid #e2e8f0', marginLeft: '8px' }}>
+                {selectedOrder.tracking_history && selectedOrder.tracking_history.map((log, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    <div style={{
+                      position: 'absolute',
+                      left: '-29px',
+                      top: '2px',
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      backgroundColor: idx === selectedOrder.tracking_history.length - 1 ? '#00832e' : '#cbd5e1',
+                      border: '3px solid #ffffff',
+                      boxShadow: '0 0 0 2px ' + (idx === selectedOrder.tracking_history.length - 1 ? '#00832e' : '#e2e8f0')
+                    }}></div>
+
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>{log.status}</div>
+                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '1px' }}>{log.details}</div>
+                    <div style={{ display: 'flex', gap: '10px', fontSize: '10px', color: '#94a3b8', marginTop: '3px' }}>
+                      <span><i className="las la-map-marker"></i> {log.location}</span>
+                      <span><i className="las la-clock"></i> {new Date(log.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', textAlign: 'center', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
+              <i className="las la-map-marked-alt" style={{ fontSize: '32px', marginBottom: '8px', display: 'block' }}></i>
+              No active tracking logs. Link details below to initiate tracing simulator.
+            </div>
+          )}
+
+          {/* Section 2: Form to Link Details */}
+          {selectedOrder && (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                <img 
+                  src={COURIER_LOGOS[courierName]} 
+                  alt={courierName} 
+                  style={{ width: '28px', height: '28px', objectFit: 'contain' }} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
+                />
+                <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Link Logistics Details</h4>
+              </div>
+              
+              <form onSubmit={handleLinkTracking} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  Target Order ID: <strong>{selectedOrder.id}</strong>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Select Logistics Service</label>
+                  <select
+                    value={courierName}
+                    onChange={(e) => setCourierName(e.target.value)}
+                    style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="Sri Lanka Post">Sri Lanka Post</option>
+                    <option value="Citypak (Hayleys)">Citypak (Hayleys)</option>
+                    <option value="Aramex">Aramex</option>
+                    <option value="DHL Express">DHL Express</option>
+                    <option value="FedEx">FedEx</option>
+                    <option value="Pronto">Pronto</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Courier Tracking Number</label>
+                  <input
+                    type="text"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    placeholder="e.g. SLP8592039201"
+                    style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%' }}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Current Tracking Status</label>
+                  <select
+                    value={trackingStatus}
+                    onChange={(e) => setTrackingStatus(e.target.value)}
+                    style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="Sorting Hub">Sorting Hub</option>
+                    <option value="In Transit">In Transit</option>
+                    <option value="Out for Delivery">Out for Delivery</option>
+                    <option value="Delivered">Delivered</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={updating}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    cursor: updating ? 'not-allowed' : 'pointer',
+                    width: '100%',
+                    marginTop: '6px'
+                  }}
+                >
+                  {updating ? 'Linking Tracking...' : 'Link & Generate History'}
+                </button>
+              </form>
+            </div>
+          )}
+
+        </div>
+
+      </div>
+    </div>
+  );
+}

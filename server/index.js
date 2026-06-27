@@ -20,7 +20,35 @@ import {
 
 dotenv.config();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_stripe_key_whatsray_123456');
+let stripeInstance = null;
+async function getDynamicStripe() {
+  let secretKey = process.env.STRIPE_SECRET_KEY;
+  try {
+    const r = await db.query("SELECT value FROM system_settings WHERE key = 'stripe_secret_key'");
+    if (r.rows.length > 0 && r.rows[0].value) {
+      secretKey = r.rows[0].value;
+    }
+  } catch (err) {
+    console.error('Failed to retrieve Stripe secret key from DB:', err.message);
+  }
+  
+  if (!stripeInstance || stripeInstance._secretKey !== secretKey) {
+    stripeInstance = new Stripe(secretKey || 'sk_test_mock_stripe_key_whatsray_123456');
+    stripeInstance._secretKey = secretKey;
+  }
+  return stripeInstance;
+}
+
+async function isStripeConfigured() {
+  let secretKey = process.env.STRIPE_SECRET_KEY;
+  try {
+    const r = await db.query("SELECT value FROM system_settings WHERE key = 'stripe_secret_key'");
+    if (r.rows.length > 0 && r.rows[0].value) {
+      secretKey = r.rows[0].value;
+    }
+  } catch (e) {}
+  return !!secretKey;
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -1146,6 +1174,9 @@ app.post('/api/admin/sessions/:id/terminate', async (req, res) => {
 app.post('/api/payments/create-checkout-session', authenticateToken, async (req, res) => {
   const { plan } = req.body;
   try {
+    const stripe = await getDynamicStripe();
+    const isConfigured = await isStripeConfigured();
+
     const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [plan]);
     if (planRes.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid plan value' });
@@ -1154,7 +1185,7 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
     const priceLkr = parseFloat(planRow.price);
     const amountCents = Math.round(priceLkr * 100);
 
-    if (!process.env.STRIPE_SECRET_KEY) {
+    if (!isConfigured) {
       // Mock Stripe mode fallback for testing
       const mockSessionId = 'cs_test_' + Math.random().toString(36).substring(2, 15);
       await db.query(
@@ -1231,6 +1262,7 @@ app.post('/api/payments/webhook', async (req, res) => {
   let event = req.body;
 
   try {
+    const stripe = await getDynamicStripe();
     if (process.env.STRIPE_WEBHOOK_SECRET && sig) {
       try {
         event = stripe.webhooks.constructEvent(req.rawBody || JSON.stringify(req.body), sig, process.env.STRIPE_WEBHOOK_SECRET);
@@ -1267,6 +1299,162 @@ app.post('/api/payments/webhook', async (req, res) => {
   }
 
   res.json({ received: true });
+});
+
+// ── In-App Stripe Card & Trial Abuse Check Endpoints ─────────────────────────
+app.get('/api/payments/stripe-key', authenticateToken, async (req, res) => {
+  let publicKey = process.env.STRIPE_PUBLIC_KEY;
+  try {
+    const r = await db.query("SELECT value FROM system_settings WHERE key = 'stripe_public_key'");
+    if (r.rows.length > 0 && r.rows[0].value) {
+      publicKey = r.rows[0].value;
+    }
+  } catch (err) {}
+  res.json({ 
+    stripeKey: publicKey || 'pk_test_51P6W9cCGnN9vK9jQzTestKey'
+  });
+});
+
+app.get('/api/payments/methods', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT id, card_brand, card_last4, is_default, created_at 
+       FROM user_payment_methods 
+       WHERE user_id = $1 
+       ORDER BY created_at DESC`, 
+      [req.user.id]
+    );
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/methods/save', authenticateToken, async (req, res) => {
+  const { paymentMethodId } = req.body;
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: 'Missing paymentMethodId' });
+  }
+
+  try {
+    const stripe = await getDynamicStripe();
+    const isConfigured = await isStripeConfigured();
+
+    const userRes = await db.query('SELECT stripe_customer_id, email, full_name FROM users WHERE id = $1', [req.user.id]);
+    const user = userRes.rows[0];
+    let customerId = user.stripe_customer_id;
+
+    if (!customerId) {
+      if (isConfigured) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.full_name,
+          metadata: { userId: req.user.id.toString() }
+        });
+        customerId = customer.id;
+      } else {
+        customerId = 'cus_mock_' + Math.random().toString(36).substring(2, 10);
+      }
+      await db.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, req.user.id]);
+    }
+
+    let cardBrand = 'Visa';
+    let cardLast4 = '4242';
+    let cardFingerprint = 'mock_visa_fingerprint_' + Math.random().toString(36).substring(2, 10);
+
+    if (isConfigured && !paymentMethodId.startsWith('pm_mock_')) {
+      await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId }
+      });
+      
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+      cardBrand = pm.card?.brand || 'Card';
+      cardLast4 = pm.card?.last4 || '0000';
+      cardFingerprint = pm.card?.fingerprint || cardFingerprint;
+    } else {
+      // Mock mode simulates cards based on ID keyword
+      if (paymentMethodId.toLowerCase().includes('mastercard')) {
+        cardBrand = 'MasterCard';
+        cardLast4 = '8810';
+        cardFingerprint = 'mock_mastercard_fingerprint';
+      } else if (paymentMethodId.toLowerCase().includes('visa')) {
+        cardBrand = 'Visa';
+        cardLast4 = '4242';
+        cardFingerprint = 'mock_visa_fingerprint';
+      }
+    }
+
+    // Reset default status of old payment methods first
+    await db.query('UPDATE user_payment_methods SET is_default = FALSE WHERE user_id = $1', [req.user.id]);
+
+    await db.query(
+      `INSERT INTO user_payment_methods (user_id, stripe_payment_method_id, card_brand, card_last4, card_fingerprint, is_default)
+       VALUES ($1, $2, $3, $4, $5, TRUE)
+       ON CONFLICT (stripe_payment_method_id) DO UPDATE SET is_default = TRUE`,
+      [req.user.id, paymentMethodId, cardBrand, cardLast4, cardFingerprint]
+    );
+
+    await logAuditEvent('Stripe Card Saved', `User ID ${req.user.id} saved card ${cardBrand} Ending in ${cardLast4}`);
+
+    res.json({ success: true, card: { card_brand: cardBrand, card_last4: cardLast4 } });
+  } catch (err) {
+    console.error('Save card error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
+  const { planId } = req.body;
+  if (!planId) {
+    return res.status(400).json({ error: 'Missing planId' });
+  }
+
+  try {
+    // 1. Check if user has linked card
+    const pmRes = await db.query(
+      'SELECT card_fingerprint FROM user_payment_methods WHERE user_id = $1 LIMIT 1', 
+      [req.user.id]
+    );
+    if (pmRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Please add a payment card under the Payment Method tab first to claim your trial.' });
+    }
+    const fingerprint = pmRes.rows[0].card_fingerprint;
+
+    // 2. Check for trial abuse via card fingerprint
+    const claimRes = await db.query(
+      'SELECT id, user_id FROM trial_claims WHERE card_fingerprint = $1 LIMIT 1', 
+      [fingerprint]
+    );
+    if (claimRes.rows.length > 0) {
+      return res.status(400).json({ error: 'This payment card has already been used to claim a trial subscription. Trial limits are restricted to one per credit card.' });
+    }
+
+    // 3. Log the trial claim and upgrade user plan
+    await db.query(
+      'INSERT INTO trial_claims (card_fingerprint, user_id) VALUES ($1, $2)', 
+      [fingerprint, req.user.id]
+    );
+    
+    // Normalizing plans matching existing database plan names (Pro maps to Premium, Elite maps to Enterprise)
+    let dbPlanId = planId;
+    if (planId === 'Pro') dbPlanId = 'Premium';
+    else if (planId === 'Elite') dbPlanId = 'Enterprise';
+
+    await db.query(
+      "UPDATE users SET plan = $1, status = 'Trial' WHERE id = $2", 
+      [dbPlanId, req.user.id]
+    );
+
+    await logAuditEvent('Trial Claimed', `User ID ${req.user.id} claimed 14-day trial of plan ${dbPlanId}`);
+
+    const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [req.user.id]);
+    
+    res.json({ success: true, plan: dbPlanId, user: userRes.rows[0] });
+  } catch (err) {
+    console.error('Claim trial error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Admin Billing & Users Endpoints ──────────────────────────────────────────

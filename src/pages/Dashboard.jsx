@@ -2242,6 +2242,15 @@ function Dashboard({ user, onLogout }) {
   const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('whatsray_active_session_id') || '');
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
+
+  // Stripe & Payment States
+  const [savedCards, setSavedCards] = useState([]);
+  const [stripePublicKey, setStripePublicKey] = useState('');
+  const [isStripeModalOpen, setIsStripeModalOpen] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState('');
+  const [isStripeScriptLoaded, setIsStripeScriptLoaded] = useState(false);
+
   const [stats, setStats] = useState({
     total_earned: 0,
     total_contacts: 0,
@@ -2300,6 +2309,291 @@ function Dashboard({ user, onLogout }) {
       fetchDashboardStats();
     }
   }, [user]);
+
+  // ── Stripe & Payments Integration Helpers ──────────────────────────────────
+  const fetchSavedCards = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/payments/methods`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedCards(data);
+      }
+    } catch (err) {
+      console.error('Error fetching saved cards:', err);
+    }
+  };
+
+  const fetchStripeKey = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/payments/stripe-key`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStripePublicKey(data.stripeKey);
+      }
+    } catch (err) {
+      console.error('Error fetching Stripe key:', err);
+    }
+  };
+
+  const handleClaimTrial = async (planId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/payments/claim-trial`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ planId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (window.notify) window.notify('success', `Congratulations! Your 14-day trial of ${planId} has been successfully activated.`);
+        else alert(`Congratulations! Your 14-day trial of ${planId} has been successfully activated.`);
+        
+        // Update user state in localStorage and app context
+        const savedUser = JSON.parse(localStorage.getItem('aura_user') || '{}');
+        savedUser.plan = data.user.plan;
+        savedUser.status = data.user.status;
+        localStorage.setItem('aura_user', JSON.stringify(savedUser));
+        
+        // Force state reload by redirecting to refresh
+        window.location.reload();
+      } else {
+        if (window.notify) window.notify('error', data.error || 'Failed to claim trial.');
+        else alert(data.error || 'Failed to claim trial.');
+      }
+    } catch (err) {
+      console.error('Error claiming trial:', err);
+      if (window.notify) window.notify('error', 'Network error. Please try again.');
+      else alert('Network error. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'subscription_index') {
+      fetchStripeKey();
+      fetchSavedCards();
+      
+      // Load Stripe script
+      if (!window.Stripe) {
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.async = true;
+        script.onload = () => {
+          setIsStripeScriptLoaded(true);
+        };
+        document.head.appendChild(script);
+      } else {
+        setIsStripeScriptLoaded(true);
+      }
+    }
+  }, [tab]);
+
+  const renderSavedCardsHtml = () => {
+    if (!savedCards || savedCards.length === 0) {
+      return `
+        <div class="col-12 text-center py-5" style="color: #64748b;">
+          <div style="font-size: 40px; opacity: 0.4; margin-bottom: 10px;"><i class="las la-credit-card"></i></div>
+          <p style="font-size: 13px; margin: 0;">No saved credit cards found. Click <strong>'Add Payment Method'</strong> to add one.</p>
+        </div>
+      `;
+    }
+
+    // ── Brand SVG logo helper ────────────────────────────────────────────────
+    const getCardBrandSvg = (brand) => {
+      const b = (brand || '').toLowerCase();
+
+      if (b === 'visa') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 471" width="64" height="40">
+          <rect width="750" height="471" rx="40" fill="rgba(255,255,255,0.15)"/>
+          <text x="375" y="320" text-anchor="middle"
+            font-family="Arial Black, Helvetica, sans-serif"
+            font-size="230" font-weight="900" font-style="italic"
+            fill="#ffffff" letter-spacing="-8">VISA</text>
+        </svg>`;
+      }
+
+      if (b === 'mastercard') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 108" width="58" height="40">
+          <circle cx="54" cy="54" r="54" fill="#EB001B" opacity="0.9"/>
+          <circle cx="98" cy="54" r="54" fill="#F79E1B" opacity="0.9"/>
+          <path d="M76 20.6a54 54 0 0 1 0 66.8A54 54 0 0 1 76 20.6z" fill="#FF5F00"/>
+        </svg>`;
+      }
+
+      if (b === 'amex' || b === 'american_express') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 60" width="70" height="40">
+          <rect width="180" height="60" rx="6" fill="rgba(0,115,207,0.85)"/>
+          <text x="90" y="43" text-anchor="middle"
+            font-family="Arial Black, sans-serif"
+            font-size="26" font-weight="900" fill="#ffffff" letter-spacing="2">AMEX</text>
+        </svg>`;
+      }
+
+      if (b === 'discover') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="76" height="40">
+          <rect width="200" height="60" rx="6" fill="rgba(255,255,255,0.15)"/>
+          <text x="60" y="40" text-anchor="middle"
+            font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">DISCOVER</text>
+          <circle cx="162" cy="30" r="26" fill="#F76F20" opacity="0.95"/>
+        </svg>`;
+      }
+
+      if (b === 'jcb') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" width="58" height="40">
+          <rect width="120" height="60" rx="6" fill="rgba(255,255,255,0.15)"/>
+          <rect x="8" y="8" width="30" height="44" rx="5" fill="#0E4C96"/>
+          <rect x="45" y="8" width="30" height="44" rx="5" fill="#E31837"/>
+          <rect x="82" y="8" width="30" height="44" rx="5" fill="#007B40"/>
+          <text x="23" y="34" text-anchor="middle" font-family="Arial Black" font-size="13" font-weight="900" fill="#ffffff">J</text>
+          <text x="60" y="34" text-anchor="middle" font-family="Arial Black" font-size="13" font-weight="900" fill="#ffffff">C</text>
+          <text x="97" y="34" text-anchor="middle" font-family="Arial Black" font-size="13" font-weight="900" fill="#ffffff">B</text>
+        </svg>`;
+      }
+
+      if (b === 'unionpay') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 60" width="68" height="40">
+          <rect width="180" height="60" rx="6" fill="rgba(200,0,0,0.8)"/>
+          <rect x="60" y="0" width="60" height="60" fill="rgba(200,0,0,0.0)"/>
+          <text x="90" y="40" text-anchor="middle"
+            font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff" letter-spacing="1">UnionPay</text>
+        </svg>`;
+      }
+
+      if (b === 'diners' || b === 'diners_club') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" width="58" height="40">
+          <rect width="120" height="60" rx="6" fill="rgba(255,255,255,0.15)"/>
+          <circle cx="46" cy="30" r="22" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.85"/>
+          <circle cx="74" cy="30" r="22" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.85"/>
+        </svg>`;
+      }
+
+      // Generic fallback
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="50" height="34">
+        <rect width="60" height="40" rx="5" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+        <rect x="0" y="10" width="60" height="10" fill="rgba(255,255,255,0.25)"/>
+        <rect x="6" y="26" width="20" height="6" rx="2" fill="rgba(255,255,255,0.4)"/>
+      </svg>`;
+    };
+
+    return savedCards.map((card, idx) => {
+      const brand = (card.card_brand || 'unknown').toLowerCase();
+      const cardLabel = card.is_default ? 'PRIMARY METHOD' : 'BACKUP METHOD';
+
+      // Card type label per brand
+      const cardTypeLabels = {
+        visa: 'Personal Card',
+        mastercard: 'Business Card',
+        amex: 'Premium Card',
+        american_express: 'Premium Card',
+        discover: 'Rewards Card',
+        jcb: 'JCB Card',
+        unionpay: 'UnionPay Card',
+        diners: 'Diners Club',
+        diners_club: 'Diners Club',
+      };
+      const cardType = cardTypeLabels[brand] || 'Credit Card';
+
+      // Each card gets a slightly different hue for visual variety
+      const hues = ['270deg', '220deg', '190deg', '310deg'];
+      const hue = hues[idx % hues.length];
+
+      const brandSvg = getCardBrandSvg(brand);
+
+      return `
+        <div class="col-lg-6 col-md-8 col-sm-10 mx-auto mx-lg-0" style="margin-bottom: 20px;">
+          <div class="glass-credit-card" style="
+            position: relative;
+            width: 100%;
+            min-height: 200px;
+            border-radius: 20px;
+            padding: 28px 28px 22px 28px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: linear-gradient(135deg, hsla(${hue}, 60%, 70%, 0.22) 0%, hsla(${hue}, 50%, 40%, 0.12) 100%);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid hsla(${hue}, 80%, 80%, 0.25);
+            box-shadow: 0 8px 32px hsla(${hue}, 60%, 20%, 0.25), inset 0 1px 0 hsla(0, 0%, 100%, 0.18);
+            cursor: default;
+          ">
+            <!-- Shimmer highlight overlay -->
+            <div style="
+              position: absolute;
+              top: -60%;
+              left: -30%;
+              width: 180%;
+              height: 120%;
+              background: linear-gradient(105deg, transparent 40%, hsla(0,0%,100%,0.07) 50%, transparent 60%);
+              pointer-events: none;
+              transform: skewX(-15deg);
+            "></div>
+
+            <!-- Decorative circles -->
+            <div style="position:absolute;right:-30px;top:-30px;width:140px;height:140px;border-radius:50%;background:hsla(${hue},70%,70%,0.12);pointer-events:none;"></div>
+            <div style="position:absolute;right:40px;top:-60px;width:100px;height:100px;border-radius:50%;background:hsla(${hue},60%,60%,0.08);pointer-events:none;"></div>
+
+            <!-- Top row: label & brand SVG logo -->
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;">
+              <div>
+                <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(255,255,255,0.6);margin-bottom:4px;">${cardLabel}</div>
+                <div style="font-size:15px;font-weight:700;color:#ffffff;text-shadow:0 1px 6px rgba(0,0,0,0.3);">${cardType}</div>
+              </div>
+              <div style="display:flex;align-items:center;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25));">
+                ${brandSvg}
+              </div>
+            </div>
+
+            <!-- Chip icon -->
+            <div style="position:relative;z-index:1;margin: 14px 0 10px 0;">
+              <div style="
+                width: 42px; height: 32px;
+                border-radius: 6px;
+                background: linear-gradient(135deg, rgba(255,215,100,0.7) 0%, rgba(200,160,50,0.6) 100%);
+                border: 1px solid rgba(255,230,130,0.5);
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr 1fr;
+                gap: 2px;
+                padding: 5px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+              ">
+                <div style="border-radius:2px;background:rgba(180,130,0,0.5);"></div>
+                <div style="border-radius:2px;background:rgba(180,130,0,0.5);"></div>
+                <div style="border-radius:2px;background:rgba(180,130,0,0.5);"></div>
+                <div style="border-radius:2px;background:rgba(180,130,0,0.5);"></div>
+              </div>
+            </div>
+
+            <!-- Card number -->
+            <div style="position:relative;z-index:1;font-size:17px;font-family:monospace;letter-spacing:0.2em;color:#ffffff;text-shadow:0 1px 8px rgba(0,0,0,0.4);margin-bottom:14px;">
+              ••••  ••••  ••••  ${card.card_last4}
+            </div>
+
+            <!-- Bottom row: holder & expiry -->
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1;">
+              <div>
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:3px;">Card Holder</div>
+                <div style="font-size:13px;font-weight:600;text-transform:uppercase;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,0.3);">${(user?.name || 'CARD HOLDER').toUpperCase()}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:3px;">Expires</div>
+                <div style="font-size:13px;font-weight:600;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,0.3);">12/29</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+
+
   
   const [openDropdowns, setOpenDropdowns] = useState({
     contacts: false,
@@ -2410,7 +2704,14 @@ function Dashboard({ user, onLogout }) {
       '@media(max-width:575px){.whatsapp-empty-screen{min-height:calc(100vh - 110px);padding:22px 14px}.whatsapp-empty-screen__art{min-height:320px;transform:scale(.84)}.whatsapp-empty-screen__robot{width:220px;height:260px}}',
       '.whatsapp-pin-toggle{position:absolute;top:50%;right:12px;transform:translateY(-50%);width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#667085;display:inline-flex;align-items:center;justify-content:center;font-size:18px;}',
       '.whatsapp-pin-toggle:hover,.whatsapp-pin-toggle:focus{background:rgba(15,118,110,.08);color:#0f766e;outline:none;}',
+      /* ── Glassmorphism Credit Card ─────────────────────────────── */
+      '.glass-credit-card{transition:transform 0.3s ease, box-shadow 0.3s ease;}',
+      '.glass-credit-card:hover{transform:translateY(-4px) scale(1.01);}',
+      /* Shimmer sweep animation on hover */
+      '.glass-credit-card::before{content:"";position:absolute;top:0;left:-75%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent);transform:skewX(-20deg);transition:left 0.6s ease;pointer-events:none;z-index:2;}',
+      '.glass-credit-card:hover::before{left:130%;}',
     ].join('\n');
+
     document.head.appendChild(styleEl);
 
     // Load scripts sequentially
@@ -2529,6 +2830,23 @@ function Dashboard({ user, onLogout }) {
   // ── 6. Intercept clicks & form submits for SPA routing ───────────────────
   useEffect(() => {
     const handleGlobalClick = (e) => {
+      // Check for Add Payment Method button click
+      const addPaymentBtn = e.target.closest('#add-payment-method-btn');
+      if (addPaymentBtn) {
+        e.preventDefault();
+        setIsStripeModalOpen(true);
+        return;
+      }
+
+      // Check for Claim Trial button click
+      const claimTrialBtn = e.target.closest('.claim-trial-btn');
+      if (claimTrialBtn) {
+        e.preventDefault();
+        const planId = claimTrialBtn.getAttribute('data-plan-id');
+        handleClaimTrial(planId);
+        return;
+      }
+
       const anchor = e.target.closest('a');
       if (anchor) {
         // Custom route attribute handling for mockup page buttons
@@ -3266,6 +3584,7 @@ function Dashboard({ user, onLogout }) {
                     .replace('__TOTAL_LISTS__', (stats?.total_lists ?? 0).toString())
                     .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
                     .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
+                    .replace('__SAVED_CARDS_LIST__', renderSavedCardsHtml())
                 }} />
               )}
             </div>
@@ -3273,6 +3592,232 @@ function Dashboard({ user, onLogout }) {
           </div>
         </div>
 
+        {/* Stripe Credit Card Popup Modal */}
+        {isStripeModalOpen && (
+          <StripeCardModal
+            stripePublicKey={stripePublicKey}
+            isScriptLoaded={isStripeScriptLoaded}
+            onClose={() => setIsStripeModalOpen(false)}
+            onSaveSuccess={() => {
+              setIsStripeModalOpen(false);
+              fetchSavedCards();
+            }}
+            user={user}
+          />
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ── Component: StripeCardModal ───────────────────────────────────────
+function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSuccess, user }) {
+  const cardElementRef = useRef(null);
+  const [stripeInstance, setStripeInstance] = useState(null);
+  const [cardElement, setCardElement] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isScriptLoaded && window.Stripe && stripePublicKey) {
+      const stripe = window.Stripe(stripePublicKey);
+      setStripeInstance(stripe);
+      const elements = stripe.elements();
+      
+      const card = elements.create('card', {
+        style: {
+          base: {
+            color: '#1e293b',
+            fontFamily: '"Inter", sans-serif',
+            fontSmoothing: 'antialiased',
+            fontSize: '15px',
+            '::placeholder': {
+              color: '#94a3b8'
+            }
+          },
+          invalid: {
+            color: '#ef4444',
+            iconColor: '#ef4444'
+          }
+        }
+      });
+      
+      card.mount(cardElementRef.current);
+      setCardElement(card);
+
+      return () => {
+        card.destroy();
+      };
+    }
+  }, [isScriptLoaded, stripePublicKey]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!stripeInstance || !cardElement) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Direct call to Stripe to create a Payment Method
+      const { paymentMethod, error: stripeErr } = await stripeInstance.createPaymentMethod({
+        type: 'card',
+        card: cardElement,
+        billing_details: {
+          name: user?.name || 'Cheak Imesh',
+          email: user?.email || '',
+        }
+      });
+
+      if (stripeErr) {
+        setError(stripeErr.message);
+        setLoading(false);
+        return;
+      }
+
+      // Save Payment Method ID to backend
+      const res = await fetch(`${API_BASE_URL}/payments/methods/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ paymentMethodId: paymentMethod.id })
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        if (window.notify) window.notify('success', 'Credit card successfully saved to your account!');
+        else alert('Credit card successfully saved to your account!');
+        onSaveSuccess();
+      } else {
+        setError(data.error || 'Failed to save card.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Network error. Failed to save card.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+      backdropFilter: 'blur(4px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 999999
+    }}>
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        width: 'min(100% - 32px, 480px)',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid #f1f5f9',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <h5 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>Add Credit / Debit Card</h5>
+          <button type="button" onClick={onClose} style={{
+            border: 'none',
+            background: 'transparent',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontSize: '20px',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <i className="las la-times"></i>
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} style={{ padding: '24px', margin: 0 }}>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Card Details</label>
+            <div style={{
+              border: '1px solid #cbd5e1',
+              borderRadius: '10px',
+              padding: '12px 16px',
+              background: '#f8fafc',
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+            }}>
+              <div ref={cardElementRef} />
+            </div>
+            <small style={{ display: 'block', marginTop: '8px', color: '#64748b', fontSize: '11px' }}>
+              Your card information is processed securely by Stripe. We do not store your full card number on our servers.
+            </small>
+          </div>
+
+          {error && (
+            <div style={{
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fee2e2',
+              color: '#ef4444',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <i className="las la-exclamation-circle" style={{ fontSize: '16px' }}></i>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose} disabled={loading} style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              color: '#475569',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#00832e',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              {loading ? (
+                <>
+                  <i className="las la-spinner la-spin"></i> Saving...
+                </>
+              ) : (
+                'Save Card'
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
