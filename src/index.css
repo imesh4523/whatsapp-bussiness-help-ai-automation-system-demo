@@ -448,4 +448,28 @@ body div#root .self-end span {
   color: #ffffff !important;
 }
 
+/* Sidebar logo branding overrides */
+body .sidebar-menu .sidebar-logo {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+body .sidebar-menu .sidebar-logo img {
+  display: block !important;
+  max-height: 48px !important;
+  object-fit: contain !important;
+  margin: 0 auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+body .sidebar-menu .brand-text {
+  display: none !important;
+}
+
+body .sidebar-menu:hover .brand-text {
+  display: block !important;
+}
+
 
