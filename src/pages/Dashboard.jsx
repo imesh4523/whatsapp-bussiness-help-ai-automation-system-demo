@@ -8,6 +8,7 @@ const getTabFromPath = (path) => {
     '/user/dashboard': 'dashboard',
     '/user/inbox': 'inbox',
     '/user/crm/customers': 'customer_list',
+    '/user/tracking': 'track_orders',
     '/user/crm/track-orders': 'track_orders',
     '/user/business-profile': 'business_profile',
     '/user/campaign/index': 'campaign_index',
@@ -63,7 +64,7 @@ const getPathFromTab = (tabKey) => {
     dashboard: '/user/dashboard',
     inbox: '/user/inbox',
     crm_customers: '/user/customer/list',
-    track_orders: '/user/crm/track-orders',
+    track_orders: '/user/tracking',
     business_profile: '/user/business-profile',
     campaign_index: '/user/campaign/index',
     campaign_create: '/user/campaign/create',
@@ -2792,6 +2793,14 @@ function Dashboard({ user, onLogout }) {
                 </a>
               </li>
 
+              {/* Track Customer Orders */}
+              <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
+                <a href="/user/tracking" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); }}>
+                  <span className="icon"><i className="las la-truck-loading" /></span>
+                  <span className="text">Track Customer Orders</span>
+                </a>
+              </li>
+
               {/* Manage Agent */}
               <li className={`sidebar-menu-list__item ${tab === 'agent_list' || tab === 'agent_create' ? 'active' : ''}`}>
                 <a href="/user/agent/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('agent_list'); }}>
@@ -2999,16 +3008,6 @@ function Dashboard({ user, onLogout }) {
                 <a href="/user/referral/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('referral_index'); }}>
                   <span className="icon"><i className="las la-share-alt" /></span>
                   <span className="text">Manage Referrals</span>
-                </a>
-              </li>
-
-              <li className="sidebar-menu-list__title"><span className="text">CRM &amp; ORDERS</span></li>
-
-              {/* Track Customer Orders */}
-              <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
-                <a href="/user/crm/track-orders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); }}>
-                  <span className="icon"><i className="las la-truck-loading" /></span>
-                  <span className="text">Track Customer Orders</span>
                 </a>
               </li>
 
