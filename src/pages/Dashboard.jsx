@@ -2202,10 +2202,7 @@ function Dashboard({ user, onLogout }) {
 
   const setTab = (newTab) => {
     const newPath = getPathFromTab(newTab);
-    if (window.location.pathname !== newPath) {
-      window.history.pushState(null, '', newPath);
-    }
-    setTabState(newTab);
+    window.location.href = newPath;
   };
 
   const [sessions, setSessions] = useState([]);
