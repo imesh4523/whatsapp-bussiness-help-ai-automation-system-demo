@@ -15,7 +15,8 @@ import {
   disconnectWhatsAppSession,
   initWhatsAppSessions,
   triggerMockIncomingMessage,
-  getActiveSocket
+  getActiveSocket,
+  trackSentMessage
 } from './wa-manager.js';
 
 dotenv.config();
@@ -174,7 +175,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [req.user.id]);
+    const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1', [req.user.id]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -184,7 +185,10 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       email: user.email,
       name: user.full_name,
       plan: user.plan,
-      status: user.status
+      status: user.status,
+      auto_renewal: user.auto_renewal,
+      plan_expires_at: user.plan_expires_at,
+      billing_cycle: user.billing_cycle
     });
   } catch (err) {
     console.error('Get me error:', err.message);
@@ -199,6 +203,25 @@ app.get('/api/products', async (req, res) => {
     res.json(productsRes.rows);
   } catch (err) {
     console.error('Fetch products error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/orders/public/track/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const orderRes = await db.query(
+      `SELECT id, items, total_amount, shipping_details, status, courier_name, tracking_number, tracking_status, tracking_history, created_at 
+       FROM orders 
+       WHERE id = $1`,
+      [id]
+    );
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json(orderRes.rows[0]);
+  } catch (err) {
+    console.error('Fetch public order tracking error:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -558,8 +581,15 @@ app.post('/api/whatsapp/send-message', authenticateToken, resolveWhatsAppSession
       if (ephemeralExpiration > 0) {
         sendOpts.ephemeralExpiration = ephemeralExpiration;
       }
-      await sock.sendMessage(recipientJid, { text }, sendOpts);
+      const result = await sock.sendMessage(recipientJid, { text }, sendOpts);
+      if (result && result.key && result.key.id) {
+        trackSentMessage(result.key.id);
+      }
     }
+
+    // Auto-extract tracking info if present in outgoing message sent from panel
+    const customerPhone = chatId.replace(`${sessionId}_`, '');
+    await checkAndExtractTracking(req.user.id, sessionId, customerPhone, text);
 
     res.json({ success: true, message: 'Message sent.' });
   } catch (err) {
@@ -622,7 +652,10 @@ app.post('/api/whatsapp/send-media', authenticateToken, upload.single('file'), r
       if (ephemeralExpiration > 0) {
         sendOpts.ephemeralExpiration = ephemeralExpiration;
       }
-      await sock.sendMessage(recipientJid, msgPayload, sendOpts);
+      const result = await sock.sendMessage(recipientJid, msgPayload, sendOpts);
+      if (result && result.key && result.key.id) {
+        trackSentMessage(result.key.id);
+      }
     }
 
     // Save to messages table as [Media] note
@@ -743,6 +776,9 @@ app.post('/api/business-profile', authenticateToken, upload.fields([{ name: 'log
 // ── Dashboard Statistics Endpoint ────────────────────────────────────
 app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
   try {
+    // Dynamically process any pending auto-renewals on dashboard access
+    await processSubscriptionRenewals();
+
     // 1. Calculate total earned: sum of total_amount of confirmed/completed orders for this user
     const earnedRes = await db.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE user_id = $1 AND (status = 'Confirmed' OR status = 'Completed')", [req.user.id]);
     const total_earned = parseFloat(earnedRes.rows[0].total);
@@ -775,6 +811,15 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
     const depositsRes = await db.query("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = $1 AND status = 'Completed'", [req.user.id]);
     const total_deposits = parseFloat(depositsRes.rows[0].total);
 
+    // 7. Total AI messages sent (sender = 'bot')
+    const aiMsgsRes = await db.query(`
+      SELECT COUNT(*) as total FROM messages m
+      JOIN chats c ON m.chat_id = c.id
+      JOIN whatsapp_sessions ws ON c.session_id = ws.id
+      WHERE ws.user_id = $1 AND m.sender = 'bot'
+    `, [req.user.id]);
+    const total_ai_messages = parseInt(aiMsgsRes.rows[0].total);
+
     res.json({
       total_earned,
       total_contacts,
@@ -783,7 +828,8 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
       active_flows,
       ai_bots,
       total_deposits,
-      total_withdrawals: 0.00
+      total_withdrawals: 0.00,
+      total_ai_messages
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1172,7 +1218,9 @@ app.post('/api/admin/sessions/:id/terminate', async (req, res) => {
 
 // ── Stripe Payments Endpoints ────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', authenticateToken, async (req, res) => {
-  const { plan } = req.body;
+  const { plan, billingCycle } = req.body;
+  const cycle = billingCycle === 'Yearly' ? 'Yearly' : 'Monthly';
+  
   try {
     const stripe = await getDynamicStripe();
     const isConfigured = await isStripeConfigured();
@@ -1182,7 +1230,17 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
       return res.status(400).json({ error: 'Invalid plan value' });
     }
     const planRow = planRes.rows[0];
-    const priceLkr = parseFloat(planRow.price);
+
+    // Determine LKR price based on plan and cycle dynamically
+    let priceLkr = 0;
+    if (plan === 'Premium') {
+      priceLkr = cycle === 'Yearly' ? 30000.00 : 3000.00;
+    } else if (plan === 'Enterprise') {
+      priceLkr = cycle === 'Yearly' ? 65000.00 : 6200.00;
+    } else {
+      priceLkr = parseFloat(planRow.price);
+    }
+    
     const amountCents = Math.round(priceLkr * 100);
 
     if (!isConfigured) {
@@ -1193,17 +1251,20 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
          VALUES ($1, $2, $3, 'LKR', $4, 'Pending')`,
         [req.user.id, mockSessionId, priceLkr, plan]
       );
-      return res.json({ url: `http://localhost:5173/user/subscription/index?session_id=${mockSessionId}&mock=true` });
+      return res.json({ url: `http://localhost:5173/user/subscription/index?session_id=${mockSessionId}&mock=true&billing_cycle=${cycle}` });
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const userRes = await db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.user.id]);
+    const stripeCustomerId = userRes.rows[0]?.stripe_customer_id;
+
+    const sessionOpts = {
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'lkr',
           product_data: {
-            name: `WhatsRay ${planRow.name}`,
-            description: `Access to features of the ${planRow.name}.`,
+            name: `WhatsRay ${planRow.name} (${cycle})`,
+            description: `Access to features of the ${planRow.name} (${cycle} billing).`,
           },
           unit_amount: amountCents,
         },
@@ -1215,9 +1276,15 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
       client_reference_id: req.user.id.toString(),
       metadata: {
         plan: plan,
-        userId: req.user.id.toString()
+        userId: req.user.id.toString(),
+        billingCycle: cycle
       }
-    });
+    };
+    if (stripeCustomerId) {
+      sessionOpts.customer = stripeCustomerId;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionOpts);
 
     // Log the transaction
     await db.query(
@@ -1234,7 +1301,7 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
 });
 
 app.post('/api/payments/confirm-session', authenticateToken, async (req, res) => {
-  const { sessionId } = req.body;
+  const { sessionId, billingCycle } = req.body;
   try {
     const trans = await db.query('SELECT * FROM transactions WHERE stripe_session_id = $1', [sessionId]);
     if (trans.rows.length === 0) {
@@ -1245,13 +1312,202 @@ app.post('/api/payments/confirm-session', authenticateToken, async (req, res) =>
     if (transaction.status === 'Pending') {
       // Upgrade user plan and complete transaction in DB
       await db.query("UPDATE transactions SET status = 'Completed' WHERE stripe_session_id = $1", [sessionId]);
-      await db.query('UPDATE users SET plan = $1 WHERE id = $2', [transaction.plan, req.user.id]);
       
-      const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [req.user.id]);
+      let cycle = billingCycle || 'Monthly';
+      if (sessionId && !sessionId.startsWith('cs_test_')) {
+        try {
+          const stripe = await getDynamicStripe();
+          const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+          if (stripeSession && stripeSession.metadata && stripeSession.metadata.billingCycle) {
+            cycle = stripeSession.metadata.billingCycle;
+          }
+        } catch (stripeErr) {
+          console.warn('Could not fetch Stripe session for billing cycle:', stripeErr.message);
+        }
+      }
+
+      const expiry = new Date();
+      if (cycle === 'Yearly') {
+        expiry.setDate(expiry.getDate() + 365); // 1 year validity
+      } else {
+        expiry.setDate(expiry.getDate() + 30);  // 30 days validity
+      }
+      
+      await db.query(
+        "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3 WHERE id = $4", 
+        [transaction.plan, expiry, cycle, req.user.id]
+      );
+      
+      const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1', [req.user.id]);
       return res.json({ success: true, plan: transaction.plan, user: userRes.rows[0] });
     }
     
     res.json({ success: true, plan: transaction.plan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/fail-session', authenticateToken, async (req, res) => {
+  const { sessionId } = req.body;
+  try {
+    const trans = await db.query('SELECT * FROM transactions WHERE stripe_session_id = $1', [sessionId]);
+    if (trans.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    await db.query("UPDATE transactions SET status = 'Failed' WHERE stripe_session_id = $1", [sessionId]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/charge-saved-card', authenticateToken, async (req, res) => {
+  console.log('CHARGE SAVED CARD ENDPOINT CALLED WITH BODY:', req.body);
+  const { plan, billingCycle, paymentMethodId } = req.body;
+  const cycle = billingCycle === 'Yearly' ? 'Yearly' : 'Monthly';
+
+  try {
+    const isConfigured = await isStripeConfigured();
+    const stripe = await getDynamicStripe();
+
+    const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [plan]);
+    if (planRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid plan value' });
+    }
+    const planRow = planRes.rows[0];
+
+    // Determine LKR price based on plan and cycle dynamically
+    let priceLkr = 0;
+    if (plan === 'Premium') {
+      priceLkr = cycle === 'Yearly' ? 30000.00 : 3000.00;
+    } else if (plan === 'Enterprise') {
+      priceLkr = cycle === 'Yearly' ? 65000.00 : 6200.00;
+    } else {
+      priceLkr = parseFloat(planRow.price);
+    }
+
+    const userRes = await db.query('SELECT id, stripe_customer_id, email, full_name FROM users WHERE id = $1', [req.user.id]);
+    const user = userRes.rows[0];
+    const customerId = user.stripe_customer_id;
+
+    if (!customerId) {
+      return res.status(400).json({ error: 'No Stripe customer associated with user.' });
+    }
+
+    // Verify payment method is owned by the user
+    const pmRes = await db.query('SELECT * FROM user_payment_methods WHERE stripe_payment_method_id = $1 AND user_id = $2', [paymentMethodId, req.user.id]);
+    if (pmRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Selected payment method not found.' });
+    }
+
+    // If Mock Mode
+    if (!isConfigured || paymentMethodId.startsWith('pm_mock_')) {
+      const isFailed = paymentMethodId.toLowerCase().includes('fail') || paymentMethodId.toLowerCase().includes('decline');
+      const mockTxId = 'ch_mock_' + Math.random().toString(36).substring(2, 12);
+      
+      if (isFailed) {
+        await db.query(
+          `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+           VALUES ($1, $2, $3, 'LKR', $4, 'Failed')`,
+          [req.user.id, mockTxId, priceLkr, plan]
+        );
+        return res.status(400).json({ error: 'Transaction declined by issuer.' });
+      }
+
+      await db.query(
+        `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+         VALUES ($1, $2, $3, 'LKR', $4, 'Completed')`,
+        [req.user.id, mockTxId, priceLkr, plan]
+      );
+
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + (cycle === 'Yearly' ? 365 : 30));
+      
+      await db.query(
+        "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3 WHERE id = $4", 
+        [plan, expiry, cycle, req.user.id]
+      );
+
+      const updatedUserRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1', [req.user.id]);
+      return res.json({ success: true, plan, user: updatedUserRes.rows[0] });
+    }
+
+    // Live Stripe charge using Payment Intent
+    try {
+      const intent = await stripe.paymentIntents.create({
+        amount: Math.round(priceLkr * 100), // convert to LKR cents
+        currency: 'lkr',
+        customer: customerId,
+        payment_method: paymentMethodId,
+        confirm: false
+      });
+
+      return res.json({ success: false, requiresAction: true, clientSecret: intent.client_secret, paymentIntentId: intent.id });
+    } catch (stripeErr) {
+      console.error('Stripe PaymentIntent creation error:', stripeErr.message);
+      const mockTxId = 'ch_err_' + Math.random().toString(36).substring(2, 12);
+      await db.query(
+        `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+         VALUES ($1, $2, $3, 'LKR', $4, 'Failed')`,
+        [req.user.id, mockTxId, priceLkr, plan]
+      );
+      return res.status(400).json({ error: stripeErr.message });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/confirm-payment-intent', authenticateToken, async (req, res) => {
+  console.log('CONFIRM PAYMENT INTENT ENDPOINT CALLED WITH BODY:', req.body);
+  const { paymentIntentId, plan, billingCycle } = req.body;
+  const cycle = billingCycle === 'Yearly' ? 'Yearly' : 'Monthly';
+
+  try {
+    const stripe = await getDynamicStripe();
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (intent.status === 'succeeded') {
+      const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [plan]);
+      if (planRes.rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid plan value' });
+      }
+      const planRow = planRes.rows[0];
+
+      // Determine LKR price based on plan and cycle dynamically
+      let priceLkr = 0;
+      if (plan === 'Premium') {
+        priceLkr = cycle === 'Yearly' ? 30000.00 : 3000.00;
+      } else if (plan === 'Enterprise') {
+        priceLkr = cycle === 'Yearly' ? 65000.00 : 6200.00;
+      } else {
+        priceLkr = parseFloat(planRow.price);
+      }
+
+      // Check if transaction is already logged
+      const txCheck = await db.query('SELECT * FROM transactions WHERE stripe_session_id = $1', [intent.id]);
+      if (txCheck.rows.length === 0) {
+        await db.query(
+          `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+           VALUES ($1, $2, $3, 'LKR', $4, 'Completed')`,
+          [req.user.id, intent.id, priceLkr, plan]
+        );
+
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + (cycle === 'Yearly' ? 365 : 30));
+        
+        await db.query(
+          "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3 WHERE id = $4", 
+          [plan, expiry, cycle, req.user.id]
+        );
+      }
+
+      const updatedUserRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1', [req.user.id]);
+      return res.json({ success: true, plan, user: updatedUserRes.rows[0] });
+    } else {
+      return res.status(400).json({ error: `Payment intent status: ${intent.status}` });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1284,7 +1540,18 @@ app.post('/api/payments/webhook', async (req, res) => {
 
     if (userId && plan) {
       try {
-        await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, userId]);
+        const cycle = session.metadata?.billingCycle === 'Yearly' ? 'Yearly' : 'Monthly';
+        const expiry = new Date();
+        if (cycle === 'Yearly') {
+          expiry.setDate(expiry.getDate() + 365); // 1 year validity
+        } else {
+          expiry.setDate(expiry.getDate() + 30);  // 30 days validity
+        }
+
+        await db.query(
+          "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3 WHERE id = $4", 
+          [plan, expiry, cycle, userId]
+        );
         await db.query(`
           INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
           VALUES ($1, $2, $3, $4, $5, 'Completed')
@@ -1318,10 +1585,24 @@ app.get('/api/payments/stripe-key', authenticateToken, async (req, res) => {
 app.get('/api/payments/methods', authenticateToken, async (req, res) => {
   try {
     const r = await db.query(
-      `SELECT id, card_brand, card_last4, is_default, created_at 
+      `SELECT id, stripe_payment_method_id, card_brand, card_last4, is_default, created_at 
        FROM user_payment_methods 
        WHERE user_id = $1 
        ORDER BY created_at DESC`, 
+      [req.user.id]
+    );
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/payments/transactions', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT * FROM transactions 
+       WHERE user_id = $1 
+       ORDER BY created_at DESC`,
       [req.user.id]
     );
     res.json(r.rows);
@@ -1411,6 +1692,15 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
   }
 
   try {
+    // 0. Check if current user has already claimed a trial on this account
+    const userClaimRes = await db.query(
+      'SELECT id FROM trial_claims WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    );
+    if (userClaimRes.rows.length > 0) {
+      return res.status(400).json({ error: 'You have already claimed a free trial subscription on this account.' });
+    }
+
     // 1. Check if user has linked card
     const pmRes = await db.query(
       'SELECT card_fingerprint FROM user_payment_methods WHERE user_id = $1 LIMIT 1', 
@@ -1446,6 +1736,14 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
       [dbPlanId, req.user.id]
     );
 
+    // Insert a transaction log record for the Free Trial so it shows in Purchase History & Transaction logs
+    const mockStripeId = 'trial_' + Math.random().toString(36).substring(2, 10);
+    await db.query(
+      `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+       VALUES ($1, $2, 0.00, 'LKR', $3, 'Completed')`,
+      [req.user.id, mockStripeId, dbPlanId]
+    );
+
     await logAuditEvent('Trial Claimed', `User ID ${req.user.id} claimed 14-day trial of plan ${dbPlanId}`);
 
     const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [req.user.id]);
@@ -1453,6 +1751,208 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
     res.json({ success: true, plan: dbPlanId, user: userRes.rows[0] });
   } catch (err) {
     console.error('Claim trial error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/methods/:id/default', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const check = await db.query('SELECT stripe_payment_method_id FROM user_payment_methods WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment method not found or access denied.' });
+    }
+    const pmId = check.rows[0].stripe_payment_method_id;
+
+    await db.query('UPDATE user_payment_methods SET is_default = FALSE WHERE user_id = $1', [req.user.id]);
+    await db.query('UPDATE user_payment_methods SET is_default = TRUE WHERE id = $1', [id]);
+
+    const isConfigured = await isStripeConfigured();
+    const userRes = await db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.user.id]);
+    const customerId = userRes.rows[0]?.stripe_customer_id;
+
+    if (isConfigured && customerId && !pmId.startsWith('pm_mock_')) {
+      const stripe = await getDynamicStripe();
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: pmId }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/payments/methods/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const check = await db.query('SELECT stripe_payment_method_id, is_default FROM user_payment_methods WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment method not found or access denied.' });
+    }
+    const { stripe_payment_method_id: pmId, is_default: wasDefault } = check.rows[0];
+
+    const isConfigured = await isStripeConfigured();
+    if (isConfigured && !pmId.startsWith('pm_mock_')) {
+      try {
+        const stripe = await getDynamicStripe();
+        await stripe.paymentMethods.detach(pmId);
+      } catch (stripeErr) {
+        console.warn('Stripe detach error:', stripeErr.message);
+      }
+    }
+
+    await db.query('DELETE FROM user_payment_methods WHERE id = $1', [id]);
+
+    if (wasDefault) {
+      const remaining = await db.query('SELECT id, stripe_payment_method_id FROM user_payment_methods WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [req.user.id]);
+      if (remaining.rows.length > 0) {
+        const nextDefaultId = remaining.rows[0].id;
+        const nextPmId = remaining.rows[0].stripe_payment_method_id;
+        await db.query('UPDATE user_payment_methods SET is_default = TRUE WHERE id = $1', [nextDefaultId]);
+
+        const userRes = await db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.user.id]);
+        const customerId = userRes.rows[0]?.stripe_customer_id;
+        if (isConfigured && customerId && !nextPmId.startsWith('pm_mock_')) {
+          try {
+            const stripe = await getDynamicStripe();
+            await stripe.customers.update(customerId, {
+              invoice_settings: { default_payment_method: nextPmId }
+            });
+          } catch (stripeErr) {
+            console.warn('Stripe default update error:', stripeErr.message);
+          }
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/payments/methods', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+
+  try {
+    const r = await db.query(`
+      SELECT pm.id, pm.card_brand, pm.card_last4, pm.card_fingerprint, pm.is_default, pm.created_at,
+             u.full_name as user_name, u.email as user_email, u.id as user_id
+      FROM user_payment_methods pm
+      LEFT JOIN users u ON pm.user_id = u.id
+      ORDER BY pm.created_at DESC
+    `);
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/payments/methods/:id', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+
+  const { id } = req.params;
+  try {
+    const check = await db.query('SELECT stripe_payment_method_id, user_id, is_default FROM user_payment_methods WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment method not found.' });
+    }
+    const { stripe_payment_method_id: pmId, user_id: userId, is_default: wasDefault } = check.rows[0];
+
+    const isConfigured = await isStripeConfigured();
+    if (isConfigured && !pmId.startsWith('pm_mock_')) {
+      try {
+        const stripe = await getDynamicStripe();
+        await stripe.paymentMethods.detach(pmId);
+      } catch (stripeErr) {
+        console.warn('Stripe detach error:', stripeErr.message);
+      }
+    }
+
+    await db.query('DELETE FROM user_payment_methods WHERE id = $1', [id]);
+
+    if (wasDefault) {
+      const remaining = await db.query('SELECT id, stripe_payment_method_id FROM user_payment_methods WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [userId]);
+      if (remaining.rows.length > 0) {
+        const nextDefaultId = remaining.rows[0].id;
+        const nextPmId = remaining.rows[0].stripe_payment_method_id;
+        await db.query('UPDATE user_payment_methods SET is_default = TRUE WHERE id = $1', [nextDefaultId]);
+
+        const userRes = await db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [userId]);
+        const customerId = userRes.rows[0]?.stripe_customer_id;
+        if (isConfigured && customerId && !nextPmId.startsWith('pm_mock_')) {
+          try {
+            const stripe = await getDynamicStripe();
+            await stripe.customers.update(customerId, {
+              invoice_settings: { default_payment_method: nextPmId }
+            });
+          } catch (stripeErr) {
+            console.warn('Stripe default update error:', stripeErr.message);
+          }
+        }
+      }
+    }
+
+    await logAuditEvent('Card Removed by Admin', `Admin deleted payment method ID ${id} belonging to User ID ${userId}`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/suspicious-activity', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+
+  try {
+    const duplicateWhatsapps = await db.query(`
+      WITH dup_phones AS (
+        SELECT phone 
+        FROM whatsapp_sessions 
+        WHERE phone IS NOT NULL AND phone != '' AND status = 'Connected'
+        GROUP BY phone 
+        HAVING COUNT(DISTINCT user_id) > 1
+      )
+      SELECT ws.id as session_id, ws.session_name, ws.phone, ws.status, ws.library, ws.created_at,
+             u.id as user_id, u.full_name as user_name, u.email as user_email
+      FROM whatsapp_sessions ws
+      INNER JOIN dup_phones dp ON ws.phone = dp.phone
+      LEFT JOIN users u ON ws.user_id = u.id
+      WHERE ws.status = 'Connected'
+      ORDER BY ws.phone, u.id
+    `);
+
+    const duplicateCards = await db.query(`
+      WITH dup_fingerprints AS (
+        SELECT card_fingerprint 
+        FROM user_payment_methods 
+        WHERE card_fingerprint IS NOT NULL AND card_fingerprint != ''
+        GROUP BY card_fingerprint 
+        HAVING COUNT(DISTINCT user_id) > 1
+      )
+      SELECT pm.id as method_id, pm.card_brand, pm.card_last4, pm.card_fingerprint, pm.created_at, pm.is_default,
+             u.id as user_id, u.full_name as user_name, u.email as user_email
+      FROM user_payment_methods pm
+      INNER JOIN dup_fingerprints df ON pm.card_fingerprint = df.card_fingerprint
+      LEFT JOIN users u ON pm.user_id = u.id
+      ORDER BY pm.card_fingerprint, u.id
+    `);
+
+    res.json({
+      duplicateWhatsapps: duplicateWhatsapps.rows,
+      duplicateCards: duplicateCards.rows
+    });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1576,8 +2076,157 @@ app.post('/api/admin/whatsapp/sessions/:sessionId/disconnect', authenticateToken
   }
 });
 
+// Toggle auto-renewal status for user
+app.post('/api/payments/toggle-auto-renewal', authenticateToken, async (req, res) => {
+  const { autoRenewal } = req.body;
+  try {
+    await db.query('UPDATE users SET auto_renewal = $1 WHERE id = $2', [!!autoRenewal, req.user.id]);
+    res.json({ success: true, auto_renewal: !!autoRenewal });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Automated Subscription Renewal Checker & Card Auto-Charge Engine
+async function processSubscriptionRenewals() {
+  console.log('Running subscription renewal checks...');
+  try {
+    // Find users whose subscription has expired (plan_expires_at is in the past) and auto_renewal is enabled
+    const expiredUsersRes = await db.query(
+      `SELECT id, email, full_name, plan, status, stripe_customer_id, billing_cycle 
+       FROM users 
+       WHERE plan != 'Free' 
+         AND plan_expires_at IS NOT NULL 
+         AND plan_expires_at < NOW() 
+         AND auto_renewal = TRUE`
+    );
+
+    for (const u of expiredUsersRes.rows) {
+      console.log(`Processing auto-renewal/charge for user ${u.full_name} (${u.email}), active plan: ${u.plan} (${u.billing_cycle})`);
+      
+      let amountLkr = 0;
+      if (u.plan === 'Premium') {
+        amountLkr = u.billing_cycle === 'Yearly' ? 30000.00 : 3000.00;
+      } else if (u.plan === 'Enterprise') {
+        amountLkr = u.billing_cycle === 'Yearly' ? 65000.00 : 6200.00;
+      }
+
+      if (amountLkr === 0) {
+        await downgradeUserToFree(u.id, 'Invalid Plan Amount');
+        continue;
+      }
+
+      // Check if user has a default payment method
+      const pmRes = await db.query(
+        `SELECT stripe_payment_method_id 
+         FROM user_payment_methods 
+         WHERE user_id = $1 AND is_default = TRUE 
+         LIMIT 1`,
+        [u.id]
+      );
+
+      if (pmRes.rows.length === 0 || !u.stripe_customer_id) {
+        console.log(`No saved payment method found for user ${u.id}, downgrading to Free.`);
+        await downgradeUserToFree(u.id, 'No default payment card registered.');
+        continue;
+      }
+
+      const paymentMethodId = pmRes.rows[0].stripe_payment_method_id;
+
+      try {
+        const stripe = await getDynamicStripe();
+        // Create an off-session charge using Stripe Payment Intents API
+        const intent = await stripe.paymentIntents.create({
+          amount: Math.round(amountLkr * 100), // convert to LKR cents
+          currency: 'lkr',
+          customer: u.stripe_customer_id,
+          payment_method: paymentMethodId,
+          off_session: true,
+          confirm: true,
+        });
+
+        if (intent.status === 'succeeded') {
+          // Renewal successful! Upgrade validity
+          const nextExpiry = new Date();
+          if (u.billing_cycle === 'Yearly') {
+            nextExpiry.setDate(nextExpiry.getDate() + 365); // 1 year validity
+          } else {
+            nextExpiry.setDate(nextExpiry.getDate() + 30);  // 30 days validity
+          }
+
+          await db.query(
+            `UPDATE users 
+             SET status = 'Active', plan_expires_at = $1 
+             WHERE id = $2`,
+            [nextExpiry, u.id]
+          );
+
+          // Log transaction record
+          await db.query(
+            `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+             VALUES ($1, $2, $3, 'LKR', $4, 'Completed')`,
+            [u.id, intent.id, amountLkr, u.plan]
+          );
+
+          await logAuditEvent('Auto Renewal Success', `User ID ${u.id} renewed to ${u.plan} via Auto-Charge (LKR ${amountLkr})`);
+          console.log(`Auto-renewal charge succeeded for user ${u.id}`);
+        } else {
+          throw new Error(`Stripe status: ${intent.status}`);
+        }
+      } catch (stripeErr) {
+        console.error(`Auto-renewal card charge failed for user ${u.id}:`, stripeErr.message);
+        
+        // Log failed transaction
+        const failedId = 'fail_auto_' + Math.random().toString(36).substring(2, 10);
+        await db.query(
+          `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+           VALUES ($1, $2, $3, 'LKR', $4, 'Failed')`,
+          [u.id, failedId, amountLkr, u.plan]
+        );
+
+        await downgradeUserToFree(u.id, `Card charge failed: ${stripeErr.message}`);
+      }
+    }
+
+    // Downgrade users who expired and did not have auto-renewal enabled
+    const nonRenewableExpiredRes = await db.query(
+      `SELECT id FROM users 
+       WHERE plan != 'Free' 
+         AND plan_expires_at IS NOT NULL 
+         AND plan_expires_at < NOW() 
+         AND auto_renewal = FALSE`
+    );
+    for (const u of nonRenewableExpiredRes.rows) {
+      await downgradeUserToFree(u.id, 'Subscription expired and auto-renewal is disabled.');
+    }
+
+  } catch (err) {
+    console.error('Renewals processor error:', err.message);
+  }
+}
+
+async function downgradeUserToFree(userId, reason) {
+  try {
+    await db.query(
+      `UPDATE users 
+       SET plan = 'Free', status = 'Active', plan_expires_at = NULL 
+       WHERE id = $1`,
+      [userId]
+    );
+    await logAuditEvent('Subscription Expired', `User ID ${userId} downgraded to Free. Reason: ${reason}`);
+    console.log(`User ${userId} downgraded to Free. Reason: ${reason}`);
+  } catch (err) {
+    console.error(`Failed to downgrade user ${userId}:`, err.message);
+  }
+}
+
+// Run checks every 10 minutes to auto-charge expired users
+setInterval(processSubscriptionRenewals, 10 * 60 * 1000);
+
 // Start Express Server & initialize sessions
 app.listen(PORT, () => {
   console.log(`WhatsRay Server is running on port ${PORT}`);
   initWhatsAppSessions();
+  // Trigger subscription check on server start
+  processSubscriptionRenewals();
 });

@@ -25,6 +25,17 @@ if (!fs.existsSync(SESSIONS_DIR)) {
 const activeSockets = {};
 const pendingQrs = {};
 
+// In-memory set to track message IDs sent from the server/panel to prevent duplicate DB logging
+export const sentMessageIds = new Set();
+export function trackSentMessage(id) {
+  if (!id) return;
+  sentMessageIds.add(id);
+  if (sentMessageIds.size > 1000) {
+    const first = sentMessageIds.values().next().value;
+    sentMessageIds.delete(first);
+  }
+}
+
 // Recursive helper to find ephemeralExpiration inside a message structure
 function findEphemeralExpirationRecursive(obj) {
   if (!obj || typeof obj !== 'object') return undefined;
@@ -208,11 +219,11 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
 
   // Listen to incoming messages and generate AI replies
   sock.ev.on('messages.upsert', async (m) => {
-    if (m.type !== 'notify') return;
+    if (m.type !== 'notify' && m.type !== 'append') return;
     
     for (const msg of m.messages) {
-      if (msg.key.fromMe || !msg.message) continue;
-
+      if (!msg.message) continue;
+      
       // Skip group chats — only process individual/personal conversations
       if (msg.key.remoteJid.endsWith('@g.us')) continue;
 
@@ -224,6 +235,36 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       const senderPhone = msg.key.remoteJid.split('@')[0].split(':')[0];
       const senderName = msg.pushName || 'WhatsApp Contact';
       const sessionPhone = sock.user?.id ? sock.user.id.split(':')[0] : 'whatsray_agent';
+      const chatId = `${sessionId}_${senderPhone}`;
+
+      if (msg.key.fromMe) {
+        // Outbound message from this WhatsApp account (either our server or linked mobile phone)
+        if (sentMessageIds.has(msg.key.id)) {
+          // Already sent by panel/bot and logged. Remove from Set and skip.
+          sentMessageIds.delete(msg.key.id);
+          continue;
+        }
+
+        // Sent manually from linked mobile phone! Log as outgoing message from 'agent'.
+        console.log(`Outbound message sent from linked mobile phone on session ${sessionId} to ${senderPhone}: ${text}`);
+        
+        await db.query(
+          `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
+           VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, $6)
+           ON CONFLICT (id) DO UPDATE SET last_message = $5, updated_at = CURRENT_TIMESTAMP`,
+          [chatId, sessionId, senderPhone, senderName, text, msg.key.remoteJid]
+        );
+
+        await db.query(
+          'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
+          [chatId, text, 'agent']
+        );
+
+        // Auto-extract tracking info if present in outgoing message from mobile phone
+        await checkAndExtractTracking(userId, sessionId, senderPhone, text);
+
+        continue;
+      }
 
       console.log(`Incoming message on session ${sessionId} from ${senderPhone}: ${text}`);
 
@@ -244,7 +285,6 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       console.log(`Detected ephemeralExpiration for session ${sessionId} (chat: ${senderPhone}): ${ephemeralExpiration}`);
 
       // Log/Create Chat Session in DB
-      const chatId = `${sessionId}_${senderPhone}`;
       await db.query(
         `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, profile_pic_url, remote_jid, ephemeral_expiration)
          VALUES ($1, $2, $3, $4, $5, 1, CURRENT_TIMESTAMP, $6, $7, COALESCE($8, 0))
@@ -302,7 +342,10 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             if (ephemeralExpiration) {
               sendOpts.ephemeralExpiration = ephemeralExpiration;
             }
-            await sock.sendMessage(msg.key.remoteJid, { text: aiReply }, sendOpts);
+            const result = await sock.sendMessage(msg.key.remoteJid, { text: aiReply }, sendOpts);
+            if (result && result.key && result.key.id) {
+              trackSentMessage(result.key.id);
+            }
             
             // Log outbound message to DB
             await db.query(
@@ -543,5 +586,96 @@ ${chatHistory}`;
     }
   } catch (err) {
     console.error('[AUTO-CRM] Order extraction failed:', err.message);
+  }
+}
+
+// ── CRM Order Tracking Auto-Extractor helper using Gemini ───────────────
+export async function checkAndExtractTracking(userId, sessionPhone, customerPhone, text) {
+  try {
+    // 1. Fetch latest order for this customer
+    const orderRes = await db.query(
+      `SELECT id, courier_name, tracking_number 
+       FROM orders 
+       WHERE user_id = $1 
+         AND (shipping_details->>'phone' = $2 OR shipping_details->>'phone' ILIKE $3) 
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId, customerPhone, `%${customerPhone.slice(-9)}`]
+    );
+    if (orderRes.rows.length === 0) return;
+    const orderId = orderRes.rows[0].id;
+
+    // 2. Fetch Gemini API Key
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      const dbKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
+      if (dbKeyRes.rows.length > 0) apiKey = dbKeyRes.rows[0].value;
+    }
+    if (!apiKey) return;
+
+    // 3. Prompt Gemini to check for tracking number and courier name
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const prompt = `Analyze this message sent by the shop assistant to the customer and determine if it contains a delivery/package tracking number or tracking link, and optionally a courier/delivery service name.
+If NOT found, return exactly: NONE
+If found, extract the details and return a strict JSON block.
+JSON format:
+{
+  "has_tracking": true,
+  "tracking_number": "extracted tracking number or tracking reference",
+  "courier_name": "extracted courier/delivery service name (e.g. Domex, Koombiyo, PromptX, Fardar, Certis Lanka, etc.) or 'Courier Service'"
+}
+Strictly output JSON or NONE. No markup, no markdown formatting.
+
+Message text:
+"${text}"`;
+
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
+        const trackingData = JSON.parse(textResult);
+        if (trackingData && trackingData.has_tracking && trackingData.tracking_number) {
+          const trackingNumber = trackingData.tracking_number;
+          const courierName = trackingData.courier_name || 'Courier Service';
+
+          // Initialize tracking history with first log
+          const trackingHistory = [
+            {
+              status: 'Dispatched',
+              details: `Parcel handed over to ${courierName}. Tracking Number: ${trackingNumber}`,
+              location: 'Courier Warehouse',
+              timestamp: new Date().toISOString()
+            }
+          ];
+
+          // Update the order in database
+          await db.query(
+            `UPDATE orders 
+             SET tracking_number = $1, 
+                 courier_name = $2, 
+                 tracking_status = 'Dispatched', 
+                 tracking_history = $3,
+                 status = 'Dispatched'
+             WHERE id = $4`,
+            [trackingNumber, courierName, JSON.stringify(trackingHistory), orderId]
+          );
+
+          console.log(`[AUTO-TRACKING] Linked tracking number ${trackingNumber} (${courierName}) to order ${orderId}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[AUTO-TRACKING] Failed to extract tracking details:', err.message);
   }
 }

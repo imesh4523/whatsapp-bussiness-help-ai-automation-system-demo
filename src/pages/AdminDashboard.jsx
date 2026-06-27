@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   Smartphone, 
@@ -18,9 +18,145 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
+// ── Premium Toast Notification System for Admin ──────────────────────────────
+let _toastDispatchAdmin = null;
+
+const TOAST_ICONS = {
+  success: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  error:   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+  info:    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  warning: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+};
+
+const TOAST_COLORS = {
+  success: { bg: '#10b981', border: '#e6f4ea', text: '#065f46', iconBg: '#e6f4ea', icon: '#10b981' },
+  error:   { bg: '#ef4444', border: '#fce8e6', text: '#9b1c1c', iconBg: '#fce8e6', icon: '#ef4444' },
+  info:    { bg: '#3b82f6', border: '#e8f0fe', text: '#1e40af', iconBg: '#e8f0fe', icon: '#3b82f6' },
+  warning: { bg: '#f59e0b', border: '#fef3c7', text: '#92400e', iconBg: '#fef3c7', icon: '#f59e0b' },
+};
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    _toastDispatchAdmin = (type, message, duration = 4500) => {
+      const id = Date.now() + Math.random();
+      setToasts(prev => [...prev, { id, type, message, duration, visible: true }]);
+    };
+    window.notify = _toastDispatchAdmin;
+    return () => { _toastDispatchAdmin = null; };
+  }, []);
+
+  const dismiss = useCallback((id) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, leaving: true } : t));
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 350);
+  }, []);
+
+  return (
+    <div style={{
+      position: 'fixed', top: '24px', right: '24px',
+      zIndex: 9999999, display: 'flex', flexDirection: 'column', gap: '12px',
+      pointerEvents: 'none', width: '360px',
+    }}>
+      {toasts.map(t => (
+        <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+      ))}
+    </div>
+  );
+}
+
+function ToastItem({ toast, onDismiss }) {
+  const [mounted, setMounted] = useState(false);
+  const c = TOAST_COLORS[toast.type] || TOAST_COLORS.info;
+
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+    const timer = setTimeout(() => onDismiss(toast.id), toast.duration);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div
+      onClick={() => onDismiss(toast.id)}
+      style={{
+        pointerEvents: 'all',
+        display: 'flex', alignItems: 'center', gap: '14px',
+        padding: '14px 18px',
+        background: '#ffffff',
+        border: '1px solid rgba(0, 0, 0, 0.06)',
+        borderRadius: '12px',
+        boxShadow: '0 10px 30px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.03)',
+        cursor: 'pointer',
+        transform: mounted && !toast.leaving ? 'translateX(0) scale(1)' : 'translateX(45px) scale(0.95)',
+        opacity: mounted && !toast.leaving ? 1 : 0,
+        transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+        willChange: 'transform, opacity',
+        position: 'relative', overflow: 'hidden',
+      }}
+    >
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+        background: c.bg,
+      }} />
+
+      <div style={{
+        flexShrink: 0,
+        width: '36px', height: '36px',
+        borderRadius: '50%',
+        background: c.iconBg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: c.icon,
+      }}
+        dangerouslySetInnerHTML={{ __html: TOAST_ICONS[toast.type] || TOAST_ICONS.info }}
+      />
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em',
+          textTransform: 'uppercase', color: c.text, marginBottom: '2px',
+          fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+          {toast.type === 'success' ? 'Success' : toast.type === 'error' ? 'Error' : toast.type === 'warning' ? 'Warning' : 'Info'}
+        </div>
+        <div style={{
+          fontSize: '13px', color: '#475569',
+          lineHeight: '1.4', fontWeight: '500',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          wordBreak: 'break-word',
+        }}>
+          {toast.message}
+        </div>
+      </div>
+
+      <div style={{
+        flexShrink: 0, color: '#94a3b8',
+        fontSize: '14px', lineHeight: 1, padding: '4px',
+        transition: 'color 0.2s',
+      }}>✕</div>
+
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px',
+        background: 'rgba(0,0,0,0.03)',
+      }}>
+        <div style={{
+          height: '100%',
+          background: c.bg,
+          animation: `toastProgress ${toast.duration}ms linear forwards`,
+        }} />
+      </div>
+    </div>
+  );
+}
+
 function AdminDashboard({ admin, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'users', 'sessions', 'ai-config'
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [allSavedCards, setAllSavedCards] = useState([]);
+  const [suspiciousActivities, setSuspiciousActivities] = useState({
+    duplicateWhatsapps: [],
+    duplicateCards: []
+  });
   
   const [usersList, setUsersList] = useState([]);
   const [activeSessions, setActiveSessions] = useState([]);
@@ -129,8 +265,8 @@ function AdminDashboard({ admin, onLogout }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch lists on active tab changes
   useEffect(() => {
+    setSearchQuery('');
     if (activeTab === 'transactions') {
       fetch(`${API_BASE_URL}/admin/transactions`)
         .then(res => res.json())
@@ -149,6 +285,20 @@ function AdminDashboard({ admin, onLogout }) {
             setGeminiApiKey(data.geminiApiKey);
           }
         })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'user-cards') {
+      fetch(`${API_BASE_URL}/admin/payments/methods`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setAllSavedCards(data); })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'suspicious') {
+      fetch(`${API_BASE_URL}/admin/suspicious-activity`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => { if (data && !data.error) setSuspiciousActivities(data); })
         .catch(err => console.warn(err));
     }
   }, [activeTab]);
@@ -220,6 +370,30 @@ function AdminDashboard({ admin, onLogout }) {
     }
   };
 
+  const handleDeleteUserCard = async (cardId) => {
+    if (!confirm('Are you sure you want to remove this user credit card method?')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/payments/methods/${cardId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      if (res.ok) {
+        setAllSavedCards(prev => prev.filter(c => c.id !== cardId));
+        if (window.notify) window.notify('success', 'User card successfully removed.');
+        else alert('User card successfully removed.');
+      } else {
+        const errData = await res.json();
+        if (window.notify) window.notify('error', errData.error || 'Failed to remove card.');
+        else alert(errData.error || 'Failed to remove card.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+
   const handleSaveAIConfig = async (e) => {
     e.preventDefault();
     try {
@@ -256,80 +430,124 @@ function AdminDashboard({ admin, onLogout }) {
     u.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredCards = allSavedCards.filter(c => 
+    c.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    c.user_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.card_last4?.includes(searchQuery)
+  );
+
+  const filteredTransactions = transactionsList.filter(tx => 
+    tx.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    tx.user_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    tx.stripe_session_id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="flex h-screen bg-[#f4f6f8] text-[#111111] font-sans antialiased overflow-hidden">
       
       {/* ── Left Sidebar ── */}
-      <div className="w-64 bg-[#0d120f] flex flex-col justify-between p-6">
+      <div className="w-64 bg-white border-r border-gray-150 flex flex-col justify-between p-6">
         <div className="space-y-8">
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <span className="w-4 h-4 rounded-full bg-[#00832e]"></span>
-            <span className="text-white font-black tracking-wider text-xl uppercase">WhatsRay Admin</span>
+          <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+            <span className="w-3.5 h-3.5 rounded-full bg-[#00832e]"></span>
+            <span className="text-neutral-800 font-extrabold tracking-tight text-lg uppercase" style={{ fontFamily: 'Inter, sans-serif' }}>
+              WhatsRay <span className="text-[#00832e]">Admin</span>
+            </span>
           </div>
 
           {/* Sidebar Tabs */}
           <nav className="space-y-2">
             <button 
               onClick={() => setActiveTab('overview')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'overview' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'overview' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
-              <Activity className="w-4 h-4" />
-              Overview
+              {activeTab === 'overview' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Activity className="w-4 h-4 flex-shrink-0" />
+              <span>Overview</span>
             </button>
             <button 
               onClick={() => setActiveTab('users')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'users' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'users' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
-              <Users className="w-4 h-4" />
-              User Accounts
+              {activeTab === 'users' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Users className="w-4 h-4 flex-shrink-0" />
+              <span>User Accounts</span>
             </button>
             <button 
               onClick={() => setActiveTab('sessions')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'sessions' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'sessions' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
-              <Smartphone className="w-4 h-4" />
-              WhatsApp Sessions
+              {activeTab === 'sessions' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Smartphone className="w-4 h-4 flex-shrink-0" />
+              <span>WhatsApp Sessions</span>
             </button>
             <button 
               onClick={() => setActiveTab('ai-config')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'ai-config' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'ai-config' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
-              <Cpu className="w-4 h-4" />
-              Global AI Config
+              {activeTab === 'ai-config' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Cpu className="w-4 h-4 flex-shrink-0" />
+              <span>Global AI Config</span>
             </button>
 
             <button 
               onClick={() => setActiveTab('transactions')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'transactions' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'transactions' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
-              <CreditCard className="w-4 h-4" />
-              Billing & Payments
+              {activeTab === 'transactions' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <CreditCard className="w-4 h-4 flex-shrink-0" />
+              <span>Billing & Payments</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('user-cards')}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'user-cards' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              {activeTab === 'user-cards' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <CreditCard className="w-4 h-4 flex-shrink-0" />
+              <span>Saved Cards Manager</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('suspicious')}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'suspicious' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              {activeTab === 'suspicious' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>Suspicious Activities</span>
             </button>
             <button 
               onClick={() => setActiveTab('audit-logs')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'audit-logs' ? 'bg-[#00832e] text-white shadow-lg' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'audit-logs' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
-              <FileText className="w-4 h-4" />
-              System Audit Logs
+              {activeTab === 'audit-logs' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <FileText className="w-4 h-4 flex-shrink-0" />
+              <span>System Audit Logs</span>
             </button>
           </nav>
         </div>
 
         {/* Admin User Info & LogOut */}
-        <div className="border-t border-neutral-800 pt-6 space-y-4">
+        <div className="border-t border-gray-100 pt-6 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-white uppercase">
+            <div className="w-10 h-10 rounded-full bg-[#e6f4ea] border border-[#00832e]/10 flex items-center justify-center font-extrabold text-[#00832e] text-sm uppercase">
               SA
             </div>
             <div>
-              <p className="text-white text-xs font-bold uppercase tracking-wider">{admin?.name}</p>
-              <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">{admin?.role}</span>
+              <p className="text-neutral-800 text-xs font-extrabold uppercase tracking-wider">{admin?.name || 'SYSTEM ADMIN'}</p>
+              <span className="text-[10px] text-emerald-600 font-extrabold uppercase tracking-widest">{admin?.role || 'ADMIN'}</span>
             </div>
           </div>
           <button 
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-all border border-transparent hover:border-red-900/30"
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-red-500 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-100/30"
           >
             <LogOut className="w-4 h-4" />
             Sign Out
@@ -801,7 +1019,20 @@ function AdminDashboard({ admin, onLogout }) {
           {/* 5. BILLING & TRANSACTIONS VIEW */}
           {activeTab === 'transactions' && (
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Billing History Logs</h3>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Billing History Logs</h3>
+                {/* Search Bar */}
+                <div className="flex items-center gap-3 bg-[#f4f6f8] px-4 py-2 rounded-2xl w-full max-w-xs">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search logs..." 
+                    className="bg-transparent w-full text-xs border-none outline-none focus:ring-0 placeholder-gray-400"
+                  />
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
@@ -817,12 +1048,12 @@ function AdminDashboard({ admin, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactionsList.length === 0 ? (
+                    {filteredTransactions.length === 0 ? (
                       <tr>
                         <td colSpan="8" className="py-8 text-center text-gray-400 font-light">No billing records found.</td>
                       </tr>
                     ) : (
-                      transactionsList.map(tx => (
+                      filteredTransactions.map(tx => (
                         <tr key={tx.id} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
                           <td className="py-4 font-bold text-neutral-800">#{tx.id}</td>
                           <td className="py-4 font-bold text-neutral-800">{tx.user_name || 'N/A'}</td>
@@ -897,11 +1128,194 @@ function AdminDashboard({ admin, onLogout }) {
             </div>
           )}
 
+          {/* 7. SAVED CARDS MANAGER VIEW */}
+          {activeTab === 'user-cards' && (
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+              <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Saved Payment Methods across Users</h3>
+                {/* Search Bar */}
+                <div className="flex items-center gap-3 bg-[#f4f6f8] px-4 py-2 rounded-2xl w-full max-w-xs">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search cards..." 
+                    className="bg-transparent w-full text-xs border-none outline-none focus:ring-0 placeholder-gray-400"
+                  />
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-neutral-400 text-xs font-bold uppercase tracking-widest">
+                      <th className="py-4">User</th>
+                      <th className="py-4">Email</th>
+                      <th className="py-4">Card Brand</th>
+                      <th className="py-4">Last 4 Digits</th>
+                      <th className="py-4">Fingerprint</th>
+                      <th className="py-4">Status</th>
+                      <th className="py-4">Registered Date</th>
+                      <th className="py-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCards.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="py-8 text-center text-gray-400 font-light">No saved payment methods found in the system.</td>
+                      </tr>
+                    ) : (
+                      filteredCards.map(c => (
+                        <tr key={c.id} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
+                          <td className="py-4 font-bold text-neutral-800">{c.user_name || 'N/A'} (ID: {c.user_id})</td>
+                          <td className="py-4 text-neutral-500">{c.user_email || 'N/A'}</td>
+                          <td className="py-4 font-bold text-neutral-800">{c.card_brand}</td>
+                          <td className="py-4 font-mono text-neutral-800">•••• {c.card_last4}</td>
+                          <td className="py-4 font-mono text-xs text-neutral-400">{c.card_fingerprint}</td>
+                          <td className="py-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.is_default ? 'bg-emerald-50 text-[#00832e]' : 'bg-gray-100 text-gray-500'}`}>
+                              {c.is_default ? 'Primary' : 'Backup'}
+                            </span>
+                          </td>
+                          <td className="py-4 text-neutral-500">
+                            {new Date(c.created_at).toLocaleString()}
+                          </td>
+                          <td className="py-4 text-right">
+                            <button
+                              onClick={() => handleDeleteUserCard(c.id)}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 border border-red-200 text-red-500 hover:bg-red-100 transition-all uppercase tracking-wider"
+                            >
+                              Remove Card
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 8. SUSPICIOUS ACTIVITIES VIEW */}
+          {activeTab === 'suspicious' && (
+            <div className="space-y-8">
+              {/* Alert headers */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-red-50/50 border border-red-200 rounded-3xl p-6 flex items-start gap-4 text-red-900">
+                  <AlertTriangle className="w-10 h-10 text-red-600 shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider">Duplicate WhatsApp Connections</h4>
+                    <p className="text-xs text-red-700 font-light leading-relaxed mt-1">
+                      Flagged active WhatsApp numbers connected across more than one account simultaneously. Suspected trial farming or multi-tenant reuse.
+                    </p>
+                    <span className="inline-block mt-3 text-xs bg-red-100 text-red-700 font-black px-2.5 py-1 rounded-full">
+                      {suspiciousActivities.duplicateWhatsapps.length} Violations
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50/50 border border-amber-200 rounded-3xl p-6 flex items-start gap-4 text-amber-900">
+                  <AlertTriangle className="w-10 h-10 text-amber-600 shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider">Duplicate Card Fingerprints</h4>
+                    <p className="text-xs text-amber-700 font-light leading-relaxed mt-1">
+                      Flagged cards with identical Stripe fingerprints saved under different user accounts. Indicates card sharing or duplicate accounts.
+                    </p>
+                    <span className="inline-block mt-3 text-xs bg-amber-100 text-amber-700 font-black px-2.5 py-1 rounded-full">
+                      {suspiciousActivities.duplicateCards.length} Cards Shared
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Duplicate WhatsApps details table */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <h3 className="text-sm font-black uppercase tracking-wider text-neutral-800">Duplicate WhatsApp Connections List</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-neutral-400 text-xs font-bold uppercase tracking-widest">
+                        <th className="py-4">Phone Number</th>
+                        <th className="py-4">Session Name</th>
+                        <th className="py-4">Library</th>
+                        <th className="py-4">Registered User</th>
+                        <th className="py-4">User Email</th>
+                        <th className="py-4">Linked Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {suspiciousActivities.duplicateWhatsapps.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-gray-400 font-light">No duplicate WhatsApp connections flagged. System is clean.</td>
+                        </tr>
+                      ) : (
+                        suspiciousActivities.duplicateWhatsapps.map((ws, index) => (
+                          <tr key={ws.session_id + '_' + index} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
+                            <td className="py-4 font-mono font-bold text-red-600 bg-red-50/20 px-2 rounded-lg">{ws.phone}</td>
+                            <td className="py-4 font-bold text-neutral-800">{ws.session_name}</td>
+                            <td className="py-4 text-neutral-500">{ws.library}</td>
+                            <td className="py-4 font-bold text-neutral-800">{ws.user_name} (ID: {ws.user_id})</td>
+                            <td className="py-4 text-neutral-500">{ws.user_email}</td>
+                            <td className="py-4 text-neutral-500">{new Date(ws.created_at).toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Duplicate Cards details table */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <h3 className="text-sm font-black uppercase tracking-wider text-neutral-800">Duplicate Card Fingerprints List</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-neutral-400 text-xs font-bold uppercase tracking-widest">
+                        <th className="py-4">Card Fingerprint</th>
+                        <th className="py-4">Card Brand</th>
+                        <th className="py-4">Last 4</th>
+                        <th className="py-4">Registered User</th>
+                        <th className="py-4">User Email</th>
+                        <th className="py-4">Status</th>
+                        <th className="py-4">Registered Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {suspiciousActivities.duplicateCards.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="py-8 text-center text-gray-400 font-light">No card fingerprints shared across different users.</td>
+                        </tr>
+                      ) : (
+                        suspiciousActivities.duplicateCards.map((c, index) => (
+                          <tr key={c.method_id + '_' + index} className="border-b border-gray-50 hover:bg-neutral-50/50 transition-all font-medium text-neutral-700">
+                            <td className="py-4 font-mono text-xs text-amber-600 bg-amber-50/20 px-2 rounded-lg">{c.card_fingerprint}</td>
+                            <td className="py-4 font-bold text-neutral-800">{c.card_brand}</td>
+                            <td className="py-4 font-mono text-neutral-800">•••• {c.card_last4}</td>
+                            <td className="py-4 font-bold text-neutral-800">{c.user_name} (ID: {c.user_id})</td>
+                            <td className="py-4 text-neutral-500">{c.user_email}</td>
+                            <td className="py-4">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.is_default ? 'bg-emerald-50 text-[#00832e]' : 'bg-gray-100 text-gray-500'}`}>
+                                {c.is_default ? 'Primary' : 'Backup'}
+                              </span>
+                            </td>
+                            <td className="py-4 text-neutral-500">{new Date(c.created_at).toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
 
 
         </main>
       </div>
-
+      <ToastContainer />
     </div>
   );
 }

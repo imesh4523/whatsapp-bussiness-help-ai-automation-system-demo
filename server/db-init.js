@@ -79,6 +79,9 @@ async function init() {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_history JSONB DEFAULT '[]'::JSONB;
 
       ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255) DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_renewal BOOLEAN DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50) DEFAULT 'Monthly';
       
       CREATE TABLE IF NOT EXISTS user_payment_methods (
         id SERIAL PRIMARY KEY,

@@ -12,6 +12,7 @@ import CookieBanner from './components/CookieBanner';
 import Auth from './pages/Auth';
 import AdminAuth from './pages/AdminAuth';
 import AdminDashboard from './pages/AdminDashboard';
+import OrderTrackingPage from './pages/OrderTrackingPage';
 import { mockProducts } from './data/mockProducts';
 import { API_BASE_URL } from './config';
 
@@ -22,6 +23,10 @@ const isDashboardRoute = (path) => {
 
 const isAdminRoute = (path) => {
   return path === '/main-admin' || path.startsWith('/main-admin/');
+};
+
+const isTrackOrderRoute = (path) => {
+  return path.startsWith('/track-order') || path.startsWith('/trackmyorder');
 };
 
 function App() {
@@ -75,7 +80,9 @@ function App() {
     const savedAdmin = localStorage.getItem('whatsray_admin');
     const path = window.location.pathname;
 
-    if (savedAdmin) {
+    if (isTrackOrderRoute(path)) {
+      setView('track-order');
+    } else if (savedAdmin) {
       setAdmin(JSON.parse(savedAdmin));
       setView('admin');
       if (!isAdminRoute(path)) {
@@ -84,10 +91,28 @@ function App() {
     } else if (isAdminRoute(path)) {
       setView('admin');
     } else if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
       setView('dashboard');
       if (!isDashboardRoute(path)) {
         window.history.replaceState(null, '', '/user/dashboard');
+      }
+      // Fetch fresh profile in the background on app load
+      const token = localStorage.getItem('aura_token');
+      if (token) {
+        fetch(`${API_BASE_URL}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => {
+            if (res.ok) return res.json();
+          })
+          .then(updatedUser => {
+            if (updatedUser) {
+              setUser(updatedUser);
+              localStorage.setItem('aura_user', JSON.stringify(updatedUser));
+            }
+          })
+          .catch(e => console.warn('Failed to refresh user profile on app mount:', e.message));
       }
     } else {
       if (isDashboardRoute(path)) {
@@ -110,7 +135,9 @@ function App() {
       const savedUser = localStorage.getItem('aura_user');
       const savedAdmin = localStorage.getItem('whatsray_admin');
 
-      if (savedAdmin || isAdminRoute(path)) {
+      if (isTrackOrderRoute(path)) {
+        setView('track-order');
+      } else if (savedAdmin || isAdminRoute(path)) {
         setView('admin');
         if (savedAdmin) setAdmin(JSON.parse(savedAdmin));
       } else if (savedUser) {
@@ -281,6 +308,13 @@ function App() {
     }
   };
 
+  if (view === 'track-order') {
+    const parts = window.location.pathname.split('/');
+    const lastPart = parts.pop() || parts.pop();
+    const orderId = (lastPart === 'track-order' || lastPart === 'trackmyorder') ? '' : lastPart;
+    return <OrderTrackingPage orderId={orderId} />;
+  }
+
   if (view === 'admin') {
     if (admin) {
       return <AdminDashboard admin={admin} onLogout={handleAdminLogout} />;
@@ -290,7 +324,7 @@ function App() {
   }
 
   if ((view === 'dashboard' || view === 'account') && user) {
-    return <Dashboard user={user} onLogout={handleLogout} />;
+    return <Dashboard user={user} setUser={setUser} onLogout={handleLogout} />;
   }
 
   return (

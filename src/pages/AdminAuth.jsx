@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Mail } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 function AdminAuth({ onSuccess }) {
   const [formData, setFormData] = useState({
@@ -15,24 +16,68 @@ function AdminAuth({ onSuccess }) {
     setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleAuthSuccess = (user, token) => {
+    localStorage.setItem('aura_token', token);
+    localStorage.setItem('aura_user', JSON.stringify(user));
+    onSuccess({
+      name: user.name || 'SYSTEM ADMIN',
+      email: user.email,
+      role: 'ADMIN'
+    });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    // Simulate API authentication request
-    setTimeout(() => {
-      setLoading(false);
-      if (formData.email === 'admin@whatsray.com' && formData.password === 'admin1234') {
-        onSuccess({
-          name: 'SYSTEM ADMIN',
-          email: formData.email,
-          role: 'ADMIN'
-        });
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: formData.email, password: formData.password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.user.email !== 'admin@whatsray.com' && data.user.plan !== 'Enterprise') {
+          setError('Access denied: Admin only.');
+          return;
+        }
+        handleAuthSuccess(data.user, data.token);
       } else {
-        setError('Invalid admin credentials. Use admin@whatsray.com and admin1234.');
+        setError(data.error || 'Invalid credentials.');
       }
-    }, 1200);
+    } catch (err) {
+      console.error(err);
+      setError('Connection failed. Please check backend server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'admin@whatsray.com', password: 'admin1234' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        handleAuthSuccess(data.user, data.token);
+      } else {
+        setError(data.error || 'Quick Login failed.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Connection failed. Please check backend server.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -96,13 +141,7 @@ function AdminAuth({ onSuccess }) {
 
           <button
             type="button"
-            onClick={() => {
-              onSuccess({
-                name: 'SYSTEM ADMIN',
-                email: 'admin@whatsray.com',
-                role: 'ADMIN'
-              });
-            }}
+            onClick={handleQuickLogin}
             className="w-full bg-[#00832e] text-white hover:bg-emerald-800 transition-colors py-3.5 rounded-xl text-xs font-bold tracking-widest uppercase active:scale-[0.99] mt-2 flex items-center justify-center gap-2"
           >
             <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>

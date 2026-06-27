@@ -103,3 +103,349 @@
   stroke: #22c55e;
   fill: none;
 }
+
+/* Animated Offer Badges */
+@keyframes offer-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes offer-pulse-white {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 176, 0, 0.5);
+  }
+  70% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 6px rgba(255, 176, 0, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 176, 0, 0);
+  }
+}
+
+.offer-badge-pro {
+  font-size: 11px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff !important;
+  padding: 3px 10px;
+  border-radius: 50px;
+  font-weight: 800;
+  margin-left: 10px;
+  display: inline-block;
+  vertical-align: middle;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: offer-pulse 2s infinite ease-in-out;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.offer-badge-elite {
+  font-size: 11px;
+  background: linear-gradient(135deg, #ffb000 0%, #ff8c00 100%);
+  color: #1e293b !important;
+  padding: 3px 10px;
+  border-radius: 50px;
+  font-weight: 800;
+  margin-left: 10px;
+  display: inline-block;
+  vertical-align: middle;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  animation: offer-pulse-white 2s infinite ease-in-out;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(255, 176, 0, 0.35);
+}
+
+/* Compact Purchase Preview Modal styling */
+#purchaseModal .modal-content {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: none;
+  overflow: hidden;
+}
+#purchaseModal .modal-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid #f1f5f9;
+}
+#purchaseModal .modal-body {
+  padding: 12px 18px;
+}
+#purchaseModal .modal-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+#purchaseModal .purchase-preview-summary {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px !important;
+}
+#purchaseModal .purchase-preview-summary__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+#purchaseModal .purchase-preview-summary__row:last-child {
+  border-bottom: none;
+}
+#purchaseModal .purchase-preview-field {
+  margin-bottom: 8px !important;
+}
+#purchaseModal .purchase-preview-field label {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+#purchaseModal select {
+  font-size: 12px;
+  height: 36px;
+  padding: 6px 12px;
+}
+#purchaseModal .purchase-preview-coupon {
+  margin-bottom: 8px !important;
+}
+#purchaseModal .purchase-preview-coupon input {
+  font-size: 12px;
+  height: 36px;
+}
+#purchaseModal .coupon-apply-button {
+  font-size: 12px;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#purchaseModal .purchaseSubmitBtn {
+  font-size: 13px;
+  height: 40px;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+#purchaseModal .select2-container--default .select2-selection--single {
+  height: 36px !important;
+  padding: 4px 12px !important;
+  font-size: 12px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+}
+#purchaseModal .select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 34px !important;
+}
+
+/* Premium Card Payment Add Containers */
+.premium-add-card-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  border: 1.2px dashed #00832e;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(0, 131, 46, 0.01) 0%, rgba(0, 131, 46, 0.04) 100%);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-bottom: 8px;
+}
+
+.premium-add-card-box:hover {
+  background: rgba(0, 131, 46, 0.06);
+  border-color: #00832e;
+  transform: translateY(-1px);
+}
+
+.premium-add-card-box .icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00832e;
+  font-size: 15px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.premium-add-card-box:hover .icon-wrap {
+  transform: scale(1.1);
+}
+
+.premium-add-card-box .text-content {
+  display: flex;
+  align-items: center;
+}
+
+.premium-add-card-box .text-content h6 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00832e;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.premium-add-card-btn-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed #00832e;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #00832e;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.premium-add-card-btn-inline:hover {
+  background: rgba(0, 131, 46, 0.04);
+  transform: translateY(-1px);
+}
+
+@keyframes toastProgress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes pulseGlow {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.2);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 3px 10px rgba(2, 132, 199, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.2);
+  }
+}
+
+#claim-free-trial-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  padding: 5px 11px !important;
+  border-radius: 20px !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.2) !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  animation: pulseGlow 2s infinite ease-in-out !important;
+  outline: none !important;
+  border-style: none !important;
+  height: auto !important;
+  line-height: 1.2 !important;
+  margin: 0 !important;
+}
+
+
+#claim-free-trial-btn i {
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+/* ── Stripe-like mock card input — strip all Bootstrap/browser overrides ── */
+.stripe-mock-container {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  padding: 11px 16px !important;
+  background: #f8fafc !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
+  display: flex !important;
+  align-items: center !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.stripe-mock-container:focus-within {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1) !important;
+}
+
+
+/* Super high-specificity mock input styling override */
+body div#root .stripe-mock-container input,
+body div#root .stripe-mock-container input.stripe-mock-field,
+body div#root .stripe-mock-container input.stripe-mock-field:focus {
+  border: none !important;
+  border-style: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 14px !important;
+  color: #1e293b !important;
+  font-family: "Inter", sans-serif !important;
+}
+
+body div#root .stripe-mock-container input.stripe-mock-field::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Force strip Chrome Autofill backgrounds and borders under high specificity */
+body div#root .stripe-mock-container input:-webkit-autofill,
+body div#root .stripe-mock-container input:-webkit-autofill:hover, 
+body div#root .stripe-mock-container input:-webkit-autofill:focus, 
+body div#root .stripe-mock-container input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset !important;
+  -webkit-text-fill-color: #1e293b !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+  border: none !important;
+  border-style: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.stripe-mock-sep {
+  width: 1px;
+  height: 18px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  margin: 0 10px;
+}
+
+/* High-specificity override for agent/bot chat message text color */
+body div#root .bg-\[\#00832e\] p,
+body div#root .bg-\[\#00832e\] span,
+body div#root .self-end p,
+body div#root .self-end span {
+  color: #ffffff !important;
+}
+
+
