@@ -4406,8 +4406,8 @@ function Dashboard({ user, setUser, onLogout }) {
             </span>
             <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', padding: '20px 10px', textAlign: 'center' }}>
               <a href="/user/dashboard" className="sidebar-logo__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', textDecoration: 'none', width: '100%' }}>
-                <img src="/agentbunny-logo.png" alt="logo" style={{ height: '64px', width: '64px', objectFit: 'contain' }} />
-                <span className="brand-text" style={{ fontSize: '16px', fontWeight: '900', color: '#00832e', letterSpacing: '0.5px', textTransform: 'uppercase' }}>AgentBunny</span>
+                <img src="/agentbunny-logo.png" alt="logo" style={{ height: '48px', width: '48px', objectFit: 'contain' }} />
+                <span className="brand-text" style={{ fontSize: '15px', fontWeight: '900', color: '#00832e', letterSpacing: '0.5px', textTransform: 'uppercase', display: isSidebarHovered ? 'block' : 'none' }}>AgentBunny</span>
               </a>
             </div>
 
