@@ -3648,8 +3648,18 @@ function TrackCustomerOrders() {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [trackingStatus, setTrackingStatus] = useState('Out for Delivery');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterCourier, setFilterCourier] = useState('All');
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+
+  const COURIER_LOGOS = {
+    'Sri Lanka Post': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Emblem_of_Sri_Lanka.svg/120px-Emblem_of_Sri_Lanka.svg.png',
+    'Citypak (Hayleys)': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Hayleys_logo.svg/320px-Hayleys_logo.svg.png',
+    'Aramex': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Aramex_logo.svg/320px-Aramex_logo.svg.png',
+    'DHL Express': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/DHL_Logo.svg/320px-DHL_Logo.svg.png',
+    'FedEx': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/FedEx_Express_logo.svg/320px-FedEx_Express_logo.svg.png',
+    'Pronto': 'https://cdn-icons-png.flaticon.com/512/726/726458.png'
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -3727,8 +3737,12 @@ function TrackCustomerOrders() {
     setTrackingStatus(order.tracking_status || 'Out for Delivery');
   };
 
-  // Filtering based on search query (by Order ID, Recipient Name, or Tracking Number)
   const filteredOrders = orders.filter(o => {
+    // 1. Filter by Courier selection
+    if (filterCourier !== 'All') {
+      if (o.courier_name !== filterCourier) return false;
+    }
+    // 2. Filter by search query
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
     return (
@@ -3739,7 +3753,14 @@ function TrackCustomerOrders() {
   });
 
   if (loading) {
-    return <div className="p-6 text-center text-gray-500">Loading Tracking Workspace...</div>;
+    return (
+      <div className="dashboard-container">
+        <div className="p-8 text-center">
+          <i className="las la-spinner la-spin text-[#00832e]" style={{ fontSize: '32px' }}></i>
+          <p className="mt-2 text-sm text-gray-500">Loading tracking workspace...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -3751,34 +3772,122 @@ function TrackCustomerOrders() {
         borderRadius: '16px', 
         padding: '24px', 
         boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-        marginBottom: '24px',
+        marginBottom: '20px',
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '16px'
+        gap: '20px'
       }}>
         <div>
-          <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Courier Integrations & Customer Order Tracker</h3>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>Search and trace packages across active logistics providers.</p>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Courier Integrations & Customer Order Tracker</h3>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Search and trace packages across active logistics providers.</p>
         </div>
-        <div style={{ position: 'relative', width: '320px' }}>
+
+        {/* Courier selector in the middle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Filter Courier:</span>
+          <select
+            value={filterCourier}
+            onChange={(e) => setFilterCourier(e.target.value)}
+            style={{ 
+              padding: '8px 12px', 
+              border: '1px solid #cbd5e1', 
+              borderRadius: '8px', 
+              fontSize: '12px', 
+              backgroundColor: '#ffffff',
+              fontWeight: '600',
+              color: '#0f172a',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="All">All Logistics Providers</option>
+            {Object.keys(COURIER_LOGOS).map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ position: 'relative', width: '280px' }}>
           <input
             type="text"
-            placeholder="Search by Order ID, Name, or Track #"
+            placeholder="Search Order ID, Name, Track #"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ 
-              padding: '10px 16px 10px 40px', 
+              padding: '8px 16px 8px 36px', 
               border: '1px solid #cbd5e1', 
               borderRadius: '24px', 
-              fontSize: '13px', 
+              fontSize: '12px', 
               width: '100%',
               backgroundColor: '#f8fafc'
             }}
           />
-          <i className="las la-search" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '16px' }}></i>
+          <i className="las la-search" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}></i>
         </div>
+      </div>
+
+      {/* Courier Badges with Real Logos */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '12px', 
+        overflowX: 'auto', 
+        paddingBottom: '16px', 
+        marginBottom: '24px',
+        borderBottom: '1px solid #f1f5f9'
+      }}>
+        <button
+          onClick={() => setFilterCourier('All')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '12px',
+            border: filterCourier === 'All' ? '2px solid #00832e' : '1px solid #e2e8f0',
+            backgroundColor: filterCourier === 'All' ? '#f0fdf4' : '#ffffff',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            color: filterCourier === 'All' ? '#166534' : '#475569',
+            transition: 'all 0.2s',
+            boxShadow: filterCourier === 'All' ? '0 4px 6px -1px rgba(0,131,46,0.1)' : 'none'
+          }}
+        >
+          <i className="las la-globe" style={{ fontSize: '16px' }}></i> All Couriers
+        </button>
+
+        {Object.entries(COURIER_LOGOS).map(([name, logo]) => {
+          const isActive = filterCourier === name;
+          return (
+            <button
+              key={name}
+              onClick={() => setFilterCourier(name)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                border: isActive ? '2px solid #00832e' : '1px solid #e2e8f0',
+                backgroundColor: isActive ? '#f0fdf4' : '#ffffff',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                color: isActive ? '#166534' : '#475569',
+                transition: 'all 0.2s',
+                boxShadow: isActive ? '0 4px 6px -1px rgba(0,131,46,0.1)' : 'none'
+              }}
+            >
+              <img 
+                src={logo} 
+                alt={name} 
+                style={{ width: '22px', height: '22px', objectFit: 'contain' }} 
+              />
+              {name}
+            </button>
+          );
+        })}
       </div>
 
       {/* 2. Main 2-Column workspace */}
@@ -3786,7 +3895,7 @@ function TrackCustomerOrders() {
         
         {/* Left side: Orders Selector list */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-          <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Shipments Register</h4>
+          <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Shipments Register</h4>
           
           {filteredOrders.length === 0 ? (
             <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
@@ -3822,8 +3931,13 @@ function TrackCustomerOrders() {
                       <td style={{ padding: '14px 12px', color: '#475569' }}>{o.shipping_details?.name}</td>
                       <td style={{ padding: '14px 12px', color: '#475569' }}>
                         {o.courier_name ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <i className="las la-truck" style={{ color: '#00832e', fontSize: '16px' }}></i> {o.courier_name}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <img 
+                              src={COURIER_LOGOS[o.courier_name]} 
+                              alt={o.courier_name} 
+                              style={{ width: '18px', height: '18px', objectFit: 'contain' }} 
+                            />
+                            {o.courier_name}
                           </span>
                         ) : '—'}
                       </td>
@@ -3855,9 +3969,16 @@ function TrackCustomerOrders() {
           {selectedOrder && selectedOrder.tracking_number ? (
             <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
-                <div>
-                  <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Package Tracing Log</h4>
-                  <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedOrder.courier_name} — <strong>{selectedOrder.tracking_number}</strong></span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img 
+                    src={COURIER_LOGOS[selectedOrder.courier_name]} 
+                    alt={selectedOrder.courier_name} 
+                    style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+                  />
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Package Tracing Log</h4>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>{selectedOrder.courier_name} — <strong>{selectedOrder.tracking_number}</strong></span>
+                  </div>
                 </div>
                 <span style={{
                   padding: '4px 10px',
@@ -3907,7 +4028,14 @@ function TrackCustomerOrders() {
           {/* Section 2: Form to Link Details */}
           {selectedOrder && (
             <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-              <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Link Logistics Details</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                <img 
+                  src={COURIER_LOGOS[courierName]} 
+                  alt={courierName} 
+                  style={{ width: '28px', height: '28px', objectFit: 'contain' }} 
+                />
+                <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Link Logistics Details</h4>
+              </div>
               
               <form onSubmit={handleLinkTracking} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{ fontSize: '12px', color: '#64748b' }}>
