@@ -836,17 +836,22 @@ function WhatsAppAccountManager({ activeSessionId, onSessionsUpdated, user }) {
             <button 
               disabled={sessions.length >= maxSessions}
               onClick={handleStartLinking} 
-              className={`btn btn-sm btn-shadow flex items-center gap-2 ${sessions.length >= maxSessions ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-black hover:bg-neutral-800'}`}
               style={{ 
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
                 padding: '10px 20px', 
                 borderRadius: '12px', 
                 fontSize: '12px', 
                 fontWeight: 'bold',
+                border: 'none',
+                cursor: sessions.length >= maxSessions ? 'not-allowed' : 'pointer',
                 color: sessions.length >= maxSessions ? '#94a3b8' : '#ffffff',
-                backgroundColor: sessions.length >= maxSessions ? '#f1f5f9' : '#000000'
+                backgroundColor: sessions.length >= maxSessions ? '#f1f5f9' : '#000000',
+                transition: 'background 0.2s'
               }}
             >
-              <i className="las la-plus-circle" style={{ color: sessions.length >= maxSessions ? '#94a3b8' : '#ffffff' }}></i> Connect New Session
+              <i className="las la-plus-circle" style={{ color: sessions.length >= maxSessions ? '#94a3b8' : '#ffffff', fontSize: '14px' }}></i> Connect New Session
             </button>
           )}
         </div>
