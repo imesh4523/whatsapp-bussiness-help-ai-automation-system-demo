@@ -5755,14 +5755,14 @@ function TrackCustomerOrders() {
   const [updating, setUpdating] = useState(false);
 
   const COURIER_LOGOS = {
-    'Sri Lanka Post': 'https://logo.clearbit.com/slpost.gov.lk',
-    'Citypak (Hayleys)': 'https://logo.clearbit.com/citypak.lk',
-    'Aramex': 'https://logo.clearbit.com/aramex.com',
-    'DHL Express': 'https://logo.clearbit.com/dhl.com',
-    'FedEx': 'https://logo.clearbit.com/fedex.com',
+    'Sri Lanka Post': 'https://th.bing.com/th/id/OIP.rY_8tLKMq8MJEHJBfhbFfQHaHa?w=180&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
+    'Citypak (Hayleys)': 'https://th.bing.com/th/id/OIP.XEr4d5aSVHlv4sIzfFe7UwHaHa?w=180&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
+    'Aramex': 'https://th.bing.com/th/id/OIP.1QdE1SCIF8EYJfWVwi_YKQHaHa?w=180&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
+    'DHL Express': 'https://th.bing.com/th?q=DHL+Logo+Icon+PNG&w=120&h=120&c=1&rs=1&qlt=70&r=0&o=7&cb=1&pid=InlineBlock&rm=3&mkt=en-SG&cc=SG&setlang=en&adlt=strict&t=1&mw=247',
+    'FedEx': 'https://th.bing.com/th/id/OIP.vuc88Kmi3r_f8yGuQPHVGgHaHa?w=169&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
     'Pronto': 'https://th.bing.com/th/id/OIP.U13AT8WXkPdZRaq4MD_ofwHaHa?w=176&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
-    'Koombiyo': 'https://koombiyodelivery.lk/logo.png',
-    'Koombiyo Delivery': 'https://koombiyodelivery.lk/logo.png'
+    'Domex': '/domex-logo.png',
+    'Koombiyo': '/koombiyo-logo.png',
   };
 
   const FALLBACK_TRUCK = 'https://cdn-icons-png.flaticon.com/512/726/726458.png';
