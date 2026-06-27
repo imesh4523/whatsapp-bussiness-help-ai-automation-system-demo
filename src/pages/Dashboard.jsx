@@ -7,7 +7,7 @@ const getTabFromPath = (path) => {
   const pathToTabMap = {
     '/user/dashboard': 'dashboard',
     '/user/inbox': 'inbox',
-    '/user/crm/customers': 'crm_customers',
+    '/user/crm/customers': 'customer_list',
     '/user/crm/track-orders': 'track_orders',
     '/user/business-profile': 'business_profile',
     '/user/campaign/index': 'campaign_index',
@@ -62,7 +62,7 @@ const getPathFromTab = (tabKey) => {
   const tabToPathMap = {
     dashboard: '/user/dashboard',
     inbox: '/user/inbox',
-    crm_customers: '/user/crm/customers',
+    crm_customers: '/user/customer/list',
     track_orders: '/user/crm/track-orders',
     business_profile: '/user/business-profile',
     campaign_index: '/user/campaign/index',
@@ -3004,14 +3004,6 @@ function Dashboard({ user, onLogout }) {
 
               <li className="sidebar-menu-list__title"><span className="text">CRM &amp; ORDERS</span></li>
 
-              {/* Manage Customers */}
-              <li className={`sidebar-menu-list__item ${tab === 'crm_customers' ? 'active' : ''}`}>
-                <a href="/user/crm/customers" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('crm_customers'); }}>
-                  <span className="icon"><i className="las la-users-cog" /></span>
-                  <span className="text">Manage Customers</span>
-                </a>
-              </li>
-
               {/* Track Customer Orders */}
               <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
                 <a href="/user/crm/track-orders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); }}>
@@ -3229,7 +3221,7 @@ function Dashboard({ user, onLogout }) {
                 <WhatsAppAIBotManager user={user} activeSessionId={activeSessionId} />
               ) : tab === 'business_profile' ? (
                 <BusinessProfile user={user} />
-              ) : tab === 'crm_customers' ? (
+              ) : tab === 'customer_list' ? (
                 <ManageCustomers user={user} />
               ) : tab === 'track_orders' ? (
                 <TrackCustomerOrders user={user} />
@@ -3495,9 +3487,12 @@ function BusinessProfile() {
 }
 
 // ── Component: ManageCustomers (CRM tab) ─────────────────────────────
+// ── Component: ManageCustomers (CRM tab) ─────────────────────────────
 function ManageCustomers() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterLabel, setFilterLabel] = useState('All');
 
   useEffect(() => {
     fetchCustomers();
@@ -3520,70 +3515,130 @@ function ManageCustomers() {
     }
   };
 
+  const filteredCustomers = customers.filter(c => {
+    if (filterLabel !== 'All') {
+      const isConfirmed = c.label === 'Confirmed';
+      if (filterLabel === 'Confirmed' && !isConfirmed) return false;
+      if (filterLabel === 'Interested' && isConfirmed) return false;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchName = (c.sender_name || '').toLowerCase().includes(q);
+      const matchPhone = (c.sender_phone || '').toLowerCase().includes(q);
+      return matchName || matchPhone;
+    }
+    return true;
+  });
+
   if (loading) {
-    return <div className="p-6 text-center text-gray-500">Loading Customers CRM...</div>;
+    return (
+      <div className="dashboard-container">
+        <div className="p-8 text-center">
+          <i className="las la-spinner la-spin text-[#00832e]" style={{ fontSize: '32px' }}></i>
+          <p className="mt-2 text-sm text-gray-500">Loading customers list...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-        <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Active CRM Customers</h3>
-        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>
-          Automatically filtered chats for customers labeled as **Confirmed** or **Interested**.
-        </p>
+    <div className="dashboard-container">
+      <div className="container-top flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+        <div className="container-top__left">
+          <h5 className="container-top__title">All Customer</h5>
+          <p className="container-top__desc">Organize and manage your customer list and status labels with effortless ease.</p>
+        </div>
 
-        {customers.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-            <i className="las la-users-cog" style={{ fontSize: '48px', marginBottom: '12px', display: 'block' }} />
-            No confirmed or interested customers found.
+        {/* Status Filter Buttons */}
+        <div className="flex gap-2 flex-shrink-0 flex-wrap">
+          {['All', 'Confirmed', 'Interested'].map(label => (
+            <button 
+              key={label}
+              type="button"
+              onClick={() => setFilterLabel(label)} 
+              className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
+                filterLabel === label 
+                  ? 'bg-[#00832e] text-white shadow-sm font-bold' 
+                  : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden mt-4">
+        
+        {/* Search header */}
+        <div className="p-4 border-b border-gray-100 bg-[#f8fafc]/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <h6 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-0">
+            Total Customers ({filteredCustomers.length})
+          </h6>
+          <div className="relative w-full sm:w-64">
+            <input 
+              type="search" 
+              placeholder="Search by name or phone..." 
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00832e] transition-colors bg-white/70" 
+            />
           </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        </div>
+
+        <div className="flex-1 overflow-x-auto">
+          {filteredCustomers.length === 0 ? (
+            <div className="py-12 text-center flex flex-col items-center justify-center">
+              <img src="https://wpp.raybeamdigital.com/assets/images/no-data.gif" className="empty-message mx-auto" alt="No data" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
+              <span className="d-block mt-2 font-bold text-neutral-700 text-sm">No data found</span>
+              <span className="d-block fs-13 text-muted text-xs mt-1">There are no available data to display on this table at the moment.</span>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '13px', fontWeight: 'bold' }}>
-                  <th style={{ padding: '12px 16px' }}>Customer Name</th>
-                  <th style={{ padding: '12px 16px' }}>Phone Number</th>
-                  <th style={{ padding: '12px 16px' }}>Status Label</th>
-                  <th style={{ padding: '12px 16px' }}>Last Message</th>
-                  <th style={{ padding: '12px 16px' }}>Last Updated</th>
+                <tr className="bg-neutral-50 border-b border-gray-100 font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="p-4">Customer Name</th>
+                  <th className="p-4">Phone Number</th>
+                  <th className="p-4 text-center">Status Label</th>
+                  <th className="p-4">Last Message</th>
+                  <th className="p-4">Last Updated</th>
                 </tr>
               </thead>
-              <tbody>
-                {customers.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
-                    <td style={{ padding: '16px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <tbody className="divide-y divide-gray-50">
+                {filteredCustomers.map((c) => (
+                  <tr key={c.id} className="hover:bg-neutral-50/50 transition-colors">
+                    <td className="p-4 flex items-center gap-3">
                       <img
-                        src={c.profile_pic_url || 'https://via.placeholder.com/40'}
-                        style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
+                        src={c.profile_pic_url || 'https://wpp.raybeamdigital.com/assets/images/avatar.png'}
+                        className="w-9 h-9 rounded-full object-cover border border-gray-100"
+                        onError={(e) => { e.target.src = 'https://wpp.raybeamdigital.com/assets/images/avatar.png'; }}
                       />
-                      <span style={{ fontWeight: '600', color: '#1e293b' }}>{c.sender_name}</span>
+                      <span className="font-bold text-neutral-800">{c.sender_name || 'Customer'}</span>
                     </td>
-                    <td style={{ padding: '16px 16px', color: '#475569' }}>{c.sender_phone}</td>
-                    <td style={{ padding: '16px 16px' }}>
-                      <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        backgroundColor: c.label === 'Confirmed' ? '#dcfce7' : '#fef9c3',
-                        color: c.label === 'Confirmed' ? '#166534' : '#854d0e'
-                      }}>
+                    <td className="p-4 font-medium text-neutral-800 font-mono">
+                      {c.sender_phone}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                        c.label === 'Confirmed' 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                          : 'bg-amber-50 text-amber-700 border-amber-100'
+                      }`}>
                         {c.label || 'Interested'}
                       </span>
                     </td>
-                    <td style={{ padding: '16px 16px', color: '#64748b', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td className="p-4 max-w-[240px] text-gray-600 truncate" title={c.last_message}>
                       {c.last_message || '—'}
                     </td>
-                    <td style={{ padding: '16px 16px', color: '#94a3b8' }}>
-                      {new Date(c.updated_at).toLocaleDateString()}
+                    <td className="p-4 text-gray-500 font-mono">
+                      {new Date(c.updated_at).toLocaleDateString()} {new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
