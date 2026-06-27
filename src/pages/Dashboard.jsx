@@ -3842,21 +3842,24 @@ function TrackCustomerOrders() {
           onClick={() => setFilterCourier('All')}
           style={{
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            borderRadius: '12px',
+            gap: '6px',
+            padding: '12px 18px',
+            borderRadius: '14px',
             border: filterCourier === 'All' ? '2px solid #00832e' : '1px solid #e2e8f0',
             backgroundColor: filterCourier === 'All' ? '#f0fdf4' : '#ffffff',
             cursor: 'pointer',
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: 'bold',
             color: filterCourier === 'All' ? '#166534' : '#475569',
             transition: 'all 0.2s',
-            boxShadow: filterCourier === 'All' ? '0 4px 6px -1px rgba(0,131,46,0.1)' : 'none'
+            boxShadow: filterCourier === 'All' ? '0 4px 6px -1px rgba(0,131,46,0.1)' : '0 1px 3px rgba(0,0,0,0.06)',
+            minWidth: '72px'
           }}
         >
-          <i className="las la-globe" style={{ fontSize: '16px' }}></i> All Couriers
+          <i className="las la-globe" style={{ fontSize: '36px', lineHeight: 1 }}></i>
+          <span>All Couriers</span>
         </button>
 
         {Object.entries(COURIER_LOGOS).map(([name, logo]) => {
@@ -3867,27 +3870,29 @@ function TrackCustomerOrders() {
               onClick={() => setFilterCourier(name)}
               style={{
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
-                borderRadius: '12px',
+                gap: '6px',
+                padding: '12px 18px',
+                borderRadius: '14px',
                 border: isActive ? '2px solid #00832e' : '1px solid #e2e8f0',
                 backgroundColor: isActive ? '#f0fdf4' : '#ffffff',
                 cursor: 'pointer',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 'bold',
                 color: isActive ? '#166534' : '#475569',
                 transition: 'all 0.2s',
-                boxShadow: isActive ? '0 4px 6px -1px rgba(0,131,46,0.1)' : 'none'
+                boxShadow: isActive ? '0 4px 6px -1px rgba(0,131,46,0.1)' : '0 1px 3px rgba(0,0,0,0.06)',
+                minWidth: '72px'
               }}
             >
               <img 
                 src={logo} 
                 alt={name} 
-                style={{ width: '22px', height: '22px', objectFit: 'contain' }} 
+                style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '6px' }} 
                 onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
               />
-              {name}
+              <span>{name}</span>
             </button>
           );
         })}
