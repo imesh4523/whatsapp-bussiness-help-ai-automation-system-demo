@@ -7,6 +7,10 @@ const getTabFromPath = (path) => {
   const pathToTabMap = {
     '/user/dashboard': 'dashboard',
     '/user/inbox': 'inbox',
+    '/user/crm/customers': 'crm_customers',
+    '/user/crm/orders': 'crm_orders',
+    '/user/crm/track-orders': 'track_orders',
+    '/user/business-profile': 'business_profile',
     '/user/campaign/index': 'campaign_index',
     '/user/campaign/create': 'campaign_create',
     '/user/customer/list': 'customer_list',
@@ -59,6 +63,10 @@ const getPathFromTab = (tabKey) => {
   const tabToPathMap = {
     dashboard: '/user/dashboard',
     inbox: '/user/inbox',
+    crm_customers: '/user/crm/customers',
+    crm_orders: '/user/crm/orders',
+    track_orders: '/user/crm/track-orders',
+    business_profile: '/user/business-profile',
     campaign_index: '/user/campaign/index',
     campaign_create: '/user/campaign/create',
     customer_list: '/user/customer/list',
@@ -2043,10 +2051,9 @@ function Dashboard({ user, onLogout }) {
   const setTab = (newTab) => {
     const newPath = getPathFromTab(newTab);
     if (window.location.pathname !== newPath) {
-      window.location.href = newPath;
-    } else {
-      setTabState(newTab);
+      window.history.pushState(null, '', newPath);
     }
+    setTabState(newTab);
   };
 
   const [sessions, setSessions] = useState([]);
@@ -3716,6 +3723,7 @@ function TrackCustomerOrders() {
   const [courierName, setCourierName] = useState('Sri Lanka Post');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [trackingStatus, setTrackingStatus] = useState('Out for Delivery');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -3795,35 +3803,86 @@ function TrackCustomerOrders() {
     setTrackingStatus(order.tracking_status || 'Out for Delivery');
   };
 
+  // Filtering based on search query (by Order ID, Recipient Name, or Tracking Number)
+  const filteredOrders = orders.filter(o => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      o.id.toLowerCase().includes(query) ||
+      (o.shipping_details?.name && o.shipping_details.name.toLowerCase().includes(query)) ||
+      (o.tracking_number && o.tracking_number.toLowerCase().includes(query))
+    );
+  });
+
   if (loading) {
     return <div className="p-6 text-center text-gray-500">Loading Tracking Workspace...</div>;
   }
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '24px', alignItems: 'start' }}>
-        
-        {/* Left side: Orders list and History tracker log */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Orders Table */}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Select Order to Track</h3>
-            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>Click any order to configure and preview tracking details.</p>
+      
+      {/* 1. Header & Live Search Bar */}
+      <div style={{ 
+        backgroundColor: '#ffffff', 
+        borderRadius: '16px', 
+        padding: '24px', 
+        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+        marginBottom: '24px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px'
+      }}>
+        <div>
+          <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Courier Integrations & Customer Order Tracker</h3>
+          <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>Search and trace packages across active logistics providers.</p>
+        </div>
+        <div style={{ position: 'relative', width: '320px' }}>
+          <input
+            type="text"
+            placeholder="Search by Order ID, Name, or Track #"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ 
+              padding: '10px 16px 10px 40px', 
+              border: '1px solid #cbd5e1', 
+              borderRadius: '24px', 
+              fontSize: '13px', 
+              width: '100%',
+              backgroundColor: '#f8fafc'
+            }}
+          />
+          <i className="las la-search" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '16px' }}></i>
+        </div>
+      </div>
 
+      {/* 2. Main 2-Column workspace */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '24px', alignItems: 'start' }}>
+        
+        {/* Left side: Orders Selector list */}
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+          <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Shipments Register</h4>
+          
+          {filteredOrders.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+              <i className="las la-truck-loading" style={{ fontSize: '48px', marginBottom: '8px', display: 'block' }}></i>
+              No matching orders found.
+            </div>
+          ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold' }}>
-                    <th style={{ padding: '10px 12px' }}>Order ID</th>
-                    <th style={{ padding: '10px 12px' }}>Recipient Name</th>
-                    <th style={{ padding: '10px 12px' }}>Courier Service</th>
-                    <th style={{ padding: '10px 12px' }}>Tracking Number</th>
-                    <th style={{ padding: '10px 12px' }}>Status</th>
+                    <th style={{ padding: '12px' }}>Order ID</th>
+                    <th style={{ padding: '12px' }}>Recipient Name</th>
+                    <th style={{ padding: '12px' }}>Logistics Service</th>
+                    <th style={{ padding: '12px' }}>Tracking Number</th>
+                    <th style={{ padding: '12px' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((o) => (
+                  {filteredOrders.map((o) => (
                     <tr 
                       key={o.id} 
                       onClick={() => selectOrder(o)}
@@ -3835,19 +3894,19 @@ function TrackCustomerOrders() {
                         fontWeight: selectedOrder?.id === o.id ? '600' : 'normal'
                       }}
                     >
-                      <td style={{ padding: '12px 12px', color: '#0f172a' }}>{o.id}</td>
-                      <td style={{ padding: '12px 12px', color: '#475569' }}>{o.shipping_details?.name}</td>
-                      <td style={{ padding: '12px 12px', color: '#475569' }}>
+                      <td style={{ padding: '14px 12px', color: '#0f172a' }}>{o.id}</td>
+                      <td style={{ padding: '14px 12px', color: '#475569' }}>{o.shipping_details?.name}</td>
+                      <td style={{ padding: '14px 12px', color: '#475569' }}>
                         {o.courier_name ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <i className="las la-truck" style={{ color: '#0f172a' }}></i> {o.courier_name}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <i className="las la-truck" style={{ color: '#00832e', fontSize: '16px' }}></i> {o.courier_name}
                           </span>
                         ) : '—'}
                       </td>
-                      <td style={{ padding: '12px 12px', fontFamily: 'monospace', color: '#475569' }}>{o.tracking_number || '—'}</td>
-                      <td style={{ padding: '12px 12px' }}>
+                      <td style={{ padding: '14px 12px', fontFamily: 'monospace', color: '#475569' }}>{o.tracking_number || '—'}</td>
+                      <td style={{ padding: '14px 12px' }}>
                         <span style={{
-                          padding: '3px 8px',
+                          padding: '4px 10px',
                           borderRadius: '12px',
                           fontSize: '11px',
                           fontWeight: 'bold',
@@ -3862,144 +3921,145 @@ function TrackCustomerOrders() {
                 </tbody>
               </table>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Shipment Progress Logs Timeline */}
-          {selectedOrder && selectedOrder.tracking_number && (
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        {/* Right side: Tracing Timeline and Link form */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* Section 1: Live Timeline Tracing (PROMINENT - TOP OF RIGHT SIDEBAR) */}
+          {selectedOrder && selectedOrder.tracking_number ? (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
                 <div>
-                  <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Courier Shipment Status</h4>
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>{selectedOrder.courier_name} — <strong>{selectedOrder.tracking_number}</strong></span>
+                  <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Package Tracing Log</h4>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedOrder.courier_name} — <strong>{selectedOrder.tracking_number}</strong></span>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{
-                    padding: '6px 12px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff'
-                  }}>
-                    {selectedOrder.tracking_status}
-                  </span>
-                </div>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  backgroundColor: '#00832e',
+                  color: '#ffffff'
+                }}>
+                  {selectedOrder.tracking_status}
+                </span>
               </div>
 
               {/* Progress steps */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', paddingLeft: '24px', borderLeft: '2px solid #e2e8f0', marginLeft: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', position: 'relative', paddingLeft: '20px', borderLeft: '2px solid #e2e8f0', marginLeft: '8px' }}>
                 {selectedOrder.tracking_history && selectedOrder.tracking_history.map((log, idx) => (
                   <div key={idx} style={{ position: 'relative' }}>
-                    
                     <div style={{
                       position: 'absolute',
-                      left: '-33px',
+                      left: '-29px',
                       top: '2px',
-                      width: '16px',
-                      height: '16px',
+                      width: '14px',
+                      height: '14px',
                       borderRadius: '50%',
-                      backgroundColor: idx === selectedOrder.tracking_history.length - 1 ? '#000000' : '#cbd5e1',
+                      backgroundColor: idx === selectedOrder.tracking_history.length - 1 ? '#00832e' : '#cbd5e1',
                       border: '3px solid #ffffff',
-                      boxShadow: '0 0 0 2px ' + (idx === selectedOrder.tracking_history.length - 1 ? '#000000' : '#e2e8f0')
+                      boxShadow: '0 0 0 2px ' + (idx === selectedOrder.tracking_history.length - 1 ? '#00832e' : '#e2e8f0')
                     }}></div>
 
-                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{log.status}</div>
-                    <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>{log.details}</div>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>{log.status}</div>
+                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '1px' }}>{log.details}</div>
+                    <div style={{ display: 'flex', gap: '10px', fontSize: '10px', color: '#94a3b8', marginTop: '3px' }}>
                       <span><i className="las la-map-marker"></i> {log.location}</span>
-                      <span><i className="las la-clock"></i> {new Date(log.time).toLocaleString()}</span>
+                      <span><i className="las la-clock"></i> {new Date(log.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          )}
-
-        </div>
-
-        {/* Right side: Tracking Linker Form */}
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-          <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Link Courier Details</h4>
-          
-          {selectedOrder ? (
-            <form onSubmit={handleLinkTracking} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ fontSize: '13px', color: '#64748b' }}>
-                Order Selected: <strong>{selectedOrder.id}</strong>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Select Courier Service</label>
-                <select
-                  value={courierName}
-                  onChange={(e) => setCourierName(e.target.value)}
-                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
-                >
-                  <option value="Sri Lanka Post">Sri Lanka Post</option>
-                  <option value="Citypak (Hayleys)">Citypak (Hayleys)</option>
-                  <option value="Aramex">Aramex</option>
-                  <option value="DHL Express">DHL Express</option>
-                  <option value="FedEx">FedEx</option>
-                  <option value="Pronto">Pronto</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Tracking Number</label>
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  placeholder="e.g. SLP8592039201"
-                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%' }}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Tracking Status</label>
-                <select
-                  value={trackingStatus}
-                  onChange={(e) => setTrackingStatus(e.target.value)}
-                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
-                >
-                  <option value="Sorting Hub">Sorting Hub</option>
-                  <option value="In Transit">In Transit</option>
-                  <option value="Out for Delivery">Out for Delivery</option>
-                  <option value="Delivered">Delivered</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={updating}
-                style={{
-                  backgroundColor: '#000000',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  cursor: updating ? 'not-allowed' : 'pointer',
-                  width: '100%',
-                  marginTop: '8px'
-                }}
-              >
-                {updating ? 'Updating Tracking...' : 'Link & Simulate Tracking'}
-              </button>
-            </form>
           ) : (
-            <div style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
-              No order selected. Select an order to link courier details.
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', textAlign: 'center', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
+              <i className="las la-map-marked-alt" style={{ fontSize: '32px', marginBottom: '8px', display: 'block' }}></i>
+              No active tracking logs. Link details below to initiate tracing simulator.
             </div>
           )}
+
+          {/* Section 2: Form to Link Details */}
+          {selectedOrder && (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Link Logistics Details</h4>
+              
+              <form onSubmit={handleLinkTracking} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  Target Order ID: <strong>{selectedOrder.id}</strong>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Select Logistics Service</label>
+                  <select
+                    value={courierName}
+                    onChange={(e) => setCourierName(e.target.value)}
+                    style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="Sri Lanka Post">Sri Lanka Post</option>
+                    <option value="Citypak (Hayleys)">Citypak (Hayleys)</option>
+                    <option value="Aramex">Aramex</option>
+                    <option value="DHL Express">DHL Express</option>
+                    <option value="FedEx">FedEx</option>
+                    <option value="Pronto">Pronto</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Courier Tracking Number</label>
+                  <input
+                    type="text"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    placeholder="e.g. SLP8592039201"
+                    style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%' }}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Current Tracking Status</label>
+                  <select
+                    value={trackingStatus}
+                    onChange={(e) => setTrackingStatus(e.target.value)}
+                    style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', width: '100%', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="Sorting Hub">Sorting Hub</option>
+                    <option value="In Transit">In Transit</option>
+                    <option value="Out for Delivery">Out for Delivery</option>
+                    <option value="Delivered">Delivered</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={updating}
+                  style={{
+                    backgroundColor: '#000000',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    cursor: updating ? 'not-allowed' : 'pointer',
+                    width: '100%',
+                    marginTop: '6px'
+                  }}
+                >
+                  {updating ? 'Linking Tracking...' : 'Link & Generate History'}
+                </button>
+              </form>
+            </div>
+          )}
+
         </div>
 
       </div>
     </div>
   );
 }
-
 export default Dashboard;
 
 
