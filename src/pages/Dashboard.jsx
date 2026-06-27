@@ -5755,9 +5755,9 @@ function TrackCustomerOrders() {
   const [updating, setUpdating] = useState(false);
 
   const COURIER_LOGOS = {
-    'Sri Lanka Post': 'https://th.bing.com/th/id/OIP.rY_8tLKMq8MJEHJBfhbFfQHaHa?w=180&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
-    'Citypak (Hayleys)': 'https://th.bing.com/th/id/OIP.XEr4d5aSVHlv4sIzfFe7UwHaHa?w=180&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
-    'Aramex': 'https://th.bing.com/th/id/OIP.1QdE1SCIF8EYJfWVwi_YKQHaHa?w=180&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
+    'Sri Lanka Post': '/sri-lanka-post-logo.png',
+    'Citypak (Hayleys)': '/citypak-logo.png',
+    'Aramex': '/aramex-logo.png',
     'DHL Express': 'https://th.bing.com/th?q=DHL+Logo+Icon+PNG&w=120&h=120&c=1&rs=1&qlt=70&r=0&o=7&cb=1&pid=InlineBlock&rm=3&mkt=en-SG&cc=SG&setlang=en&adlt=strict&t=1&mw=247',
     'FedEx': 'https://th.bing.com/th/id/OIP.vuc88Kmi3r_f8yGuQPHVGgHaHa?w=169&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
     'Pronto': 'https://th.bing.com/th/id/OIP.U13AT8WXkPdZRaq4MD_ofwHaHa?w=176&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
@@ -5847,6 +5847,9 @@ function TrackCustomerOrders() {
     const norm = (name || '').toLowerCase();
     if (norm.includes('domex')) return '/domex-logo.png';
     if (norm.includes('koombiyo')) return '/koombiyo-logo.png';
+    if (norm.includes('sri lanka post')) return '/sri-lanka-post-logo.png';
+    if (norm.includes('citypak')) return '/citypak-logo.png';
+    if (norm.includes('aramex')) return '/aramex-logo.png';
     return COURIER_LOGOS[name] || null;
   };
 
@@ -5859,6 +5862,12 @@ function TrackCustomerOrders() {
         if (!dbName.includes('domex')) return false;
       } else if (filterName.includes('koombiyo')) {
         if (!dbName.includes('koombiyo')) return false;
+      } else if (filterName.includes('sri lanka post')) {
+        if (!dbName.includes('sri lanka post')) return false;
+      } else if (filterName.includes('citypak')) {
+        if (!dbName.includes('citypak')) return false;
+      } else if (filterName.includes('aramex')) {
+        if (!dbName.includes('aramex')) return false;
       } else {
         if (o.courier_name !== filterCourier) return false;
       }

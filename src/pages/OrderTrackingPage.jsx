@@ -60,6 +60,12 @@ export default function OrderTrackingPage({ orderId }) {
       logoUrl = '/domex-logo.png';
     } else if (nameLower.includes('koombiyo')) {
       logoUrl = '/koombiyo-logo.png';
+    } else if (nameLower.includes('sri lanka post')) {
+      logoUrl = '/sri-lanka-post-logo.png';
+    } else if (nameLower.includes('aramex')) {
+      logoUrl = '/aramex-logo.png';
+    } else if (nameLower.includes('citypak')) {
+      logoUrl = '/citypak-logo.png';
     } else if (nameLower.includes('pronto') || nameLower.includes('prompt')) {
       logoUrl = 'https://th.bing.com/th/id/OIP.U13AT8WXkPdZRaq4MD_ofwHaHa?w=176&h=180&c=7&r=0&o=7&pid=1.7&rm=3';
     } else if (nameLower.includes('dhl')) {
@@ -83,6 +89,18 @@ export default function OrderTrackingPage({ orderId }) {
       fallbackText = 'text-neutral-900';
       initials = 'KB';
       displayName = courierName || 'Koombiyo Delivery';
+    } else if (nameLower.includes('sri lanka post')) {
+      fallbackBg = 'bg-red-600';
+      initials = 'SL';
+      displayName = 'Sri Lanka Post';
+    } else if (nameLower.includes('aramex')) {
+      fallbackBg = 'bg-red-500';
+      initials = 'AX';
+      displayName = 'Aramex';
+    } else if (nameLower.includes('citypak')) {
+      fallbackBg = 'bg-red-700';
+      initials = 'CP';
+      displayName = 'Citypak';
     } else if (nameLower.includes('pronto') || nameLower.includes('prompt')) {
       fallbackBg = 'bg-red-500';
       initials = 'PR';
