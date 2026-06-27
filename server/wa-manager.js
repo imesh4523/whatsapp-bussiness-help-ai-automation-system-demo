@@ -234,7 +234,7 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       // Must strip both '@domain' and ':device' suffixes
       const senderPhone = msg.key.remoteJid.split('@')[0].split(':')[0];
       const senderName = msg.pushName || 'WhatsApp Contact';
-      const sessionPhone = sock.user?.id ? sock.user.id.split(':')[0] : 'whatsray_agent';
+      const sessionPhone = sock.user?.id ? sock.user.id.split(':')[0] : 'agentbunny_agent';
       const chatId = `${sessionId}_${senderPhone}`;
 
       if (msg.key.fromMe) {
@@ -462,7 +462,7 @@ export async function triggerMockIncomingMessage(userId, sessionId, customerPhon
   // 3. Trigger simulated AI processing
   setTimeout(async () => {
     try {
-      const aiReply = await generateAIReply('whatsray_agent', customerPhone, messageText);
+      const aiReply = await generateAIReply('agentbunny_agent', customerPhone, messageText);
       
       // Save BOT reply
       await db.query(
@@ -473,7 +473,7 @@ export async function triggerMockIncomingMessage(userId, sessionId, customerPhon
       
       const wsRes = await db.query('SELECT ws.user_id FROM chats c JOIN whatsapp_sessions ws ON c.session_id = ws.id WHERE c.id = $1', [chatId]);
       if (wsRes.rows.length > 0) {
-        await checkAndExtractOrder(wsRes.rows[0].user_id, 'whatsray_agent', customerPhone);
+        await checkAndExtractOrder(wsRes.rows[0].user_id, 'agentbunny_agent', customerPhone);
       }
 
       console.log(`[SIMULATOR] AI auto-replied to ${customerPhone}: ${aiReply}`);

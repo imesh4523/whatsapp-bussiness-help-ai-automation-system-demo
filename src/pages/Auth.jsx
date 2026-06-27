@@ -7,7 +7,7 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
   const [currentType, setCurrentType] = useState(type); // 'login', 'signup', 'forgot'
   const [formData, setFormData] = useState({
     fullName: '',
-    email: 'demo@whatsray.com',
+    email: 'demo@agentbunny.com',
     password: 'demo1234',
     confirmPassword: ''
   });
@@ -133,7 +133,7 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
               onClick={() => {
                 onSuccess({
                   name: 'Cheak Imesh',
-                  email: 'demo@whatsray.com'
+                  email: 'demo@agentbunny.com'
                 });
               }}
               className="w-full bg-[#00832e] text-white hover:bg-emerald-800 transition-colors py-3.5 rounded-xl text-xs font-bold tracking-widest uppercase active:scale-[0.99] mt-2 flex items-center justify-center gap-2"

@@ -148,7 +148,7 @@ export default function OrderTrackingPage({ orderId }) {
               <i className="las la-shipping-fast text-lg"></i>
             </div>
             <span className="font-black text-sm tracking-widest uppercase text-slate-800">
-              WhatsRay Delivery
+              AgentBunny Delivery
             </span>
           </div>
           <span className="text-xs text-slate-400 font-bold bg-slate-100 px-3 py-1 rounded-full">
@@ -366,7 +366,7 @@ export default function OrderTrackingPage({ orderId }) {
       {/* Clean Minimal Footer */}
       <footer className="bg-white border-t border-slate-200/80 py-6 mt-12">
         <div className="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] text-slate-400 font-bold tracking-wider uppercase">
-          <p>© {new Date().getFullYear()} WhatsRay CRM. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} AgentBunny CRM. All rights reserved.</p>
           <p>Order Fulfillment System</p>
         </div>
       </footer>

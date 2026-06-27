@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../config';
 
 function AdminAuth({ onSuccess }) {
   const [formData, setFormData] = useState({
-    email: 'admin@whatsray.com',
+    email: 'admin@agentbunny.com',
     password: 'admin1234'
   });
   const [error, setError] = useState('');
@@ -41,7 +41,7 @@ function AdminAuth({ onSuccess }) {
       });
       const data = await res.json();
       if (res.ok) {
-        if (data.user.email !== 'admin@whatsray.com' && data.user.plan !== 'Enterprise') {
+        if (data.user.email !== 'admin@agentbunny.com' && data.user.plan !== 'Enterprise') {
           setError('Access denied: Admin only.');
           return;
         }
@@ -64,7 +64,7 @@ function AdminAuth({ onSuccess }) {
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'admin@whatsray.com', password: 'admin1234' })
+        body: JSON.stringify({ email: 'admin@agentbunny.com', password: 'admin1234' })
       });
       const data = await res.json();
       if (res.ok) {
@@ -88,7 +88,7 @@ function AdminAuth({ onSuccess }) {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
             <span className="w-3 h-3 rounded-full bg-[#00832e]"></span>
-            <span className="font-black text-lg tracking-wider text-black">WhatsRay Admin</span>
+            <span className="font-black text-lg tracking-wider text-black">AgentBunny Admin</span>
           </div>
           <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">System Management Portal</p>
         </div>
@@ -107,7 +107,7 @@ function AdminAuth({ onSuccess }) {
                 value={formData.email}
                 onChange={handleInputChange}
                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
-                placeholder="admin@whatsray.com"
+                placeholder="admin@agentbunny.com"
               />
               <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             </div>

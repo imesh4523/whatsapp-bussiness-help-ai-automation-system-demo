@@ -190,7 +190,7 @@ const getTabFromPath = (path) => {
     '/user/template/index': 'template_index',
     '/help': 'help',
     '/user-guide': 'user_guide',
-    '/user/whatsray-assistant': 'whatsray_assistant',
+    '/user/agentbunny-assistant': 'agentbunny_assistant',
     '/ticket': 'ticket'
   };
   return pathToTabMap[path] || 'dashboard';
@@ -247,7 +247,7 @@ const getPathFromTab = (tabKey) => {
     template_index: '/user/template/index',
     help: '/help',
     user_guide: '/user-guide',
-    whatsray_assistant: '/user/whatsray-assistant',
+    agentbunny_assistant: '/user/agentbunny-assistant',
     ticket: '/ticket'
   };
   return tabToPathMap[tabKey] || '/user/dashboard';
@@ -283,20 +283,20 @@ const getMockPage = (tabKey) => {
     template_index: 'All Templates',
     help: 'Help Center',
     user_guide: 'User Guide',
-    whatsray_assistant: 'WhatsRay AI Support',
+    agentbunny_assistant: 'AgentBunny AI Support',
     ticket: 'Support Tickets'
   };
 
   const title = titleMap[tabKey] || 'Demo Page';
 
-  if (tabKey === 'whatsray_assistant') {
+  if (tabKey === 'agentbunny_assistant') {
     return {
-      title: `WhatsRay - ${title}`,
+      title: `AgentBunny - ${title}`,
       body: `
         <div class="dashboard-container">
           <div class="container-top">
             <div class="container-top__left">
-              <h5 class="container-top__title">WhatsRay AI Support</h5>
+              <h5 class="container-top__title">AgentBunny AI Support</h5>
               <p class="container-top__desc">Ask anything and get answers instantly from our AI Assistant</p>
             </div>
           </div>
@@ -308,7 +308,7 @@ const getMockPage = (tabKey) => {
                     <i class="las la-robot"></i>
                   </div>
                   <div class="bg-light p-3 rounded" style="max-width: 70%;">
-                    <p class="mb-0 fs-14">Hello! I am your WhatsRay AI Assistant. How can I help you automate your WhatsApp Business workflow today?</p>
+                    <p class="mb-0 fs-14">Hello! I am your AgentBunny AI Assistant. How can I help you automate your WhatsApp Business workflow today?</p>
                   </div>
                 </div>
               </div>
@@ -337,7 +337,7 @@ const getMockPage = (tabKey) => {
     const backPath = getPathFromTab(backRoute);
 
     return {
-      title: `WhatsRay - ${title}`,
+      title: `AgentBunny - ${title}`,
       body: `
         <div class="dashboard-container">
           <div class="container-top">
@@ -398,7 +398,7 @@ const getMockPage = (tabKey) => {
   const createPath = createRoute ? getPathFromTab(createRoute) : '#';
 
   return {
-    title: `WhatsRay - ${title}`,
+    title: `AgentBunny - ${title}`,
     body: `
       <div class="dashboard-container">
         <div class="container-top">
@@ -1081,7 +1081,7 @@ function WhatsAppAccountManager({ activeSessionId, onSessionsUpdated, user }) {
                           {!isActive && (
                             <button 
                               onClick={() => {
-                                localStorage.setItem('whatsray_active_session_id', s.id);
+                                localStorage.setItem('agentbunny_active_session_id', s.id);
                                 window.location.reload();
                               }}
                               className="btn btn-xs bg-black text-white hover:bg-neutral-800 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider"
@@ -2450,7 +2450,7 @@ function Dashboard({ user, setUser, onLogout }) {
   };
 
   const [sessions, setSessions] = useState([]);
-  const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('whatsray_active_session_id') || '');
+  const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('agentbunny_active_session_id') || '');
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
 
@@ -2506,11 +2506,11 @@ function Dashboard({ user, setUser, onLogout }) {
           const exists = data.some(s => s.id === activeSessionId);
           if (!exists) {
             setActiveSessionId(data[0].id);
-            localStorage.setItem('whatsray_active_session_id', data[0].id);
+            localStorage.setItem('agentbunny_active_session_id', data[0].id);
           }
         } else {
           setActiveSessionId('');
-          localStorage.removeItem('whatsray_active_session_id');
+          localStorage.removeItem('agentbunny_active_session_id');
         }
       }
     } catch (err) {
@@ -2657,7 +2657,7 @@ function Dashboard({ user, setUser, onLogout }) {
     invoiceWindow.document.write(`
       <html>
         <head>
-          <title>Invoice #${tx.id} - WhatsRay</title>
+          <title>Invoice #${tx.id} - AgentBunny</title>
           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/line-awesome/1.3.0/line-awesome/css/line-awesome.min.css">
           <style>
@@ -2683,7 +2683,7 @@ function Dashboard({ user, setUser, onLogout }) {
             <div class="row">
               <div class="col-12">
                 <div class="invoice-title d-flex justify-content-between align-items-center">
-                  <h2>WhatsRay</h2>
+                  <h2>AgentBunny</h2>
                   <h3 class="text-muted">Invoice #${tx.id}</h3>
                 </div>
                 <hr>
@@ -2698,7 +2698,7 @@ function Dashboard({ user, setUser, onLogout }) {
                   <div class="col-6 text-end">
                     <address>
                       <strong>Shipped From:</strong><br>
-                      WhatsRay Automation Ltd.<br>
+                      AgentBunny Automation Ltd.<br>
                       Colombo, Sri Lanka
                     </address>
                   </div>
@@ -2740,7 +2740,7 @@ function Dashboard({ user, setUser, onLogout }) {
                         </thead>
                         <tbody>
                           <tr>
-                            <td>WhatsRay ${tx.plan} Subscription (1 Month)</td>
+                            <td>AgentBunny ${tx.plan} Subscription (1 Month)</td>
                             <td class="text-center">රු ${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-center">1</td>
                             <td class="text-end">රු ${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
@@ -3374,7 +3374,7 @@ function Dashboard({ user, setUser, onLogout }) {
   const [prevTab, setPrevTab] = useState(() => getTabFromPath(window.location.pathname));
   const containerRef = useRef(null);
 
-  // ── 1. Load WhatsRay CSS & JS assets once on mount ──────────────────────
+  // ── 1. Load AgentBunny CSS & JS assets once on mount ──────────────────────
   useEffect(() => {
     const stylesheets = [
       "https://wpp.raybeamdigital.com/assets/global/css/bootstrap.min.css",
@@ -3888,7 +3888,7 @@ function Dashboard({ user, setUser, onLogout }) {
           else if (href.includes('/user/referral/index'))         { e.preventDefault(); setTab('referral_index'); }
           else if (href.includes('/help'))                        { e.preventDefault(); setTab('help'); }
           else if (href.includes('/user-guide'))                  { e.preventDefault(); setTab('user_guide'); }
-          else if (href.includes('/user/whatsray-assistant'))     { e.preventDefault(); setTab('whatsray_assistant'); }
+          else if (href.includes('/user/agentbunny-assistant'))     { e.preventDefault(); setTab('agentbunny_assistant'); }
           else if (href.includes('/ticket'))                      { e.preventDefault(); setTab('ticket'); }
           else if (href.includes('/user/logout')) { e.preventDefault(); onLogout(); }
           else if (href.includes('#') && (anchor.classList.contains('sidebar-menu-list__link') || anchor.closest('.has-dropdown'))) {
@@ -4245,7 +4245,7 @@ function Dashboard({ user, setUser, onLogout }) {
     };
     const title = titleMap[tabKey] || 'Premium Marketing Tool';
     return {
-      title: `WhatsRay - ${title}`,
+      title: `AgentBunny - ${title}`,
       body: `
         <div class="dashboard-container d-flex align-items-center justify-content-center" style="min-height: calc(100vh - 180px); background: #f8fafc; padding: 2rem;">
           <div class="text-center p-5 bg-white shadow-sm border border-slate-100" style="border-radius: 24px; max-width: 550px; margin: 40px auto; border: 1px solid #e2e8f0; background: #ffffff;">
@@ -4406,7 +4406,7 @@ function Dashboard({ user, setUser, onLogout }) {
             </span>
             <div className="sidebar-logo">
               <a href="/user/dashboard" className="sidebar-logo__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); }}>
-                <img src="https://wpp.raybeamdigital.com/assets/images/logo_icon/logo.png" alt="logo" />
+                <img src="/agentbunny-logo.png" alt="logo" style={{ maxHeight: '45px', objectFit: 'contain' }} />
               </a>
             </div>
 
@@ -4692,16 +4692,16 @@ function Dashboard({ user, setUser, onLogout }) {
               <li className="sidebar-menu-list__title"><span className="text">SETTINGS &amp; HELP</span></li>
 
               {/* Help & Support dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['help'] || ['help', 'user_guide', 'whatsray_assistant', 'ticket'].includes(tab) ? 'open' : ''}`}>
+              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['help'] || ['help', 'user_guide', 'agentbunny_assistant', 'ticket'].includes(tab) ? 'open' : ''}`}>
                 <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('help'); }}>
                   <span className="icon"><i className="las la-life-ring" /></span>
                   <span className="text">Help &amp; Support</span>
                 </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['help'] || ['help', 'user_guide', 'whatsray_assistant', 'ticket'].includes(tab)) ? 'block' : 'none' }}>
+                <div className="sidebar-submenu" style={{ display: (openDropdowns['help'] || ['help', 'user_guide', 'agentbunny_assistant', 'ticket'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
                     <li className={`sidebar-submenu-list__item ${tab === 'help' ? 'active' : ''}`}><a href="/help" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('help'); }}><span className="text">Help Center</span></a></li>
                     <li className={`sidebar-submenu-list__item ${tab === 'user_guide' ? 'active' : ''}`}><a href="/user-guide" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('user_guide'); }}><span className="text">User Guide</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'whatsray_assistant' ? 'active' : ''}`}><a href="/user/whatsray-assistant" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('whatsray_assistant'); }}><span className="text">WhatsRay AI Support</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'agentbunny_assistant' ? 'active' : ''}`}><a href="/user/agentbunny-assistant" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('agentbunny_assistant'); }}><span className="text">AgentBunny AI Support</span></a></li>
                     <li className={`sidebar-submenu-list__item ${tab === 'ticket' ? 'active' : ''}`}><a href="/ticket" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ticket'); }}><span className="text">Support Ticket</span></a></li>
                   </ul>
                 </div>
@@ -4737,7 +4737,7 @@ function Dashboard({ user, setUser, onLogout }) {
                   <div className="dashboard-body__bar d-lg-none d-block" onClick={() => setIsSidebarMobileOpen(true)}>
                     <span className="dashboard-body__bar-icon"><i className="fas fa-bars" /></span>
                   </div>
-                  <h3 className="title">{currentPage.title ? currentPage.title.replace('WhatsRay - ', '') : 'Dashboard'}</h3>
+                  <h3 className="title">{currentPage.title ? currentPage.title.replace('AgentBunny - ', '') : 'Dashboard'}</h3>
                 </div>
 
                 <div className="dashboard-header__right" style={{ display: 'flex', alignItems: 'center' }}>
@@ -4791,7 +4791,7 @@ function Dashboard({ user, setUser, onLogout }) {
                                   key={s.id}
                                   onClick={() => {
                                     setActiveSessionId(s.id);
-                                    localStorage.setItem('whatsray_active_session_id', s.id);
+                                    localStorage.setItem('agentbunny_active_session_id', s.id);
                                     setIsSessionDropdownOpen(false);
                                     window.location.reload();
                                   }}

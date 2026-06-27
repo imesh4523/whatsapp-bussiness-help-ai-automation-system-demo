@@ -422,7 +422,7 @@ function AdminDashboard({ admin, onLogout }) {
 
   // Load stylesheet references to make sure admin matches dashboard styling themes
   useEffect(() => {
-    document.title = 'WhatsRay - System Admin Portal';
+    document.title = 'AgentBunny - System Admin Portal';
   }, []);
 
   const filteredUsers = usersList.filter(u => 
@@ -452,7 +452,7 @@ function AdminDashboard({ admin, onLogout }) {
           <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
             <span className="w-3.5 h-3.5 rounded-full bg-[#00832e]"></span>
             <span className="text-neutral-800 font-extrabold tracking-tight text-lg uppercase" style={{ fontFamily: 'Inter, sans-serif' }}>
-              WhatsRay <span className="text-[#00832e]">Admin</span>
+              AgentBunny <span className="text-[#00832e]">Admin</span>
             </span>
           </div>
 

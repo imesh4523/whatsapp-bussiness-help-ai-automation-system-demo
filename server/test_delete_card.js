@@ -2,8 +2,8 @@ import jwt from 'jsonwebtoken';
 
 async function testDelete() {
   const token = jwt.sign(
-    { id: 2, email: 'admin@whatsray.com', role: 'user' },
-    'super_military_grade_whatsray_jwt_secret_key',
+    { id: 2, email: 'admin@agentbunny.com', role: 'user' },
+    'super_military_grade_agentbunny_jwt_secret_key',
     { expiresIn: '7d' }
   );
 

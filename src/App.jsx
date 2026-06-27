@@ -42,14 +42,14 @@ function App() {
 
   const handleAdminLogin = (adminDetails) => {
     setAdmin(adminDetails);
-    localStorage.setItem('whatsray_admin', JSON.stringify(adminDetails));
+    localStorage.setItem('agentbunny_admin', JSON.stringify(adminDetails));
     setView('admin');
     window.history.pushState(null, '', '/main-admin');
   };
 
   const handleAdminLogout = () => {
     setAdmin(null);
-    localStorage.removeItem('whatsray_admin');
+    localStorage.removeItem('agentbunny_admin');
     setView('home');
     window.history.pushState(null, '', '/');
   };
@@ -77,7 +77,7 @@ function App() {
   // Sync user and route path from URL on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('aura_user');
-    const savedAdmin = localStorage.getItem('whatsray_admin');
+    const savedAdmin = localStorage.getItem('agentbunny_admin');
     const path = window.location.pathname;
 
     if (isTrackOrderRoute(path)) {
@@ -133,7 +133,7 @@ function App() {
     const handlePopState = () => {
       const path = window.location.pathname;
       const savedUser = localStorage.getItem('aura_user');
-      const savedAdmin = localStorage.getItem('whatsray_admin');
+      const savedAdmin = localStorage.getItem('agentbunny_admin');
 
       if (isTrackOrderRoute(path)) {
         setView('track-order');

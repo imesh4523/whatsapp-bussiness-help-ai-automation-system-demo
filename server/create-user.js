@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import db from './db.js';
 
 async function createUser() {
-  const email = 'imesh@whatsray.com';
+  const email = 'imesh@agentbunny.com';
   const password = 'password123';
   const fullName = 'Imesh Raybeam';
 

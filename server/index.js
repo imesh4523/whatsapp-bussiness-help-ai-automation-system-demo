@@ -34,7 +34,7 @@ async function getDynamicStripe() {
   }
   
   if (!stripeInstance || stripeInstance._secretKey !== secretKey) {
-    stripeInstance = new Stripe(secretKey || 'sk_test_mock_stripe_key_whatsray_123456');
+    stripeInstance = new Stripe(secretKey || 'sk_test_mock_stripe_key_agentbunny_123456');
     stripeInstance._secretKey = secretKey;
   }
   return stripeInstance;
@@ -74,7 +74,7 @@ function authenticateToken(req, res, next) {
   
   if (!token) return res.status(401).json({ error: 'Access token missing' });
 
-  jwt.verify(token, process.env.JWT_SECRET || 'super_military_grade_whatsray_jwt_secret_key', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key', (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid or expired token' });
     req.user = user;
     next();
@@ -109,7 +109,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email, role: 'user' },
-      process.env.JWT_SECRET || 'super_military_grade_whatsray_jwt_secret_key',
+      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
       { expiresIn: '7d' }
     );
 
@@ -153,7 +153,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: 'user' },
-      process.env.JWT_SECRET || 'super_military_grade_whatsray_jwt_secret_key',
+      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
       { expiresIn: '7d' }
     );
 
@@ -1263,7 +1263,7 @@ app.post('/api/payments/create-checkout-session', authenticateToken, async (req,
         price_data: {
           currency: 'lkr',
           product_data: {
-            name: `WhatsRay ${planRow.name} (${cycle})`,
+            name: `AgentBunny ${planRow.name} (${cycle})`,
             description: `Access to features of the ${planRow.name} (${cycle} billing).`,
           },
           unit_amount: amountCents,
@@ -1835,7 +1835,7 @@ app.delete('/api/payments/methods/:id', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/payments/methods', authenticateToken, async (req, res) => {
   const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
     return res.status(403).json({ error: 'Access denied: Admin only.' });
   }
 
@@ -1855,7 +1855,7 @@ app.get('/api/admin/payments/methods', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/payments/methods/:id', authenticateToken, async (req, res) => {
   const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
     return res.status(403).json({ error: 'Access denied: Admin only.' });
   }
 
@@ -1910,7 +1910,7 @@ app.delete('/api/admin/payments/methods/:id', authenticateToken, async (req, res
 
 app.get('/api/admin/suspicious-activity', authenticateToken, async (req, res) => {
   const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
     return res.status(403).json({ error: 'Access denied: Admin only.' });
   }
 
@@ -1992,7 +1992,7 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
 // Admin endpoint: list all WhatsApp sessions across all users
 app.get('/api/admin/whatsapp/sessions', authenticateToken, async (req, res) => {
   const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
     return res.status(403).json({ error: 'Access denied: Admin only.' });
   }
 
@@ -2014,7 +2014,7 @@ app.get('/api/admin/whatsapp/sessions', authenticateToken, async (req, res) => {
 // Admin endpoint: update session name / status for any user
 app.patch('/api/admin/whatsapp/sessions/:sessionId', authenticateToken, async (req, res) => {
   const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
     return res.status(403).json({ error: 'Access denied: Admin only.' });
   }
 
@@ -2061,7 +2061,7 @@ app.patch('/api/admin/whatsapp/sessions/:sessionId', authenticateToken, async (r
 // Admin endpoint: force disconnect session
 app.post('/api/admin/whatsapp/sessions/:sessionId/disconnect', authenticateToken, async (req, res) => {
   const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
-  if (req.user.email !== 'admin@whatsray.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
     return res.status(403).json({ error: 'Access denied: Admin only.' });
   }
 
@@ -2225,7 +2225,7 @@ setInterval(processSubscriptionRenewals, 10 * 60 * 1000);
 
 // Start Express Server & initialize sessions
 app.listen(PORT, () => {
-  console.log(`WhatsRay Server is running on port ${PORT}`);
+  console.log(`AgentBunny Server is running on port ${PORT}`);
   initWhatsAppSessions();
   // Trigger subscription check on server start
   processSubscriptionRenewals();

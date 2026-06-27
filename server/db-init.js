@@ -105,8 +105,8 @@ async function init() {
     console.log('Database tables verified/created successfully.');
 
     // Seed default users if they do not exist
-    const demoEmail = 'demo@whatsray.com';
-    const adminEmail = 'admin@whatsray.com';
+    const demoEmail = 'demo@agentbunny.com';
+    const adminEmail = 'admin@agentbunny.com';
 
     const userCheck = await db.query('SELECT * FROM users WHERE email = $1', [demoEmail]);
     if (userCheck.rows.length === 0) {
