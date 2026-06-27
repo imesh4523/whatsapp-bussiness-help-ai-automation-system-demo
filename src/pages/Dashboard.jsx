@@ -8,7 +8,6 @@ const getTabFromPath = (path) => {
     '/user/dashboard': 'dashboard',
     '/user/inbox': 'inbox',
     '/user/crm/customers': 'crm_customers',
-    '/user/crm/orders': 'crm_orders',
     '/user/crm/track-orders': 'track_orders',
     '/user/business-profile': 'business_profile',
     '/user/campaign/index': 'campaign_index',
@@ -64,7 +63,6 @@ const getPathFromTab = (tabKey) => {
     dashboard: '/user/dashboard',
     inbox: '/user/inbox',
     crm_customers: '/user/crm/customers',
-    crm_orders: '/user/crm/orders',
     track_orders: '/user/crm/track-orders',
     business_profile: '/user/business-profile',
     campaign_index: '/user/campaign/index',
@@ -1845,6 +1843,23 @@ function WhatsAppOrderManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [logoUrl, setLogoUrl] = useState('');
+
+  const fetchLogo = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/business-profile`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.logo_url) {
+          setLogoUrl(`${API_BASE_URL.replace('/api', '')}${data.logo_url}`);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load brand logo for receipt:', err.message);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -1866,7 +1881,115 @@ function WhatsAppOrderManager() {
 
   useEffect(() => {
     fetchOrders();
+    fetchLogo();
   }, []);
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const copyDetails = (order) => {
+    const ship = order.shipping_details || {};
+    const itemsText = (Array.isArray(order.items) ? order.items : []).map(i => `${i.productName || i.product || 'Item'} x${i.quantity || 1}`).join(', ');
+    
+    const details = `Order ID: ${order.id}\nRecipient: ${ship.fullName || order.user_name || 'Customer'}\nPhone: ${ship.phone || ''}\nAddress: ${ship.address || ''}, ${ship.city || ''}\nPayment Method: ${ship.payment_method || 'COD'}\nItems: ${itemsText}\nTotal Amount: Rs. ${parseFloat(order.total_amount).toFixed(2)}`;
+    navigator.clipboard.writeText(details);
+    alert('Copied to clipboard!');
+  };
+
+  const printReceipt = (order) => {
+    const printWindow = window.open('', '_blank', 'width=600,height=800');
+    const items = Array.isArray(order.items) ? order.items : [];
+    const ship = order.shipping_details || {};
+    
+    const itemsHtml = items.map(item => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px dashed #cccccc;">${item.productName || item.product || 'Product'}</td>
+        <td style="padding: 8px 0; text-align: center; border-bottom: 1px dashed #cccccc;">${item.quantity || 1}</td>
+        <td style="padding: 8px 0; text-align: right; border-bottom: 1px dashed #cccccc;">Rs. ${parseFloat(item.price || order.total_amount).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const logoHtml = logoUrl 
+      ? `<img src="${logoUrl}" style="max-height: 70px; object-fit: contain; margin-bottom: 10px; display: block;" />`
+      : `<h2 style="margin: 0; font-family: sans-serif; letter-spacing: 1px;">RECEIPT</h2>`;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Order Receipt - ${order.id}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; padding: 20px; color: #000000; line-height: 1.4; }
+            .receipt-box { max-width: 400px; margin: 0 auto; border: 2px dashed #000000; padding: 20px; }
+            .header { text-align: center; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; }
+            .details { margin-bottom: 20px; font-size: 14px; }
+            .totals { border-top: 1px dashed #000000; padding-top: 10px; margin-top: 10px; }
+            .totals-row { display: flex; justify-content: space-between; font-weight: bold; }
+            .footer { text-align: center; margin-top: 30px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-box">
+            <div class="header">
+              ${logoHtml}
+              <div style="font-size: 12px; margin-top: 5px;">Thank you for shopping with us!</div>
+            </div>
+            
+            <div class="details">
+              <strong>Order ID:</strong> ${order.id}<br>
+              <strong>Date:</strong> ${new Date(order.created_at).toLocaleString()}<br>
+              <hr style="border: 0; border-top: 1px dashed #000000; margin: 10px 0;">
+              <strong>Recipient:</strong> ${ship.fullName || order.user_name || 'WhatsApp Customer'}<br>
+              <strong>Phone:</strong> ${ship.phone || ''}<br>
+              <strong>Address:</strong> ${ship.address || ''}, ${ship.city || ''}<br>
+              <strong>Payment:</strong> ${ship.payment_method || 'COD'}<br>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+              <thead>
+                <tr>
+                  <th style="text-align: left; border-bottom: 1px solid #000000; padding-bottom: 5px;">Item</th>
+                  <th style="text-align: center; border-bottom: 1px solid #000000; padding-bottom: 5px;">Qty</th>
+                  <th style="text-align: right; border-bottom: 1px solid #000000; padding-bottom: 5px;">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div class="totals-row" style="font-size: 16px;">
+                <span>GRAND TOTAL</span>
+                <span>Rs. ${parseFloat(order.total_amount).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div class="footer">
+              *** END OF RECEIPT ***
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
@@ -2019,17 +2142,43 @@ function WhatsAppOrderManager() {
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        <select
-                          value={o.status}
-                          onChange={(e) => handleUpdateStatus(o.id, e.target.value)}
-                          className="text-[10px] font-bold px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-[#00832e] text-neutral-700 bg-white"
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="Processing">Processing</option>
-                          <option value="Shipped">Shipped</option>
-                          <option value="Delivered">Delivered</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
+                        <div className="flex items-center justify-center gap-2">
+                          <select
+                            value={o.status}
+                            onChange={(e) => handleUpdateStatus(o.id, e.target.value)}
+                            className="text-[10px] font-bold px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-[#00832e] text-neutral-700 bg-white"
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+
+                          <button
+                            onClick={() => copyDetails(o)}
+                            className="p-1.5 border border-gray-200 rounded-lg hover:bg-neutral-100 text-neutral-700 cursor-pointer transition-colors"
+                            title="Copy Details"
+                          >
+                            <i className="las la-copy" style={{ fontSize: '14px' }}></i>
+                          </button>
+
+                          <button
+                            onClick={() => printReceipt(o)}
+                            className="p-1.5 bg-black text-white rounded-lg hover:bg-neutral-800 cursor-pointer transition-colors"
+                            title="Print Receipt"
+                          >
+                            <i className="las la-print" style={{ fontSize: '14px' }}></i>
+                          </button>
+
+                          <button
+                            onClick={() => deleteOrder(o.id)}
+                            className="p-1.5 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 cursor-pointer transition-colors"
+                            title="Delete Order"
+                          >
+                            <i className="las la-trash" style={{ fontSize: '14px' }}></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2861,14 +3010,6 @@ function Dashboard({ user, onLogout }) {
                 </a>
               </li>
 
-              {/* Manage Orders */}
-              <li className={`sidebar-menu-list__item ${tab === 'crm_orders' ? 'active' : ''}`}>
-                <a href="/user/crm/orders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('crm_orders'); }}>
-                  <span className="icon"><i className="las la-shopping-cart" /></span>
-                  <span className="text">Manage Orders</span>
-                </a>
-              </li>
-
               {/* Track Customer Orders */}
               <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
                 <a href="/user/crm/track-orders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); }}>
@@ -3088,8 +3229,6 @@ function Dashboard({ user, onLogout }) {
                 <BusinessProfile user={user} />
               ) : tab === 'crm_customers' ? (
                 <ManageCustomers user={user} />
-              ) : tab === 'crm_orders' ? (
-                <ManageOrders user={user} />
               ) : tab === 'track_orders' ? (
                 <TrackCustomerOrders user={user} />
               ) : (
@@ -3447,274 +3586,6 @@ function ManageCustomers() {
     </div>
   );
 }
-
-// ── Component: ManageOrders (CRM tab) ─────────────────────────────
-function ManageOrders() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [logoUrl, setLogoUrl] = useState('');
-  const [copiedOrderId, setCopiedOrderId] = useState('');
-
-  useEffect(() => {
-    fetchOrders();
-    fetchLogo();
-  }, []);
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/crm/orders`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchLogo = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/business-profile`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.logo_url) {
-          setLogoUrl(`${API_BASE_URL.replace('/api', '')}${data.logo_url}`);
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load brand logo for receipt:', err.message);
-    }
-  };
-
-  const updateStatus = async (orderId, newStatus) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/crm/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) {
-        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const deleteOrder = async (orderId) => {
-    if (!window.confirm('Are you sure you want to delete this order?')) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/crm/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
-      });
-      if (res.ok) {
-        setOrders(orders.filter(o => o.id !== orderId));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const copyDetails = (order) => {
-    const details = `Order ID: ${order.id}\nRecipient: ${order.shipping_details?.name || 'Customer'}\nPhone: ${order.shipping_details?.phone || ''}\nAddress: ${order.shipping_details?.address || ''}\nPayment Method: ${order.shipping_details?.payment_method || 'COD'}\nTotal Amount: රු${parseFloat(order.total_amount).toFixed(2)}`;
-    navigator.clipboard.writeText(details);
-    setCopiedOrderId(order.id);
-    setTimeout(() => setCopiedOrderId(''), 2000);
-  };
-
-  const printReceipt = (order) => {
-    const printWindow = window.open('', '_blank', 'width=600,height=800');
-    
-    const itemsHtml = order.items.map(item => `
-      <tr>
-        <td style="padding: 8px 0; border-bottom: 1px dashed #cccccc;">${item.name}</td>
-        <td style="padding: 8px 0; text-align: center; border-bottom: 1px dashed #cccccc;">${item.qty || 1}</td>
-        <td style="padding: 8px 0; text-align: right; border-bottom: 1px dashed #cccccc;">රු${parseFloat(item.price || order.total_amount).toFixed(2)}</td>
-      </tr>
-    `).join('');
-
-    const logoHtml = logoUrl 
-      ? `<img src="${logoUrl}" style="max-height: 70px; object-fit: contain; margin-bottom: 10px; display: block;" />`
-      : `<h2 style="margin: 0; font-family: sans-serif; letter-spacing: 1px;">RECEIPT</h2>`;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Order Receipt - ${order.id}</title>
-          <style>
-            body { font-family: 'Courier New', Courier, monospace; padding: 20px; color: #000000; line-height: 1.4; }
-            .receipt-box { max-width: 400px; margin: 0 auto; border: 2px dashed #000000; padding: 20px; }
-            .header { text-align: center; margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; }
-            .details { margin-bottom: 20px; font-size: 14px; }
-            .totals { border-top: 1px dashed #000000; padding-top: 10px; margin-top: 10px; }
-            .totals-row { display: flex; justify-content: space-between; font-weight: bold; }
-            .footer { text-align: center; margin-top: 30px; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="receipt-box">
-            <div class="header">
-              ${logoHtml}
-              <div style="font-size: 12px; margin-top: 5px;">Thank you for shopping with us!</div>
-            </div>
-            
-            <div class="details">
-              <strong>Order ID:</strong> ${order.id}<br>
-              <strong>Date:</strong> ${new Date(order.created_at).toLocaleString()}<br>
-              <hr style="border: 0; border-top: 1px dashed #000000; margin: 10px 0;">
-              <strong>Recipient:</strong> ${order.shipping_details?.name || 'WhatsApp Customer'}<br>
-              <strong>Phone:</strong> ${order.shipping_details?.phone || ''}<br>
-              <strong>Address:</strong> ${order.shipping_details?.address || ''}<br>
-              <strong>Payment:</strong> ${order.shipping_details?.payment_method || 'COD'}<br>
-            </div>
-
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
-              <thead>
-                <tr>
-                  <th style="text-align: left; border-bottom: 1px solid #000000; padding-bottom: 5px;">Item</th>
-                  <th style="text-align: center; border-bottom: 1px solid #000000; padding-bottom: 5px;">Qty</th>
-                  <th style="text-align: right; border-bottom: 1px solid #000000; padding-bottom: 5px;">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${itemsHtml}
-              </tbody>
-            </table>
-
-            <div class="totals">
-              <div class="totals-row" style="font-size: 16px;">
-                <span>GRAND TOTAL</span>
-                <span>රු${parseFloat(order.total_amount).toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div class="footer">
-              *** END OF RECEIPT ***
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
-  if (loading) {
-    return <div className="p-6 text-center text-gray-500">Loading Orders CRM...</div>;
-  }
-
-  return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-        <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Manage WhatsApp Orders</h3>
-        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>
-          View, copy, and print receipts/shipping labels for orders automatically extracted from customer chats.
-        </p>
-
-        {orders.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-            <i className="las la-shopping-cart" style={{ fontSize: '48px', marginBottom: '12px', display: 'block' }} />
-            No customer orders found.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '13px', fontWeight: 'bold' }}>
-                  <th style={{ padding: '12px 16px' }}>Order ID</th>
-                  <th style={{ padding: '12px 16px' }}>Recipient Name</th>
-                  <th style={{ padding: '12px 16px' }}>Address</th>
-                  <th style={{ padding: '12px 16px' }}>Payment</th>
-                  <th style={{ padding: '12px 16px' }}>Total Amount</th>
-                  <th style={{ padding: '12px 16px' }}>Status</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o) => (
-                  <tr key={o.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
-                    <td style={{ padding: '16px 16px', fontWeight: '600', color: '#000000' }}>{o.id}</td>
-                    <td style={{ padding: '16px 16px' }}>
-                      <div style={{ fontWeight: '500', color: '#1e293b' }}>{o.shipping_details?.name}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>{o.shipping_details?.phone}</div>
-                    </td>
-                    <td style={{ padding: '16px 16px', color: '#475569', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.shipping_details?.address}>
-                      {o.shipping_details?.address}
-                    </td>
-                    <td style={{ padding: '16px 16px', fontWeight: '600', color: '#475569' }}>
-                      {o.shipping_details?.payment_method || 'COD'}
-                    </td>
-                    <td style={{ padding: '16px 16px', fontWeight: 'bold', color: '#0f172a' }}>
-                      රු{parseFloat(o.total_amount).toFixed(2)}
-                    </td>
-                    <td style={{ padding: '16px 16px' }}>
-                      <select
-                        value={o.status}
-                        onChange={(e) => updateStatus(o.id, e.target.value)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          backgroundColor: o.status === 'Confirmed' ? '#dcfce7' : o.status === 'Cancelled' ? '#fee2e2' : '#f1f5f9',
-                          color: o.status === 'Confirmed' ? '#166534' : o.status === 'Cancelled' ? '#991b1b' : '#334155'
-                        }}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Confirmed">Confirmed</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '16px 16px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                      <button
-                        onClick={() => copyDetails(o)}
-                        style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <i className="las la-copy"></i> {copiedOrderId === o.id ? 'Copied' : 'Copy'}
-                      </button>
-                      
-                      <button
-                        onClick={() => printReceipt(o)}
-                        style={{ padding: '8px 12px', border: 'none', borderRadius: '8px', backgroundColor: '#000000', color: '#ffffff', cursor: 'pointer', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <i className="las la-print"></i> Print
-                      </button>
-
-                      <button
-                        onClick={() => deleteOrder(o.id)}
-                        style={{ padding: '8px', border: 'none', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#991b1b', cursor: 'pointer', fontSize: '12px' }}
-                      >
-                        <i className="las la-trash"></i>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 
 // ── Component: TrackCustomerOrders (CRM tab) ─────────────────────────
 function TrackCustomerOrders() {

@@ -250,6 +250,18 @@ app.patch('/api/orders/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/orders/:id', authenticateToken, async (req, res) => {
+  try {
+    const check = await db.query('SELECT user_id FROM orders WHERE id = $1', [req.params.id]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    
+    await db.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
+    res.json({ success: true, message: 'Order deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── WhatsApp Session Endpoints ───────────────────────────────────────────────
 
 // Helper / Middleware to resolve WhatsApp session ID from request headers, query, or body
