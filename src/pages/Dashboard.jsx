@@ -3015,7 +3015,7 @@ function Dashboard({ user, onLogout }) {
                 <WhatsAppAIBotManager user={user} activeSessionId={activeSessionId} />
 
               ) : (
-                <div dangerouslySetInnerHTML={{ __html: currentPage.body || '<h3>Page not found</h3>' }} />
+                <div dangerouslySetInnerHTML={{ __html: (currentPage.body || '<h3>Page not found</h3>').replace('__USER_PLAN__', user?.plan || 'Free') }} />
               )}
             </div>
 
