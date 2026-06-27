@@ -2084,8 +2084,10 @@ function WhatsAppOrderManager() {
               <p className="mt-2 text-sm text-gray-500">Loading orders list...</p>
             </div>
           ) : filteredOrders.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-400">
-              No orders match this status or search criteria.
+            <div className="py-12 text-center flex flex-col items-center justify-center">
+              <img src="https://wpp.raybeamdigital.com/assets/images/no-data.gif" className="empty-message mx-auto" alt="No data" style={{ width: '120px', height: '120px', objectFit: 'contain' }} />
+              <span className="d-block mt-2 font-bold text-neutral-700 text-sm">No data found</span>
+              <span className="d-block fs-13 text-muted text-xs mt-1">There are no available data to display on this table at the moment.</span>
             </div>
           ) : (
             <table className="w-full text-left border-collapse text-xs">
