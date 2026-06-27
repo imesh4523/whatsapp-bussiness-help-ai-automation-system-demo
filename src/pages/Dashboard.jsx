@@ -1334,19 +1334,51 @@ function WhatsAppInbox({ activeSessionId }) {
 
   if (!isConnected) {
     return (
-      <div className="p-8 text-center max-w-md mx-auto space-y-6">
-        <div className="inline-flex p-4 bg-orange-50 rounded-full text-orange-600">
-          <i className="lab la-whatsapp" style={{ fontSize: '48px' }}></i>
+      <div className="whatsapp-empty-screen">
+        <div className="whatsapp-empty-screen__backdrop"></div>
+        <div className="whatsapp-empty-screen__glow whatsapp-empty-screen__glow--one"></div>
+        <div className="whatsapp-empty-screen__glow whatsapp-empty-screen__glow--two"></div>
+
+        <div className="whatsapp-empty-screen__content">
+          <div className="whatsapp-empty-screen__art" aria-hidden="true">
+            <div className="whatsapp-empty-screen__orbit whatsapp-empty-screen__orbit--one"></div>
+            <div className="whatsapp-empty-screen__orbit whatsapp-empty-screen__orbit--two"></div>
+
+            <div className="whatsapp-empty-screen__card whatsapp-empty-screen__card--top">
+              <i className="lab la-whatsapp"></i>
+              <span>Connected chat ready</span>
+            </div>
+
+            <div className="whatsapp-empty-screen__robot">
+              <div className="whatsapp-empty-screen__head"></div>
+              <div className="whatsapp-empty-screen__body"></div>
+              <div className="whatsapp-empty-screen__leg whatsapp-empty-screen__leg--left"></div>
+              <div className="whatsapp-empty-screen__leg whatsapp-empty-screen__leg--right"></div>
+              <div className="whatsapp-empty-screen__arm whatsapp-empty-screen__arm--left"></div>
+              <div className="whatsapp-empty-screen__arm whatsapp-empty-screen__arm--right"></div>
+            </div>
+
+            <div className="whatsapp-empty-screen__card whatsapp-empty-screen__card--bottom">
+              <i className="las la-comment-dots"></i>
+              <span>Messages will appear here</span>
+            </div>
+          </div>
+
+          <div className="whatsapp-empty-screen__text">
+            <p className="whatsapp-empty-screen__eyebrow">Welcome to your Inbox</p>
+            <h1>Connect WhatsApp to start messaging</h1>
+            <p className="whatsapp-empty-screen__desc">
+              Connect a WhatsApp account to view synchronized chats, reply to contacts, and manage conversations from one place.
+            </p>
+            <button 
+              type="button" 
+              className="btn btn--base btn-shadow whatsapp-empty-screen__cta"
+              onClick={() => { window.location.href = '/user/whatsapp-account'; }}
+            >
+              <i className="lab la-whatsapp"></i> Connect WhatsApp
+            </button>
+          </div>
         </div>
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-neutral-800">WhatsApp Offline</h3>
-          <p className="text-sm text-gray-500 font-light leading-relaxed">
-            Please link a WhatsApp account first under the "WhatsApp Account" tab to activate your live inbox panel.
-          </p>
-        </div>
-        <a href="/user/whatsapp-account" className="btn btn-sm btn--base px-4 py-2" onClick={(e) => { e.preventDefault(); window.location.href='/user/whatsapp-account'; }}>
-          Connect WhatsApp
-        </a>
       </div>
     );
   }
