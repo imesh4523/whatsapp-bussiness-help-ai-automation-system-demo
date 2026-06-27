@@ -866,22 +866,18 @@ app.patch('/api/crm/orders/:orderId/tracking', authenticateToken, async (req, re
     if (check.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
     if (check.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
 
-    // Generate mock shipment history timeline
-    const mockHistory = [
-      { status: 'Manifest Created', details: 'Seller processed package shipping manifest.', location: 'Seller Warehouse', time: new Date(Date.now() - 48*60*60*1000).toISOString() },
-      { status: 'Picked Up', details: `Shipment received and scanned by ${courier_name || 'Courier'}.`, location: 'Courier Depot', time: new Date(Date.now() - 36*60*60*1000).toISOString() },
-      { status: 'Sorting', details: 'Package in sorting queue.', location: 'Main Sorting Facility', time: new Date(Date.now() - 24*60*60*1000).toISOString() },
-      { status: 'In Transit', details: 'Shipment dispatched to destination hub.', location: 'Transit Center', time: new Date(Date.now() - 12*60*60*1000).toISOString() },
-      { status: tracking_status || 'Out for Delivery', details: 'Package out with local delivery agent.', location: 'Delivery Area', time: new Date().toISOString() }
-    ];
+    // Query live courier API connector
+    const { queryCourierAPI } = require('./couriers');
+    const apiHistory = await queryCourierAPI(courier_name || 'Sri Lanka Post', tracking_number);
+    const finalStatus = tracking_status || apiHistory[apiHistory.length - 1]?.status || 'Out for Delivery';
 
     await db.query(`
       UPDATE orders 
       SET courier_name = $1, tracking_number = $2, tracking_status = $3, tracking_history = $4
       WHERE id = $5
-    `, [courier_name, tracking_number, tracking_status || 'Out for Delivery', JSON.stringify(mockHistory), req.params.orderId]);
+    `, [courier_name, tracking_number, finalStatus, JSON.stringify(apiHistory), req.params.orderId]);
 
-    res.json({ success: true, message: 'Courier tracking details updated successfully.', tracking_history: mockHistory });
+    res.json({ success: true, message: 'Courier tracking details updated successfully.', tracking_history: apiHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -890,19 +886,33 @@ app.patch('/api/crm/orders/:orderId/tracking', authenticateToken, async (req, re
 app.get('/api/crm/track/:trackingNumber', authenticateToken, async (req, res) => {
   try {
     const r = await db.query('SELECT * FROM orders WHERE tracking_number = $1 AND user_id = $2', [req.params.trackingNumber, req.user.id]);
+    const { queryCourierAPI } = require('./couriers');
+
     if (r.rows.length === 0) {
+      // Simulate live external lookup
+      const simulatedHistory = await queryCourierAPI('Sri Lanka Post', req.params.trackingNumber);
       return res.json({
         id: 'ord_mock_123',
-        courier_name: 'DHL Express',
+        courier_name: 'Sri Lanka Post',
         tracking_number: req.params.trackingNumber,
-        tracking_status: 'In Transit',
-        tracking_history: [
-          { status: 'Manifest Created', details: 'Shipping manifest processed.', location: 'Colombo Hub', time: new Date(Date.now() - 24*60*60*1000).toISOString() },
-          { status: 'In Transit', details: 'Parcel out for delivery hub dispatch.', location: 'DHL Sorting Center', time: new Date().toISOString() }
-        ]
+        tracking_status: simulatedHistory[simulatedHistory.length - 1]?.status || 'Out for Delivery',
+        tracking_history: simulatedHistory
       });
     }
-    res.json(r.rows[0]);
+
+    const order = r.rows[0];
+    const liveHistory = await queryCourierAPI(order.courier_name || 'Sri Lanka Post', order.tracking_number);
+    const latestStatus = liveHistory[liveHistory.length - 1]?.status || 'In Transit';
+
+    await db.query('UPDATE orders SET tracking_history = $1, tracking_status = $2 WHERE id = $3', [
+      JSON.stringify(liveHistory),
+      latestStatus,
+      order.id
+    ]);
+
+    order.tracking_history = liveHistory;
+    order.tracking_status = latestStatus;
+    res.json(order);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
