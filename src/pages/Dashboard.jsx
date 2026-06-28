@@ -1541,8 +1541,13 @@ function WhatsAppInbox({ activeSessionId }) {
   const filteredChats = chats.filter(c => {
     // 1. Label filter
     if (labelFilter !== 'All') {
-      const chatLabel = c.label || 'None';
-      if (chatLabel.toLowerCase() !== labelFilter.toLowerCase()) return false;
+      if (labelFilter === 'New') {
+        // "New" filter = chats with unread messages
+        if (!c.unread_count || c.unread_count === 0) return false;
+      } else {
+        const chatLabel = c.label || 'None';
+        if (chatLabel.toLowerCase() !== labelFilter.toLowerCase()) return false;
+      }
     }
     // 2. Text search
     if (chatSearch.trim()) {
@@ -1556,73 +1561,92 @@ function WhatsAppInbox({ activeSessionId }) {
 
   return (
     <div className="dashboard-container">
-      <div className="container-top flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* Page Title (Desktop only) */}
+      <div className="container-top hidden lg:flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="container-top__left">
           <h5 className="container-top__title">Conversations Inbox</h5>
           <p className="container-top__desc">Interact with clients and monitor AI assistant logs in real-time.</p>
-        </div>
-        <div className="flex gap-2 flex-shrink-0 flex-wrap">
-          <button 
-            type="button"
-            onClick={() => setLabelFilter('All')} 
-            className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
-              labelFilter === 'All' 
-                ? 'bg-[#00832e] text-white shadow-sm font-bold' 
-                : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
-            }`}
-          >
-            All
-          </button>
-          <button 
-            type="button"
-            onClick={() => setLabelFilter('Confirmed')} 
-            className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
-              labelFilter === 'Confirmed' 
-                ? 'bg-[#00832e] text-white shadow-sm font-bold' 
-                : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
-            }`}
-          >
-            Confirmed
-          </button>
-          <button 
-            type="button"
-            onClick={() => setLabelFilter('Cancelled')} 
-            className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
-              labelFilter === 'Cancelled' 
-                ? 'bg-[#00832e] text-white shadow-sm font-bold' 
-                : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
-            }`}
-          >
-            Cancelled
-          </button>
-          <button 
-            type="button"
-            onClick={() => setLabelFilter('Interested')} 
-            className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
-              labelFilter === 'Interested' 
-                ? 'bg-[#00832e] text-white shadow-sm font-bold' 
-                : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
-            }`}
-          >
-            Interested
-          </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4" style={{ height: 'calc(100vh - 210px)', minHeight: '520px', maxHeight: '680px' }}>
         
         {/* Left Side: Chats list */}
-        <div className={`lg:col-span-1 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden ${mobileInboxView === 'list' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="p-4 border-b border-gray-100 bg-[#f8fafc]/50">
-            <h6 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Active Chats ({filteredChats.length})</h6>
+        <div className={`lg:col-span-1 bg-white lg:rounded-3xl lg:border lg:border-gray-100 lg:shadow-sm flex flex-col overflow-hidden ${mobileInboxView === 'list' ? 'flex' : 'hidden lg:flex'}`}>
+          <div className="p-4 border-b border-gray-100 bg-[#f8fafc]/50 space-y-3">
+            {/* Chats title on mobile */}
+            <div className="lg:hidden flex justify-between items-center mb-1">
+              <h1 className="text-2xl font-black text-neutral-900" style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Chats</h1>
+            </div>
+            
             <div className="relative">
               <input 
                 type="search" 
-                placeholder="Search chats..." 
+                placeholder="Search..." 
                 value={chatSearch}
                 onChange={e => setChatSearch(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-gray-100 rounded-xl focus:outline-none focus:border-[#00832e] transition-colors" 
+                className="w-full text-xs px-3.5 py-2.5 border border-gray-200 rounded-full focus:outline-none focus:border-[#00832e] transition-colors bg-neutral-50/50" 
               />
+              <i className="las la-search" style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}></i>
+            </div>
+
+            {/* Horizontal Scroll Filter Badges */}
+            <div className="flex gap-2 overflow-x-auto pb-1 flex-nowrap hide-scrollbar" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+              <button 
+                type="button"
+                onClick={() => setLabelFilter('All')} 
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all flex-shrink-0 border-none cursor-pointer ${
+                  labelFilter === 'All' 
+                    ? 'bg-[#00832e] text-white shadow-sm font-bold' 
+                    : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
+                }`}
+              >
+                All
+              </button>
+              <button 
+                type="button"
+                onClick={() => setLabelFilter('Interested')} 
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all flex-shrink-0 border-none cursor-pointer ${
+                  labelFilter === 'Interested' 
+                    ? 'bg-[#00832e] text-white shadow-sm font-bold' 
+                    : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
+                }`}
+              >
+                Interested
+              </button>
+              <button 
+                type="button"
+                onClick={() => setLabelFilter('New')} 
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all flex-shrink-0 border-none cursor-pointer ${
+                  labelFilter === 'New' 
+                    ? 'bg-[#00832e] text-white shadow-sm font-bold' 
+                    : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
+                }`}
+              >
+                New
+              </button>
+              <button 
+                type="button"
+                onClick={() => setLabelFilter('Confirmed')} 
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all flex-shrink-0 border-none cursor-pointer ${
+                  labelFilter === 'Confirmed' 
+                    ? 'bg-[#00832e] text-white shadow-sm font-bold' 
+                    : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
+                }`}
+              >
+                Confirmed
+              </button>
+              <button 
+                type="button"
+                onClick={() => setLabelFilter('Cancelled')} 
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all flex-shrink-0 border-none cursor-pointer ${
+                  labelFilter === 'Cancelled' 
+                    ? 'bg-[#00832e] text-white shadow-sm font-bold' 
+                    : 'bg-[#f1f5f9] text-[#4a5d6e] hover:bg-[#e2e8f0]'
+                }`}
+              >
+                Cancelled
+              </button>
             </div>
           </div>
           
@@ -1717,7 +1741,7 @@ function WhatsAppInbox({ activeSessionId }) {
           </div>
 
           {/* Test message simulator */}
-          <div className="p-4 border-t border-gray-100 bg-[#f8fafc]/50">
+          <div className="p-4 border-t border-gray-100 bg-[#f8fafc]/50 hidden lg:block">
             <h6 className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-2">Simulate Client Message</h6>
             <form onSubmit={handleSimulateMessage} className="space-y-2">
               <input 

@@ -26,6 +26,15 @@
   background: rgba(17, 17, 17, 0.3);
 }
 
+/* Hide scrollbar utility (for horizontal filter pill rows) */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Glassmorphism Classes */
 .glass-panel {
   background: rgba(255, 255, 255, 0.7);
