@@ -472,4 +472,12 @@ body .sidebar-menu:hover .brand-text {
   display: block !important;
 }
 
+body .dashboard .sidebar-menu:not(:hover) .sidebar-logo img {
+  display: block !important;
+}
+
+body .dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after {
+  display: none !important;
+}
+
 

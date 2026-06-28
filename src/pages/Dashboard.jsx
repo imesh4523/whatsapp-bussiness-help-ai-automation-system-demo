@@ -3423,6 +3423,8 @@ function Dashboard({ user, setUser, onLogout }) {
       'body .sidebar-menu .sidebar-logo img{display:block!important; max-height:48px!important; object-fit:contain!important; margin:0 auto!important; opacity:1!important; visibility:visible!important;}',
       '.brand-text{display:none!important;}',
       '.sidebar-menu:hover .brand-text{display:block!important;}',
+      '.dashboard .sidebar-menu:not(:hover) .sidebar-logo img{display:block!important;}',
+      '.dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after{display:none!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-logo__link::after{display:none!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-menu-list__item.has-dropdown>.sidebar-menu-list__link::after{display:block!important;}',
       // Inbox whatsapp-empty-screen
