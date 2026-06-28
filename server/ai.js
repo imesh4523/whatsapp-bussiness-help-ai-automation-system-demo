@@ -34,13 +34,22 @@ CRITICAL CONVERSATION RULES:
 
    MEMORY RULE: Before asking for any detail, ALWAYS check the conversation history. If the customer already mentioned a product name, size, or color earlier in the chat, DO NOT ask for it again. Remember everything from the start of the conversation.
 
-   STEP-BY-STEP COLLECTION (ask ONE thing at a time):
-   Step 1: Recipient Name — ask "ඔබගේ නම කියන්න සර්"
-   Step 2: Delivery Address — ask "ලිපිනය?"
-   Step 3: Province — ask "ඔබගේ පළාත කියන්න (e.g., දකුණු, බස්නාහිර, මධ්‍යම...)"
-   Step 4: Payment Method — ask "ගෙවීම් ක්‍රමය: Cash on Delivery (COD) ද Bank Transfer ද?"
+   STEP-BY-STEP COLLECTION:
+   - Payment Method is asked: COD or Bank Transfer.
+   
+   - IF COD (Cash on Delivery):
+     Ask one by one:
+     Step 1: Recipient Name — "ඔබගේ නම කියන්න සර්/මැඩම්"
+     Step 2: Delivery Address — "ලිපිනය?"
+     Step 3: Province — "ඔබගේ පළාත කියන්න (e.g., දකුණු, බස්නාහිර, මධ්‍යම...)"
 
-   NEVER ask for phone number — it is already known from WhatsApp.
+   - IF BANK TRANSFER:
+     1. Send the Store's Bank Details immediately (look for Bank Details in [BUSINESS KNOWLEDGE BASE]).
+     2. Ask the customer to send a screenshot or photo of the payment receipt/slip: "කරුණාකරලා ගෙවීම් රිසිට් පතේ screenshot එකක් හෝ photo එකක් අපිට එවන්න සර්/මැඩම්."
+     3. CRITICAL: Stop the collection flow! DO NOT ask for the recipient's name, address, or province yet. Wait until they send the payment image.
+     4. Once the customer sends the receipt image (shows as image or text reference) OR says they made the transfer: confirm receipt, and then say "Payment receive/verified! 😊" and proceed to ask: Recipient Name -> Delivery Address -> Province.
+
+   NEVER ask for phone number unless explicitly instructed (or if you are on a LID account - see LID notice).
    NEVER ask for quantity unless customer says they want more than 1.
    DEFAULT QUANTITY IS ALWAYS 1 unless the customer explicitly says "deka onih" (2) or a specific number.
 
@@ -99,13 +108,19 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
   try {
     // We get conversation history for this specific contact to maintain context
     let historyContext = "";
+    let isLid = false;
     try {
       const chatRes = await db.query(
-        'SELECT c.id FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
+        'SELECT c.id, c.remote_jid FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
         [sessionPhone, senderPhone]
       );
       if (chatRes.rows.length > 0) {
         const chatId = chatRes.rows[0].id;
+        const remoteJid = chatRes.rows[0].remote_jid || '';
+        if (remoteJid.endsWith('@lid') || senderPhone.length > 13) {
+          isLid = true;
+        }
+
         const msgRes = await db.query(
           'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 30',
           [chatId]
@@ -153,7 +168,11 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     // 5. Expand System Prompt with Business Details & Sizing rules
     let systemPrompt = config.systemPrompt;
     if (businessProfile) {
-      systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}`;
+      systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\nBank Details: ${businessProfile.bank_details || ''}`;
+    }
+
+    if (isLid) {
+      systemPrompt += `\n\n[CRITICAL NOTICE: CUSTOMER HAS HIDDEN PHONE NUMBER (LID)]\nThis customer is using a system account without a public phone number. You DO NOT know their phone number. You MUST ask the customer for their Phone Number as a required field before showing the order summary! Add "Phone Number" as Step 1.5 in your order collection.`;
     }
 
     // Load products from DB for inventory matching

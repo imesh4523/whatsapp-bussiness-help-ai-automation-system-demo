@@ -5564,6 +5564,7 @@ function BusinessProfile() {
     description: '',
     address: '',
     sizes_info: '',
+    bank_details: '',
     logo_url: null,
     photo_urls: []
   });
@@ -5606,6 +5607,7 @@ function BusinessProfile() {
       formData.append('description', profile.description || '');
       formData.append('address', profile.address || '');
       formData.append('sizes_info', profile.sizes_info || '');
+      formData.append('bank_details', profile.bank_details || '');
       
       if (logoFile) {
         formData.append('logo', logoFile);
@@ -5708,6 +5710,16 @@ function BusinessProfile() {
               onChange={(e) => setProfile({ ...profile, sizes_info: e.target.value })}
               style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '100px', resize: 'vertical' }}
               placeholder="e.g. S size fits waist 28-30. M fits 31-33. Length is 42 inches for all sizes."
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Bank Details (For Bank Transfer payment option)</label>
+            <textarea
+              value={profile.bank_details || ''}
+              onChange={(e) => setProfile({ ...profile, bank_details: e.target.value })}
+              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '100px', resize: 'vertical' }}
+              placeholder="e.g. Bank: HNB, Account Name: Elegant Stores, Account Number: 1234567890, Branch: Colombo"
             />
           </div>
 

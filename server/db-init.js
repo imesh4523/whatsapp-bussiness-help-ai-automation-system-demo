@@ -61,7 +61,8 @@ async function init() {
         address TEXT,
         sizes_info TEXT,
         logo_url VARCHAR(500),
-        photo_urls TEXT[] DEFAULT '{}'::TEXT[]
+        photo_urls TEXT[] DEFAULT '{}'::TEXT[],
+        bank_details TEXT
       );
 
       CREATE TABLE IF NOT EXISTS orders (

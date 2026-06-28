@@ -951,7 +951,7 @@ app.get('/api/business-profile', authenticateToken, async (req, res) => {
 
 app.post('/api/business-profile', authenticateToken, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'photos', maxCount: 10 }]), async (req, res) => {
   try {
-    const { business_name, description, address, sizes_info } = req.body;
+    const { business_name, description, address, sizes_info, bank_details } = req.body;
     
     // 1. Fetch current profile
     const currentRes = await db.query('SELECT * FROM business_profiles WHERE user_id = $1', [req.user.id]);
@@ -998,13 +998,13 @@ app.post('/api/business-profile', authenticateToken, upload.fields([{ name: 'log
 
     // 5. Save to database
     await db.query(`
-      INSERT INTO business_profiles (user_id, business_name, description, address, sizes_info, logo_url, photo_urls)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO business_profiles (user_id, business_name, description, address, sizes_info, logo_url, photo_urls, bank_details)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (user_id) DO UPDATE 
-      SET business_name = $2, description = $3, address = $4, sizes_info = $5, logo_url = $6, photo_urls = $7
-    `, [req.user.id, business_name, description, address, sizes_info, logo_url, photo_urls]);
+      SET business_name = $2, description = $3, address = $4, sizes_info = $5, logo_url = $6, photo_urls = $7, bank_details = $8
+    `, [req.user.id, business_name, description, address, sizes_info, logo_url, photo_urls, bank_details]);
 
-    res.json({ success: true, message: 'Business profile updated successfully.', profile: { business_name, description, address, sizes_info, logo_url, photo_urls } });
+    res.json({ success: true, message: 'Business profile updated successfully.', profile: { business_name, description, address, sizes_info, logo_url, photo_urls, bank_details } });
   } catch (err) {
     console.error('Update business profile error:', err);
     res.status(500).json({ error: err.message });
@@ -2204,15 +2204,15 @@ app.get('/api/admin/user-profile/:userId', async (req, res) => {
 
 app.post('/api/admin/user-profile/:userId', async (req, res) => {
   const { userId } = req.params;
-  const { businessName, description, address, sizesInfo, systemPrompt, temperature, typingDelay, defaultModel } = req.body;
+  const { businessName, description, address, sizesInfo, bankDetails, systemPrompt, temperature, typingDelay, defaultModel } = req.body;
   try {
     // 1. Update/Insert Business Profile
     await db.query(`
-      INSERT INTO business_profiles (user_id, business_name, description, address, sizes_info)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO business_profiles (user_id, business_name, description, address, sizes_info, bank_details)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (user_id) DO UPDATE 
-      SET business_name = $2, description = $3, address = $4, sizes_info = $5
-    `, [userId, businessName, description, address, sizesInfo]);
+      SET business_name = $2, description = $3, address = $4, sizes_info = $5, bank_details = $6
+    `, [userId, businessName, description, address, sizesInfo, bankDetails]);
 
     // 2. Update/Insert AI Config
     await db.query(`

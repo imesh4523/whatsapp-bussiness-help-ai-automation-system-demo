@@ -441,6 +441,18 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             // Clean all tags from the text message
             cleanReply = aiReply.replace(/\[IMAGE:\s*\d+\]/gi, '').trim();
 
+            let orderId = null;
+            if (cleanReply.toUpperCase().includes('#PENDING')) {
+              try {
+                orderId = await checkAndExtractOrderOnTheFly(userId, sessionId, senderPhone, cleanReply);
+                if (orderId) {
+                  cleanReply = cleanReply.replace(/#PENDING/gi, `#${orderId}`);
+                }
+              } catch (onFlyErr) {
+                console.error('[AUTO-CRM] Failed to extract order on the fly:', onFlyErr.message);
+              }
+            }
+
             // Send message via Baileys socket with ephemeral expiration if active
             const sendOpts = {};
             if (ephemeralExpiration) {
@@ -499,7 +511,74 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
               [chatId, cleanReply, 'bot']
             );
             await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [cleanReply, chatId]);
-            await checkAndExtractOrder(userId, sessionId, senderPhone);
+            
+            // Send tracking link message if order was created on the fly
+            if (orderId) {
+              try {
+                // Fetch the product image url for items in this order
+                const orderRes = await db.query('SELECT items FROM orders WHERE id = $1', [orderId]);
+                let productImageUrl = null;
+                if (orderRes.rows.length > 0 && orderRes.rows[0].items) {
+                  const itemsList = orderRes.rows[0].items;
+                  if (itemsList.length > 0) {
+                    const firstItemName = itemsList[0].name || '';
+                    const searchWord = firstItemName.split(' ')[0] || '';
+                    if (searchWord.length > 2) {
+                      const prodSearch = await db.query(
+                        "SELECT image_url FROM products WHERE name ILIKE $1 AND image_url IS NOT NULL LIMIT 1",
+                        [`%${searchWord}%`]
+                      );
+                      if (prodSearch.rows.length > 0) {
+                        productImageUrl = prodSearch.rows[0].image_url;
+                      }
+                    }
+                  }
+                }
+
+                const trackingText = `🚚 *පහත link එකෙන් ඔයාගේ ඇණවුම track කරන්න පුළුවන් සර්/මැඩම්!* 👇\n\n🔗 *Tracking Link:* https://wpp.raybeamdigital.com/track-order/${orderId}\n\n(දැනට මෙහි status එක *Confirmed / Processing* ලෙස පෙන්වයි. අප පාර්සලය courier සේවාවට භාරදුන් පසු tracking number එක update කරනු ලැබේ.) 😊`;
+
+                if (productImageUrl) {
+                  let resolvedImage = null;
+                  if (productImageUrl.startsWith('/uploads/')) {
+                    const filename = productImageUrl.replace('/uploads/', '');
+                    const filePath = path.join(__dirname, 'uploads', filename);
+                    if (fs.existsSync(filePath)) {
+                      resolvedImage = { local: true, path: filePath };
+                    }
+                  } else if (productImageUrl.startsWith('http://') || productImageUrl.startsWith('https://')) {
+                    resolvedImage = { local: false, url: productImageUrl };
+                  }
+
+                  if (resolvedImage) {
+                    let fileBuffer;
+                    if (resolvedImage.local) {
+                      fileBuffer = fs.readFileSync(resolvedImage.path);
+                    } else {
+                      const response = await fetch(resolvedImage.url);
+                      const arrayBuffer = await response.arrayBuffer();
+                      fileBuffer = Buffer.from(arrayBuffer);
+                    }
+                    await sock.sendMessage(msg.key.remoteJid, { image: fileBuffer, caption: trackingText }, sendOpts);
+                  } else {
+                    await sock.sendMessage(msg.key.remoteJid, { text: trackingText }, sendOpts);
+                  }
+                } else {
+                  await sock.sendMessage(msg.key.remoteJid, { text: trackingText }, sendOpts);
+                }
+
+                // Log tracking message to DB
+                const trackChatId = `${sessionId}_${senderPhone}`;
+                await db.query(
+                  'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
+                  [chatId, trackingText, 'bot']
+                );
+              } catch (trackErr) {
+                console.error('Failed to send tracking link message:', trackErr.message);
+              }
+            } else {
+              // Fallback check extract just in case it wasn't intercepted
+              await checkAndExtractOrder(userId, sessionId, senderPhone);
+            }
             
             // Increment usage and freeze if limit met
             try {
@@ -767,21 +846,7 @@ ${chatHistory}`;
             await db.query("UPDATE chats SET label = 'Confirmed' WHERE id = $1", [chatId]);
             console.log(`[AUTO-CRM] Order ${orderId} automatically created for customer ${senderPhone} (Amount: Rs. ${amount})`);
 
-            // Send actual order ID confirmation to customer
-            try {
-              const sock = getActiveSocket(sessionPhone);
-              if (sock) {
-                const jid = `${senderPhone}@s.whatsapp.net`;
-                const confirmMsg = `✅ ඔබගේ ඇණවුම් ID: *#${orderId}*\nමේක save කරගන්න සර්/මැඩම්! 📦\nඅපගේ කණ්ඩායම ඉක්මනින් ඔබව සම්බන්ධ කරගන්නවා!`;
-                await sock.sendMessage(jid, { text: confirmMsg });
-                await db.query(
-                  'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
-                  [chatId, confirmMsg, 'bot']
-                );
-              }
-            } catch (msgErr) {
-              console.warn('[AUTO-CRM] Could not send order ID confirmation to customer:', msgErr.message);
-            }
+            // Done
           }
         }
       }
@@ -861,4 +926,102 @@ Message text:
   } catch (err) {
     console.error('[AUTO-TRACKING] Failed to extract tracking details:', err.message);
   }
+}
+
+// ── CRM Order Auto-Extractor on-the-fly helper ─────────────────────
+export async function checkAndExtractOrderOnTheFly(userId, sessionPhone, senderPhone, pendingReply) {
+  try {
+    const chatRes = await db.query(
+      'SELECT id, sender_name FROM chats WHERE session_id = $1 AND sender_phone = $2',
+      [sessionPhone, senderPhone]
+    );
+    if (chatRes.rows.length === 0) return null;
+    const chatId = chatRes.rows[0].id;
+    const customerName = chatRes.rows[0].sender_name;
+
+    const msgRes = await db.query(
+      'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 30',
+      [chatId]
+    );
+    const messages = msgRes.rows.reverse();
+    let chatHistory = messages.map(m => `${m.sender === 'customer' ? 'Customer' : 'Assistant'}: ${m.text}`).join('\n');
+    if (pendingReply) {
+      chatHistory += `\nAssistant: ${pendingReply}`;
+    }
+
+    const prompt = `Analyze this chat history and determine if an order was just fully finalized and confirmed by the customer.
+
+Finalized means:
+1. Customer confirmed their order summary (said yes/ov/confirm/ok to the final summary).
+2. Recipient name, delivery address, province, and payment method (COD or Bank Transfer) are known.
+
+If NOT fully finalized, return exactly: NONE
+If it IS fully finalized, extract and return strict JSON ONLY (no markdown, no explanation):
+{
+  "confirmed": true,
+  "recipient_name": "the actual recipient name the customer gave",
+  "phone": "the recipient phone number from chat history if they explicitly gave one (otherwise use null)",
+  "address": "full delivery address",
+  "province": "province name",
+  "payment_method": "COD or Bank Transfer",
+  "items": [
+    { "productName": "full item name including size and color", "quantity": 1, "price": 0 }
+  ],
+  "total_amount": 0
+}
+Extract item name WITH size and color from context (e.g. "T-shirt Size M Black" not just "Item").
+If total amount is mentioned, use it. Otherwise 0.
+Strictly output JSON or NONE. No markdown.
+
+Chat history:
+${chatHistory}`;
+
+    try {
+      const textResult = await callActiveAI(prompt, "application/json");
+      if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
+        const orderData = JSON.parse(textResult);
+        if (orderData && orderData.confirmed) {
+          // Check for duplicate in last 5 minutes
+          const dupCheck = await db.query(
+            "SELECT id FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2) AND created_at > NOW() - INTERVAL '5 minutes'",
+            [userId, senderPhone]
+          );
+          if (dupCheck.rows.length === 0) {
+            const orderId = await generateOrderNo(db);
+            const shippingDetails = {
+              name: orderData.recipient_name || customerName,
+              phone: orderData.phone || senderPhone,
+              address: orderData.address,
+              province: orderData.province || '',
+              payment_method: orderData.payment_method
+            };
+            
+            let amount = parseFloat(orderData.total_amount) || 0;
+            if (amount === 0) {
+              amount = 7500.00; // default estimated item value
+            }
+
+            const items = orderData.items && orderData.items.length > 0
+              ? orderData.items.map(i => ({ name: i.productName || i.name || 'Product', qty: i.quantity || i.qty || 1, price: i.price || 0 }))
+              : [{ name: 'Standard Product', qty: 1, price: amount }];
+
+            await db.query(
+              'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
+              [orderId, userId, JSON.stringify(items), amount, JSON.stringify(shippingDetails), 'Confirmed']
+            );
+
+            // Update chat label to 'Confirmed'
+            await db.query("UPDATE chats SET label = 'Confirmed' WHERE id = $1", [chatId]);
+            console.log(`[AUTO-CRM ON-THE-FLY] Order ${orderId} automatically created for customer ${senderPhone} (Amount: Rs. ${amount})`);
+            return orderId;
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.error('[AUTO-CRM ON-THE-FLY] Gemini API Key rotation failed in Order Extractor:', apiErr.message);
+    }
+  } catch (err) {
+    console.error('[AUTO-CRM ON-THE-FLY] Order extraction failed:', err.message);
+  }
+  return null;
 }

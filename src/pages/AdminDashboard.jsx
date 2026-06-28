@@ -278,6 +278,7 @@ function AdminDashboard({ admin, onLogout }) {
   const [editDescription, setEditDescription] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editSizesInfo, setEditSizesInfo] = useState('');
+  const [editBankDetails, setEditBankDetails] = useState('');
   const [editSystemPrompt, setEditSystemPrompt] = useState('');
   const [editTemperature, setEditTemperature] = useState(0.6);
   const [editTypingDelay, setEditTypingDelay] = useState(150);
@@ -644,6 +645,7 @@ function AdminDashboard({ admin, onLogout }) {
         setEditDescription(data.profile?.description || '');
         setEditAddress(data.profile?.address || '');
         setEditSizesInfo(data.profile?.sizes_info || '');
+        setEditBankDetails(data.profile?.bank_details || '');
         setEditSystemPrompt(data.aiConfig?.system_prompt || '');
         setEditTemperature(data.aiConfig?.temperature || 0.6);
         setEditTypingDelay(data.aiConfig?.typing_delay || 150);
@@ -669,6 +671,7 @@ function AdminDashboard({ admin, onLogout }) {
           description: editDescription,
           address: editAddress,
           sizesInfo: editSizesInfo,
+          bankDetails: editBankDetails,
           systemPrompt: editSystemPrompt,
           temperature: editTemperature,
           typingDelay: editTypingDelay,
@@ -3125,6 +3128,16 @@ function AdminDashboard({ admin, onLogout }) {
                     onChange={(e) => setEditSizesInfo(e.target.value)}
                     placeholder="e.g. S, M, L, XL, XXL available. Free delivery on orders above Rs. 5000"
                     className="w-full px-3.5 py-2.5 text-xs bg-neutral-50 focus:bg-white focus:ring-2 focus:ring-[#00832e]/5 border border-gray-200 rounded-xl outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Bank Details (For Bank Transfer payment option)</label>
+                  <textarea 
+                    rows="2"
+                    value={editBankDetails}
+                    onChange={(e) => setEditBankDetails(e.target.value)}
+                    placeholder="e.g. Bank: HNB, Account Name: Elegant Stores, Account Number: 1234567890, Branch: Colombo"
+                    className="w-full px-3.5 py-2.5 text-xs bg-neutral-50 focus:bg-white focus:ring-2 focus:ring-[#00832e]/5 border border-gray-200 rounded-xl outline-none resize-none"
                   />
                 </div>
               </div>
