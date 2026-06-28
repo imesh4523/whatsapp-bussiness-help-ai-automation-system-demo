@@ -1770,39 +1770,52 @@ function WhatsAppInbox({ activeSessionId }) {
           {activeChat ? (
             <>
               {/* Header */}
-              <div className="p-4 border-b border-gray-100 bg-[#f8fafc]/50 flex justify-between items-center">
-                <div className="flex items-center gap-3">
+              <div className="border-b border-gray-100 bg-[#f8fafc]/50">
+                {/* Top row: back + avatar + name + AI badge */}
+                <div className="p-3 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setMobileInboxView('list')}
-                    className="lg:hidden mr-1 p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border-none cursor-pointer flex items-center justify-center"
-                    style={{ padding: '8px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', marginRight: '6px' }}
+                    className="lg:hidden flex-shrink-0 p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border-none cursor-pointer flex items-center justify-center"
+                    style={{ padding: '7px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', flexShrink: 0 }}
                   >
                     <i className="las la-arrow-left" style={{ fontSize: '16px', fontWeight: 'bold' }}></i>
                   </button>
-                  {/* Profile photo in chat header */}
-                  {activeChat.profile_pic_url ? (
-                    <img 
-                      src={activeChat.profile_pic_url} 
-                      alt={activeChat.sender_name || 'Contact'}
-                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className="w-10 h-10 rounded-full bg-[#00832e] text-white items-center justify-center font-bold text-sm flex-shrink-0"
-                    style={{ display: activeChat.profile_pic_url ? 'none' : 'flex' }}
-                  >
-                    {activeChat.sender_name ? activeChat.sender_name.substring(0, 2).toUpperCase() : 'WA'}
+
+                  {/* Avatar */}
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    {activeChat.profile_pic_url ? (
+                      <img 
+                        src={activeChat.profile_pic_url} 
+                        alt={activeChat.sender_name || 'Contact'}
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className="w-10 h-10 rounded-full bg-[#00832e] text-white items-center justify-center font-bold text-sm flex-shrink-0"
+                      style={{ display: activeChat.profile_pic_url ? 'none' : 'flex' }}
+                    >
+                      {activeChat.sender_name ? activeChat.sender_name.substring(0, 2).toUpperCase() : 'WA'}
+                    </div>
                   </div>
-                  <div>
-                    <h6 className="text-xs font-bold text-neutral-800">{activeChat.sender_name || formatPhone(activeChat.sender_phone)}</h6>
-                    {/* Phone number below name in header — inline editable */}
-                    <div className="flex items-center gap-1 mb-0.5">
+
+                  {/* Name + phone (phone hidden on mobile) + AI badge */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h6 className="text-sm font-bold text-neutral-800 truncate mb-0" style={{ maxWidth: '140px' }}>
+                        {activeChat.sender_name || formatPhone(activeChat.sender_phone)}
+                      </h6>
+                      <span className="text-[9px] text-emerald-600 flex items-center gap-1 font-semibold flex-shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping flex-shrink-0"></span> AI On
+                      </span>
+                    </div>
+                    {/* Phone — desktop only */}
+                    <div className="hidden lg:flex items-center gap-1 mt-0.5">
                       {editingPhone ? (
                         <form
                           onSubmit={e => { e.preventDefault(); handleSavePhone(activeChat.id, editPhoneVal); }}
@@ -1838,16 +1851,14 @@ function WhatsAppInbox({ activeSessionId }) {
                         </>
                       )}
                     </div>
-                    <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> AI Active Autoreply
-                    </span>
                   </div>
                 </div>
 
-                {/* Curved Status Buttons */}
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status:</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                {/* Status buttons row — full width below on mobile, inline on desktop */}
+                <div className="px-3 pb-2.5 flex items-center gap-1.5 overflow-x-auto hide-scrollbar flex-nowrap">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex-shrink-0">Status:</span>
+                  <div className="flex gap-1.5 flex-nowrap overflow-x-auto hide-scrollbar">
+
                     {/* Confirmed Button */}
                     <button
                       type="button"

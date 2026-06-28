@@ -59,7 +59,7 @@ export async function callGeminiAPI(endpointModel, payload) {
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
     // Strip model if the endpoint has double model path prefix
-    const url = `https://generativelanguage.googleapis.com/v1/models/${endpointModel}:generateContent?key=${key}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${endpointModel}:generateContent?key=${key}`;
     try {
       console.log(`Attempting Gemini API request with Key #${i + 1}/${keys.length}...`);
       const response = await fetch(url, {
