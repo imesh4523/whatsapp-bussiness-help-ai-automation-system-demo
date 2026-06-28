@@ -19,7 +19,17 @@ import {
   LifeBuoy,
   Mail,
   Gift,
-  Trash2
+  Trash2,
+  Globe,
+  Play,
+  RefreshCw,
+  Info,
+  Key,
+  Server,
+  ExternalLink,
+  Copy,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -236,6 +246,23 @@ function AdminDashboard({ admin, onLogout }) {
   const [newCouponExpires, setNewCouponExpires] = useState('');
   const [newCouponMaxUses, setNewCouponMaxUses] = useState('');
 
+  // Domain & Email Config States
+  const [domainConfig, setDomainConfig] = useState({
+    domainName: '',
+    cloudflareZoneId: '',
+    cloudflareApiToken: '',
+    resendApiKey: '',
+    emailSender: '',
+    emailSenderName: 'AgentBunny'
+  });
+  const [isSavingDomain, setIsSavingDomain] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [isConfiguring, setIsConfiguring] = useState(false);
+  const [configResult, setConfigResult] = useState(null); // 'success' | 'error' | null
+  const [domainStatus, setDomainStatus] = useState(null);
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
   // Edit User Profile Modal States
   const [editingUser, setEditingUser] = useState(null);
   const [editBusinessName, setEditBusinessName] = useState('');
@@ -343,6 +370,33 @@ function AdminDashboard({ admin, onLogout }) {
             if (data.googleRedirectUri !== undefined) setGoogleRedirectUri(data.googleRedirectUri);
             if (data.googleAuthActive !== undefined) setGoogleAuthActive(data.googleAuthActive);
           }
+        })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'domain-config') {
+      fetch(`${API_BASE_URL}/admin/domain/settings`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            setDomainConfig({
+              domainName: data.domainName || '',
+              cloudflareZoneId: data.cloudflareZoneId || '',
+              cloudflareApiToken: data.cloudflareApiToken || '',
+              resendApiKey: data.resendApiKey || '',
+              emailSender: data.emailSender || '',
+              emailSenderName: data.emailSenderName || 'AgentBunny'
+            });
+          }
+        })
+        .catch(err => console.warn(err));
+
+      fetch(`${API_BASE_URL}/admin/domain/status`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data) setDomainStatus(data);
         })
         .catch(err => console.warn(err));
     } else if (activeTab === 'coupons') {
@@ -648,6 +702,114 @@ function AdminDashboard({ admin, onLogout }) {
     }
   };
 
+  const handleSaveDomainSettings = async (e) => {
+    e.preventDefault();
+    setIsSavingDomain(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/domain/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify(domainConfig)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Domain and email settings saved successfully.');
+        else alert('Settings saved successfully.');
+        fetchDomainStatus();
+      } else {
+        if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to save settings.');
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Network error while saving settings.');
+    } finally {
+      setIsSavingDomain(false);
+    }
+  };
+
+  const handleAutoConfigureDomain = async () => {
+    setIsConfiguring(true);
+    setLogs([{ level: 'info', msg: 'Starting auto-configuration...' }]);
+    setConfigResult(null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/domain/configure`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      const data = await res.json();
+      if (data.logs && Array.isArray(data.logs)) {
+        setLogs(data.logs);
+      }
+      if (res.ok && data.success) {
+        setConfigResult('success');
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Cloudflare DNS auto-configured and Resend domain verified successfully!');
+        fetchDomainStatus();
+      } else {
+        setConfigResult('error');
+        if (data.error) {
+          setLogs(prev => [...prev, { level: 'error', msg: data.error }]);
+        }
+        if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to auto-configure domain.');
+      }
+    } catch (err) {
+      console.error(err);
+      setLogs(prev => [...prev, { level: 'error', msg: err.message }]);
+      setConfigResult('error');
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Network request failed.');
+    } finally {
+      setIsConfiguring(false);
+    }
+  };
+
+  const fetchDomainStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/domain/status`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      const data = await res.json();
+      if (res.ok) setDomainStatus(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSendDomainTestEmail = async () => {
+    if (!testEmailRecipient || !testEmailRecipient.includes('@')) {
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Please enter a valid recipient email address.');
+      return;
+    }
+    setIsSendingTest(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/domain/test-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ toEmail: testEmailRecipient.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (window.notifyAdmin) window.notifyAdmin('success', `Test email sent successfully to ${testEmailRecipient}!`);
+        setTestEmailRecipient('');
+      } else {
+        if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to send test email.');
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Network error sending test email.');
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   const handleEditPlan = (plan) => {
     setEditingPlan(plan);
     
@@ -940,6 +1102,15 @@ function AdminDashboard({ admin, onLogout }) {
               {activeTab === 'ai-config' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
               <Settings className="w-4 h-4 flex-shrink-0" />
               <span>System Settings</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('domain-config')}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'domain-config' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              {activeTab === 'domain-config' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Globe className="w-4 h-4 flex-shrink-0" />
+              <span>Domain & Email</span>
             </button>
             <button 
               onClick={() => setActiveTab('coupons')}
@@ -2486,6 +2657,230 @@ function AdminDashboard({ admin, onLogout }) {
                     })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* 13. DOMAIN & EMAIL CONFIGURATION VIEW */}
+          {activeTab === 'domain-config' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column: Form Settings */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-neutral-800 flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-[#00832e]" /> Domain & Cloudflare Configuration
+                    </h3>
+                    <p className="text-[11px] text-gray-500 font-light mt-1.5 leading-relaxed">
+                      Configure your custom domain settings. Cloudflare API Token requires "Edit DNS" permissions.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSaveDomainSettings} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Custom Domain Name</label>
+                        <input 
+                          type="text"
+                          required
+                          value={domainConfig.domainName}
+                          onChange={(e) => setDomainConfig(prev => ({ ...prev, domainName: e.target.value }))}
+                          placeholder="e.g. agentbunny.com"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none transition-colors"
+                        />
+                        <p className="text-[9px] text-neutral-400">Without https:// or www. (e.g. agentbunny.com)</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cloudflare Zone ID</label>
+                        <input 
+                          type="text"
+                          required
+                          value={domainConfig.cloudflareZoneId}
+                          onChange={(e) => setDomainConfig(prev => ({ ...prev, cloudflareZoneId: e.target.value }))}
+                          placeholder="Cloudflare Zone ID"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none transition-colors font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cloudflare API Token</label>
+                      <input 
+                        type="password"
+                        required
+                        value={domainConfig.cloudflareApiToken}
+                        onChange={(e) => setDomainConfig(prev => ({ ...prev, cloudflareApiToken: e.target.value }))}
+                        placeholder="••••••••••••••••••••••••••••••••"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none transition-colors font-mono"
+                      />
+                      <p className="text-[9px] text-neutral-400">
+                        Create token at <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="text-[#00832e] hover:underline font-bold">Cloudflare API Tokens</a> with Zone.DNS "Edit" permission.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1 pt-4 border-t border-gray-100">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Resend API Config</h4>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Resend API Key</label>
+                      <input 
+                        type="password"
+                        required
+                        value={domainConfig.resendApiKey}
+                        onChange={(e) => setDomainConfig(prev => ({ ...prev, resendApiKey: e.target.value }))}
+                        placeholder="re_••••••••••••••••"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none transition-colors font-mono"
+                      />
+                      <p className="text-[9px] text-neutral-400">
+                        Get your API key from <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-[#00832e] hover:underline font-bold">Resend Keys</a>.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sender Display Name</label>
+                        <input 
+                          type="text"
+                          required
+                          value={domainConfig.emailSenderName}
+                          onChange={(e) => setDomainConfig(prev => ({ ...prev, emailSenderName: e.target.value }))}
+                          placeholder="e.g. AgentBunny"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sender Email Address</label>
+                        <input 
+                          type="text"
+                          required
+                          value={domainConfig.emailSender}
+                          onChange={(e) => setDomainConfig(prev => ({ ...prev, emailSender: e.target.value }))}
+                          placeholder="e.g. noreply@agentbunny.com"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4 pt-4 font-sans">
+                      <button
+                        type="submit"
+                        disabled={isSavingDomain}
+                        className="flex-1 px-4 py-3 bg-[#00832e] hover:bg-[#007027] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isSavingDomain ? 'Saving...' : 'Save Settings'}
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={handleAutoConfigureDomain}
+                        disabled={isConfiguring || !domainConfig.domainName || !domainConfig.cloudflareZoneId || !domainConfig.cloudflareApiToken || !domainConfig.resendApiKey}
+                        className="flex-1 px-4 py-3 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isConfiguring ? 'Configuring DNS...' : '🚀 Auto Configure Domain'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Domain Verification Status block */}
+                {domainStatus && domainStatus.status !== 'not_configured' && (
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Resend Domain Verification Details</h4>
+                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase ${
+                        domainStatus.status === 'verified' ? 'bg-emerald-50 text-emerald-700' :
+                        domainStatus.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                        'bg-red-50 text-red-700'
+                      }`}>
+                        {domainStatus.status}
+                      </span>
+                    </div>
+
+                    {domainStatus.records && domainStatus.records.length > 0 && (
+                      <div className="space-y-3">
+                        {domainStatus.records.map((rec, i) => (
+                          <div key={i} className="flex justify-between items-start gap-4 p-3 bg-neutral-50 rounded-xl border border-neutral-100 text-xs">
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-neutral-200 text-neutral-700 font-extrabold text-[9px] px-1.5 py-0.5 rounded uppercase">{rec.type}</span>
+                                <span className="font-mono font-bold text-neutral-800 truncate">{rec.name}</span>
+                              </div>
+                              <div className="font-mono text-[10px] text-neutral-500 break-all">{rec.value}</div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(rec.value);
+                                if (window.notifyAdmin) window.notifyAdmin('success', 'Value copied to clipboard!');
+                              }}
+                              className="px-2 py-1 bg-white hover:bg-neutral-100 text-[10px] font-bold rounded border border-neutral-200 cursor-pointer"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Console Output & Send Test Email */}
+              <div className="space-y-6">
+                {/* Send Test Email Card */}
+                {domainConfig.domainName && (
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Send Config Verification Email</h4>
+                      <p className="text-[10px] text-gray-500">Send a verification template test mail to ensure deliverability is working.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <input 
+                        type="email"
+                        value={testEmailRecipient}
+                        onChange={(e) => setTestEmailRecipient(e.target.value)}
+                        placeholder="receiver@gmail.com"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSendDomainTestEmail}
+                        disabled={isSendingTest || !testEmailRecipient}
+                        className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isSendingTest ? 'Sending Test...' : 'Send Verification Email'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Console Log Panel */}
+                <div className="bg-[#0b0c10] text-[#4af626] font-mono text-[11px] rounded-3xl p-5 shadow-inner border border-neutral-800 min-h-[300px] flex flex-col justify-between">
+                  <div className="flex justify-between items-center pb-2 border-b border-neutral-800 mb-3 text-neutral-500 uppercase tracking-widest text-[9px] font-bold">
+                    <span>DNS Configuration Console</span>
+                    {configResult === 'success' && <span className="text-emerald-400">Success</span>}
+                    {configResult === 'error' && <span className="text-red-400">Failed</span>}
+                    {isConfiguring && <span className="text-blue-400 animate-pulse">Running...</span>}
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 max-h-[350px]">
+                    {logs.length === 0 ? (
+                      <span className="text-neutral-500">$ idle. Enter settings and click Auto Configure.</span>
+                    ) : (
+                      logs.map((e, idx) => (
+                        <div key={idx} className={
+                          e.level === 'error' ? 'text-red-400' :
+                          e.level === 'ok' ? 'text-emerald-400' :
+                          e.level === 'warn' ? 'text-amber-400' : 'text-neutral-200'
+                        }>
+                          [{e.level.toUpperCase()}] {e.msg}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}

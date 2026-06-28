@@ -1751,6 +1751,336 @@ app.post('/api/admin/system-settings', async (req, res) => {
   }
 });
 
+// ── Domain & Email Settings ──────────────────────────────────────
+app.get('/api/admin/domain/settings', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
+    const cfZoneQuery = await db.query("SELECT value FROM system_settings WHERE key = 'cloudflare_zone_id'");
+    const cfTokenQuery = await db.query("SELECT value FROM system_settings WHERE key = 'cloudflare_api_token'");
+    const resendKeyQuery = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
+    const senderQuery = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
+    const senderNameQuery = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender_name'");
+
+    res.json({
+      domainName: domainQuery.rows.length > 0 ? domainQuery.rows[0].value : '',
+      cloudflareZoneId: cfZoneQuery.rows.length > 0 ? cfZoneQuery.rows[0].value : '',
+      cloudflareApiToken: cfTokenQuery.rows.length > 0 ? cfTokenQuery.rows[0].value : '',
+      resendApiKey: resendKeyQuery.rows.length > 0 ? resendKeyQuery.rows[0].value : '',
+      emailSender: senderQuery.rows.length > 0 ? senderQuery.rows[0].value : '',
+      emailSenderName: senderNameQuery.rows.length > 0 ? senderNameQuery.rows[0].value : ''
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/domain/settings', authenticateToken, async (req, res) => {
+  const { domainName, cloudflareZoneId, cloudflareApiToken, resendApiKey, emailSender, emailSenderName } = req.body;
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    const updates = [
+      { key: 'domain_name', value: domainName?.trim() || '' },
+      { key: 'cloudflare_zone_id', value: cloudflareZoneId?.trim() || '' },
+      { key: 'cloudflare_api_token', value: cloudflareApiToken?.trim() || '' },
+      { key: 'resend_api_key', value: resendApiKey?.trim() || '' },
+      { key: 'email_sender', value: emailSender?.trim() || '' },
+      { key: 'email_sender_name', value: emailSenderName?.trim() || '' },
+      { key: 'email_service', value: resendApiKey?.trim() ? 'resend' : 'none' }
+    ];
+
+    for (const item of updates) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ($1, $2)
+        ON CONFLICT (key) DO UPDATE SET value = $2
+      `, [item.key, item.value]);
+    }
+
+    await logAuditEvent('Domain Settings Updated', 'Admin updated domain & Cloudflare settings');
+    res.json({ success: true, message: 'Settings saved successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Auto-configure flow
+app.post('/api/admin/domain/configure', authenticateToken, async (req, res) => {
+  const logs = [];
+  const log = (level, msg) => {
+    logs.push({ level, msg });
+    console.log(`[Domain Config] [${level.toUpperCase()}] ${msg}`);
+  };
+
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
+    const cfZoneQuery = await db.query("SELECT value FROM system_settings WHERE key = 'cloudflare_zone_id'");
+    const cfTokenQuery = await db.query("SELECT value FROM system_settings WHERE key = 'cloudflare_api_token'");
+    const resendKeyQuery = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
+
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim().toLowerCase() : '';
+    const zoneId = cfZoneQuery.rows.length > 0 ? cfZoneQuery.rows[0].value?.trim() : '';
+    const cfToken = cfTokenQuery.rows.length > 0 ? cfTokenQuery.rows[0].value?.trim() : '';
+    const resendKey = resendKeyQuery.rows.length > 0 ? resendKeyQuery.rows[0].value?.trim() : '';
+
+    if (!domain) return res.status(400).json({ logs, error: 'Domain name is not set. Please save settings first.' });
+    if (!zoneId) return res.status(400).json({ logs, error: 'Cloudflare Zone ID is not set.' });
+    if (!cfToken) return res.status(400).json({ logs, error: 'Cloudflare API Token is not set.' });
+    if (!resendKey) return res.status(400).json({ logs, error: 'Resend API Key is not set.' });
+
+    const cfHeaders = {
+      "Authorization": `Bearer ${cfToken}`,
+      "Content-Type": "application/json"
+    };
+    const resendHeaders = {
+      "Authorization": `Bearer ${resendKey}`,
+      "Content-Type": "application/json"
+    };
+
+    // ── Step 1: Add domain to Resend ──
+    log('info', `Adding domain "${domain}" to Resend...`);
+    let resendDomainId = null;
+    let dnsRecordsFromResend = [];
+
+    const listRes = await fetch("https://api.resend.com/domains", { headers: resendHeaders });
+    const listData = await listRes.json();
+    const existingDomain = (listData?.data || []).find(d => d.name === domain);
+
+    if (existingDomain) {
+      resendDomainId = existingDomain.id;
+      log('ok', `Domain already exists in Resend (id: ${resendDomainId}). Fetching DNS records...`);
+      const detailRes = await fetch(`https://api.resend.com/domains/${resendDomainId}`, { headers: resendHeaders });
+      const detailData = await detailRes.json();
+      dnsRecordsFromResend = detailData?.records || [];
+    } else {
+      const createRes = await fetch("https://api.resend.com/domains", {
+        method: "POST",
+        headers: resendHeaders,
+        body: JSON.stringify({ name: domain })
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok) {
+        log('error', `Resend domain creation failed: ${createData.message || JSON.stringify(createData)}`);
+        return res.status(500).json({ logs, error: 'Failed to add domain to Resend.' });
+      }
+      resendDomainId = createData.id;
+      dnsRecordsFromResend = createData?.records || [];
+      log('ok', `Domain added to Resend (id: ${resendDomainId})`);
+    }
+
+    // ── Step 2: Fetch existing Cloudflare DNS records ──
+    log('info', `Fetching existing DNS records from Cloudflare zone ${zoneId}...`);
+    const existingCfRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?per_page=100`, {
+      headers: cfHeaders
+    });
+    const existingCfData = await existingCfRes.json();
+    if (!existingCfRes.ok) {
+      log('error', `Cloudflare API error: ${existingCfData?.errors?.[0]?.message || JSON.stringify(existingCfData)}`);
+      return res.status(500).json({ logs, error: 'Failed to fetch Cloudflare DNS records.' });
+    }
+    const existingRecords = existingCfData?.result || [];
+    log('ok', `Found ${existingRecords.length} existing DNS records.`);
+
+    // Helper to add/replace record
+    const addCfRecord = async (type, name, content, priority) => {
+      const fullName = name === '@' ? domain : `${name}.${domain}`;
+      const targetName = fullName.toLowerCase();
+
+      // Find conflicting
+      const conflicting = existingRecords.filter(r => r.type.toUpperCase() === type.toUpperCase() && r.name.toLowerCase() === targetName);
+
+      if (conflicting.length > 0) {
+        const exactMatch = conflicting.find(r => r.content.trim() === content.trim() && (priority === undefined || r.priority === priority));
+        if (exactMatch) {
+          log('info', `${type} record "${fullName}" already exists with matching value — skipping.`);
+          return;
+        }
+
+        // Delete conflicting
+        for (const conf of conflicting) {
+          log('info', `Deleting old conflicting ${type} record "${fullName}" (ID: ${conf.id})...`);
+          const delRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${conf.id}`, {
+            method: 'DELETE',
+            headers: cfHeaders
+          });
+          if (delRes.ok) {
+            log('ok', `Deleted old conflicting ${type} record: ${fullName}`);
+          }
+        }
+      }
+
+      const body = { type, name: fullName, content, ttl: 1 };
+      if (priority !== undefined) body.priority = priority;
+
+      const r = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`, {
+        method: 'POST',
+        headers: cfHeaders,
+        body: JSON.stringify(body)
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        log('error', `Failed to add ${type} "${fullName}": ${d?.errors?.[0]?.message || JSON.stringify(d)}`);
+      } else {
+        log('ok', `Added ${type} record: ${fullName}`);
+      }
+    };
+
+    // ── Step 3: Add Resend DNS records to Cloudflare ──
+    log('info', `Adding ${dnsRecordsFromResend.length} Resend DNS records to Cloudflare...`);
+    for (const rec of dnsRecordsFromResend) {
+      const recType = (rec.type || 'TXT').toUpperCase();
+      let recName = rec.name || '@';
+      if (recName.toLowerCase().endsWith('.' + domain.toLowerCase())) {
+        recName = recName.slice(0, -(domain.length + 1));
+      } else if (recName.toLowerCase() === domain.toLowerCase()) {
+        recName = '@';
+      }
+      await addCfRecord(recType, recName, rec.value || rec.content || '', rec.priority);
+    }
+
+    // ── Step 4: Ensure SPF exists ──
+    log('info', 'Ensuring SPF record exists...');
+    const hasSPF = existingRecords.some(r => r.type === 'TXT' && r.name.toLowerCase() === domain.toLowerCase() && r.content.includes('v=spf1'));
+    if (!hasSPF) {
+      await addCfRecord('TXT', '@', 'v=spf1 include:amazonses.com ~all');
+    } else {
+      log('warn', 'SPF record already covered — skipping.');
+    }
+
+    // ── Step 5: Ensure DMARC exists ──
+    log('info', 'Ensuring DMARC record exists...');
+    await addCfRecord('TXT', '_dmarc', `v=DMARC1; p=quarantine; rua=mailto:dmarc@${domain}; adkim=r; aspf=r`);
+
+    // ── Step 6: Trigger Verification ──
+    if (resendDomainId) {
+      log('info', 'Triggering Resend domain verification...');
+      const verifyRes = await fetch(`https://api.resend.com/domains/${resendDomainId}/verify`, {
+        method: 'POST',
+        headers: resendHeaders
+      });
+      if (verifyRes.ok) {
+        log('ok', 'Resend domain verification triggered successfully!');
+      } else {
+        log('warn', 'Resend verification request pending DNS propagation.');
+      }
+    }
+
+    // ── Step 7: Auto-enable Resend in Email Settings ──
+    log('info', 'Enabling Resend email provider in settings...');
+    await db.query("INSERT INTO system_settings (key, value) VALUES ('email_service', 'resend') ON CONFLICT (key) DO UPDATE SET value = 'resend'");
+
+    const senderQuery = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
+    if (senderQuery.rows.length === 0 || !senderQuery.rows[0].value?.endsWith('@' + domain)) {
+      const suggestedSender = `noreply@${domain}`;
+      await db.query("INSERT INTO system_settings (key, value) VALUES ('email_sender', $1) ON CONFLICT (key) DO UPDATE SET value = $1", [suggestedSender]);
+      log('ok', `Email sender address configured to: ${suggestedSender}`);
+    }
+
+    log('ok', '✅ Configuration complete! Active email service set to Resend.');
+    res.json({ logs, success: true });
+  } catch (err) {
+    res.status(500).json({ logs, error: err.message });
+  }
+});
+
+// Domain status
+app.get('/api/admin/domain/status', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
+    const resendKeyQuery = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
+    
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim().toLowerCase() : '';
+    const resendKey = resendKeyQuery.rows.length > 0 ? resendKeyQuery.rows[0].value?.trim() : '';
+
+    if (!domain || !resendKey) {
+      return res.json({ status: 'not_configured', records: [] });
+    }
+
+    const r = await fetch("https://api.resend.com/domains", {
+      headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" }
+    });
+    const data = await r.json();
+    const found = (data?.data || []).find(d => d.name.toLowerCase() === domain);
+    if (!found) return res.json({ status: 'not_added', records: [] });
+
+    const detail = await fetch(`https://api.resend.com/domains/${found.id}`, {
+      headers: { "Authorization": `Bearer ${resendKey}` }
+    });
+    const detailData = await detail.json();
+    res.json({
+      status: found.status,
+      id: found.id,
+      records: detailData?.records || []
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
+// Test Email Send
+app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => {
+  const { toEmail } = req.body;
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    if (!toEmail || !toEmail.includes('@')) {
+      return res.status(400).json({ error: 'Invalid recipient email address.' });
+    }
+
+    const { sendGenericEmail } = await import('./email-service.js');
+    
+    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agentbunny.com';
+
+    const htmlContent = `
+      <div style="font-family: sans-serif; padding: 25px; max-width: 550px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #00832e; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; font-style: italic;">AgentBunny</h2>
+          <p style="color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; margin-bottom: 0;">Email Configuration Test</p>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #f3f4f6; margin-bottom: 20px;" />
+        <p style="color: #374151; font-size: 14px; font-weight: 500;">Hello!</p>
+        <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">This is a test email sent from your Admin Dashboard to verify that your Domain & Email configuration (via Resend + Cloudflare) is working correctly.</p>
+        <div style="font-size: 18px; font-weight: 800; text-align: center; margin: 30px 0; color: #1f2937; background-color: #f0fdf4; padding: 15px; border-radius: 12px; border: 1px dashed #86efac;">
+          Configuration is Active! ✅
+        </div>
+        <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 25px 0 15px 0;" />
+        <p style="font-size: 11px; color: #9ca3af; text-align: center; margin: 0;">AgentBunny AI Automation System</p>
+      </div>
+    `;
+
+    const success = await sendGenericEmail(toEmail, "AgentBunny Domain Test Email ✅", htmlContent);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(500).json({ error: 'Failed to send test email. Check server logs.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Simple validation since this is the dedicated dashboard
 app.get('/api/admin/overview', async (req, res) => {
   try {
