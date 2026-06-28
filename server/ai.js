@@ -348,6 +348,14 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     return replyText.trim();
   } catch (err) {
     console.error('AI API call failed, falling back to mock reply:', err.message);
+    try {
+      await db.query(
+        "INSERT INTO system_settings (key, value) VALUES ('last_ai_error', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+        [`[${new Date().toISOString()}] Provider: ${aiProvider}, Error: ${err.message}`]
+      );
+    } catch (dbErr) {
+      console.error('Failed to log AI error to DB:', dbErr.message);
+    }
     return getMockAIResponse(messageText);
   }
 }
