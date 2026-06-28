@@ -1204,8 +1204,20 @@ function WhatsAppAccountManager({ activeSessionId, onSessionsUpdated, user }) {
                   {connectionStatus === 'pairing' ? (
                     <div className="text-center space-y-4" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider" style={{ fontSize: '11px', color: '#94a3b8' }}>Your Pairing Code</p>
-                      <div className="font-mono text-3xl font-black text-neutral-900 bg-white border border-gray-200 py-4 px-6 rounded-2xl inline-block tracking-widest shadow-inner" style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b', background: '#fff', border: '1px solid #e2e8f0', padding: '16px 24px', borderRadius: '16px', display: 'inline-block', letterSpacing: '4px' }}>
-                        {pairingCode}
+                      <div className="flex flex-col items-center gap-2" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                        <div className="font-mono text-3xl font-black text-neutral-900 bg-white border border-gray-200 py-4 px-6 rounded-2xl inline-block tracking-widest shadow-inner" style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b', background: '#fff', border: '1px solid #e2e8f0', padding: '16px 24px', borderRadius: '16px', display: 'inline-block', letterSpacing: '4px', margin: '0 auto' }}>
+                          {pairingCode}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(pairingCode);
+                            if (window.notify) window.notify('success', 'Pairing code copied to clipboard!');
+                          }}
+                          className="px-3 py-1.5 bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#475569] text-[10px] font-extrabold uppercase tracking-wider rounded-lg border-none cursor-pointer flex items-center gap-1.5 transition-all"
+                        >
+                          <i className="las la-copy" style={{ fontSize: '13px' }}></i> Copy Code
+                        </button>
                       </div>
                       <div className="space-y-1 text-left text-xs font-light text-gray-500 max-w-xs mx-auto bg-neutral-50 p-4 rounded-xl border border-gray-100" style={{ textAlign: 'left', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', fontSize: '12px', color: '#64748b' }}>
                         <p className="font-bold text-neutral-600 mb-1" style={{ fontWeight: 'bold', margin: '0 0 8px 0', color: '#1e293b' }}>How to enter code:</p>
@@ -3476,7 +3488,7 @@ function Dashboard({ user, setUser, onLogout }) {
       '@keyframes whatsappGlowFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-12px) scale(1.04)}}',
       '@keyframes whatsappCardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}',
       '@media(max-width:991px){.whatsapp-empty-screen__content{grid-template-columns:1fr;justify-items:center;text-align:center}.whatsapp-empty-screen__text{padding-top:0}.whatsapp-empty-screen__desc{margin-left:auto;margin-right:auto}}',
-      '@media(max-width:575px){.whatsapp-empty-screen{min-height:calc(100vh - 110px);padding:22px 14px}.whatsapp-empty-screen__art{min-height:320px;transform:scale(.84)}.whatsapp-empty-screen__robot{width:220px;height:260px}}',
+      '@media(max-width:575px){.whatsapp-empty-screen{min-height:calc(100vh - 110px);padding:22px 14px}.whatsapp-empty-screen__art{min-height:320px;transform:scale(.84)}.whatsapp-empty-screen__robot{width:220px;height:260px}.whatsapp-empty-screen__card--top{top:-15px!important;}}',
       '.whatsapp-pin-toggle{position:absolute;top:50%;right:12px;transform:translateY(-50%);width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#667085;display:inline-flex;align-items:center;justify-content:center;font-size:18px;}',
       '.whatsapp-pin-toggle:hover,.whatsapp-pin-toggle:focus{background:rgba(15,118,110,.08);color:#0f766e;outline:none;}',
       /* ── Glassmorphism Credit Card ─────────────────────────────── */
@@ -3859,54 +3871,54 @@ function Dashboard({ user, setUser, onLogout }) {
 
         if (anchor.href) {
           const href = anchor.href;
-          if (href.includes('/user/dashboard'))            { e.preventDefault(); setTab('dashboard'); }
-          else if (href.includes('/user/inbox'))           { e.preventDefault(); setTab('inbox'); }
-          else if (href.includes('/user/template/create/carousel')) { e.preventDefault(); setTab('template_create_carousel'); }
-          else if (href.includes('/user/template/create'))          { e.preventDefault(); setTab('template_create'); }
-          else if (href.includes('/user/template/index'))           { e.preventDefault(); setTab('template_index'); }
-          else if (href.includes('/user/campaign/index'))  { e.preventDefault(); setTab('campaign_index'); }
-          else if (href.includes('/user/campaign/create')) { e.preventDefault(); setTab('campaign_create'); }
-          else if (href.includes('/user/customer/list'))   { e.preventDefault(); setTab('customer_list'); }
-          else if (href.includes('/user/customer/create')) { e.preventDefault(); setTab('customer_create'); }
-          else if (href.includes('/user/orders/list'))     { e.preventDefault(); setTab('orders_list'); }
-          else if (href.includes('/user/agent/list'))      { e.preventDefault(); setTab('agent_list'); }
-          else if (href.includes('/user/agent/create'))    { e.preventDefault(); setTab('agent_create'); }
-          else if (href.includes('/user/saved-reply/index'))  { e.preventDefault(); setTab('saved_reply_index'); }
-          else if (href.includes('/user/saved-reply/create')) { e.preventDefault(); setTab('saved_reply_create'); }
-          else if (href.includes('/user/whatsapp-account'))   { e.preventDefault(); setTab('whatsapp_account'); }
-          else if (href.includes('/user/subscription/yearly')) { e.preventDefault(); setTab('subscription_yearly'); }
-          else if (href.includes('/user/subscription/monthly')) { e.preventDefault(); setTab('subscription_monthly'); }
-          else if (href.includes('/user/subscription/index')) { e.preventDefault(); setTab('subscription_index'); }
-          else if (href.includes('/user/profile-setting'))    { e.preventDefault(); setTab('profile_setting'); }
-          else if (href.includes('/user/development-credential')) { e.preventDefault(); setTab('development_credential'); }
-          else if (href.includes('/user/ip-white-list/index')) { e.preventDefault(); setTab('ip_white_list'); }
-          else if (href.includes('/user/twofactor'))       { e.preventDefault(); setTab('twofactor'); }
-          else if (href.includes('/user/change-password')) { e.preventDefault(); setTab('change_password'); }
-          else if (href.includes('/user/contact/list'))           { e.preventDefault(); setTab('contact_list'); }
-          else if (href.includes('/user/contact-tag/list'))       { e.preventDefault(); setTab('contact_tag_list'); }
-          else if (href.includes('/user/contactlist/list'))       { e.preventDefault(); setTab('contactlist_list'); }
-          else if (href.includes('/user/automation/welcome-message')) { e.preventDefault(); setTab('automation_welcome_message'); }
-          else if (href.includes('/user/flow-builder'))           { e.preventDefault(); setTab('flow_builder'); }
-          else if (href.includes('/user/automation/ai-bot'))      { e.preventDefault(); setTab('automation_ai_bot'); }
-          else if (href.includes('/user/shortlink/create'))       { e.preventDefault(); setTab('shortlink_create'); }
-          else if (href.includes('/user/shortlink/index'))        { e.preventDefault(); setTab('shortlink_index'); }
-          else if (href.includes('/user/floater/create'))         { e.preventDefault(); setTab('floater_create'); }
-          else if (href.includes('/user/floater/index'))          { e.preventDefault(); setTab('floater_index'); }
-          else if (href.includes('/user/cta-url/create'))         { e.preventDefault(); setTab('cta_url_create'); }
-          else if (href.includes('/user/cta-url/index'))          { e.preventDefault(); setTab('cta_url_index'); }
-          else if (href.includes('/user/interactive-list/create')) { e.preventDefault(); setTab('interactive_list_create'); }
-          else if (href.includes('/user/interactive-list/index'))  { e.preventDefault(); setTab('interactive_list_index'); }
-          else if (href.includes('/user/ecommerce/woo-commerce/products')) { e.preventDefault(); setTab('ecommerce_woocommerce_products'); }
-          else if (href.includes('/user/ecommerce/woo-commerce/config'))   { e.preventDefault(); setTab('ecommerce_woocommerce_config'); }
-          else if (href.includes('/user/deposit/history'))        { e.preventDefault(); setTab('deposit_history'); }
-          else if (href.includes('/user/withdraw/history'))       { e.preventDefault(); setTab('withdraw_history'); }
-          else if (href.includes('/user/transactions'))           { e.preventDefault(); setTab('transactions'); }
-          else if (href.includes('/user/whatsapp-pricing'))       { e.preventDefault(); setTab('whatsapp_pricing'); }
-          else if (href.includes('/user/referral/index'))         { e.preventDefault(); setTab('referral_index'); }
-          else if (href.includes('/help'))                        { e.preventDefault(); setTab('help'); }
-          else if (href.includes('/user-guide'))                  { e.preventDefault(); setTab('user_guide'); }
-          else if (href.includes('/user/agentbunny-assistant'))     { e.preventDefault(); setTab('agentbunny_assistant'); }
-          else if (href.includes('/ticket'))                      { e.preventDefault(); setTab('ticket'); }
+          if (href.includes('/user/dashboard'))            { e.preventDefault(); setTab('dashboard'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/inbox'))           { e.preventDefault(); setTab('inbox'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/template/create/carousel')) { e.preventDefault(); setTab('template_create_carousel'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/template/create'))          { e.preventDefault(); setTab('template_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/template/index'))           { e.preventDefault(); setTab('template_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/campaign/index'))  { e.preventDefault(); setTab('campaign_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/campaign/create')) { e.preventDefault(); setTab('campaign_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/customer/list'))   { e.preventDefault(); setTab('customer_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/customer/create')) { e.preventDefault(); setTab('customer_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/orders/list'))     { e.preventDefault(); setTab('orders_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/agent/list'))      { e.preventDefault(); setTab('agent_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/agent/create'))    { e.preventDefault(); setTab('agent_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/saved-reply/index'))  { e.preventDefault(); setTab('saved_reply_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/saved-reply/create')) { e.preventDefault(); setTab('saved_reply_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/whatsapp-account'))   { e.preventDefault(); setTab('whatsapp_account'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/subscription/yearly')) { e.preventDefault(); setTab('subscription_yearly'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/subscription/monthly')) { e.preventDefault(); setTab('subscription_monthly'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/subscription/index')) { e.preventDefault(); setTab('subscription_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/profile-setting'))    { e.preventDefault(); setTab('profile_setting'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/development-credential')) { e.preventDefault(); setTab('development_credential'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/ip-white-list/index')) { e.preventDefault(); setTab('ip_white_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/twofactor'))       { e.preventDefault(); setTab('twofactor'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/change-password')) { e.preventDefault(); setTab('change_password'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/contact/list'))           { e.preventDefault(); setTab('contact_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/contact-tag/list'))       { e.preventDefault(); setTab('contact_tag_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/contactlist/list'))       { e.preventDefault(); setTab('contactlist_list'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/automation/welcome-message')) { e.preventDefault(); setTab('automation_welcome_message'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/flow-builder'))           { e.preventDefault(); setTab('flow_builder'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/automation/ai-bot'))      { e.preventDefault(); setTab('automation_ai_bot'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/shortlink/create'))       { e.preventDefault(); setTab('shortlink_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/shortlink/index'))        { e.preventDefault(); setTab('shortlink_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/floater/create'))         { e.preventDefault(); setTab('floater_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/floater/index'))          { e.preventDefault(); setTab('floater_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/cta-url/create'))         { e.preventDefault(); setTab('cta_url_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/cta-url/index'))          { e.preventDefault(); setTab('cta_url_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/interactive-list/create')) { e.preventDefault(); setTab('interactive_list_create'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/interactive-list/index'))  { e.preventDefault(); setTab('interactive_list_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/ecommerce/woo-commerce/products')) { e.preventDefault(); setTab('ecommerce_woocommerce_products'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/ecommerce/woo-commerce/config'))   { e.preventDefault(); setTab('ecommerce_woocommerce_config'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/deposit/history'))        { e.preventDefault(); setTab('deposit_history'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/withdraw/history'))       { e.preventDefault(); setTab('withdraw_history'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/transactions'))           { e.preventDefault(); setTab('transactions'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/whatsapp-pricing'))       { e.preventDefault(); setTab('whatsapp_pricing'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/referral/index'))         { e.preventDefault(); setTab('referral_index'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/help'))                        { e.preventDefault(); setTab('help'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user-guide'))                  { e.preventDefault(); setTab('user_guide'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/agentbunny-assistant'))     { e.preventDefault(); setTab('agentbunny_assistant'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/ticket'))                      { e.preventDefault(); setTab('ticket'); setIsSidebarMobileOpen(false); }
           else if (href.includes('/user/logout')) { e.preventDefault(); onLogout(); }
           else if (href.includes('#') && (anchor.classList.contains('sidebar-menu-list__link') || anchor.closest('.has-dropdown'))) {
             // Let sidebar dropdowns pass through
@@ -4422,7 +4434,7 @@ function Dashboard({ user, setUser, onLogout }) {
               <i className="fas fa-times" />
             </span>
             <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', padding: '20px 10px', textAlign: 'center' }}>
-              <a href="/user/dashboard" className="sidebar-logo__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', textDecoration: 'none', width: '100%' }}>
+              <a href="/user/dashboard" className="sidebar-logo__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); setIsSidebarMobileOpen(false); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', textDecoration: 'none', width: '100%' }}>
                 <img src="/agentbunny-logo.png" alt="logo" style={{ height: '48px', width: '48px', objectFit: 'contain' }} />
                 <span className="brand-text" style={{ fontSize: '15px', fontWeight: '900', color: '#00832e', letterSpacing: '0.5px', textTransform: 'uppercase' }}>AgentBunny</span>
               </a>
@@ -4431,7 +4443,7 @@ function Dashboard({ user, setUser, onLogout }) {
             <ul className="sidebar-menu-list">
               {/* Dashboard */}
               <li className={`sidebar-menu-list__item ${tab === 'dashboard' ? 'active' : ''}`}>
-                <a href="/user/dashboard" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); }}>
+                <a href="/user/dashboard" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('dashboard'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-th-large" /></span>
                   <span className="text">My Dashboard</span>
                 </a>
@@ -4441,7 +4453,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Inbox */}
               <li className={`sidebar-menu-list__item ${tab === 'inbox' ? 'active' : ''}`}>
-                <a href="/user/inbox" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('inbox'); }}>
+                <a href="/user/inbox" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('inbox'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-sms" /></span>
                   <span className="text">Manage Inbox</span>
                 </a>
@@ -4449,7 +4461,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Customer */}
               <li className={`sidebar-menu-list__item ${tab === 'customer_list' || tab === 'customer_create' ? 'active' : ''}`}>
-                <a href="/user/customer/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('customer_list'); }}>
+                <a href="/user/customer/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('customer_list'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-users" /></span>
                   <span className="text">Manage Customer</span>
                 </a>
@@ -4457,7 +4469,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Orders */}
               <li className={`sidebar-menu-list__item ${tab === 'orders_list' ? 'active' : ''}`}>
-                <a href="/user/orders/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('orders_list'); }}>
+                <a href="/user/orders/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('orders_list'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-shopping-basket" /></span>
                   <span className="text">Manage Orders</span>
                 </a>
@@ -4465,7 +4477,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Track Customer Orders */}
               <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
-                <a href="/user/tracking" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); }}>
+                <a href="/user/tracking" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-truck-loading" /></span>
                   <span className="text">Track Customer Orders</span>
                 </a>
@@ -4473,7 +4485,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Agent */}
               <li className={`sidebar-menu-list__item ${tab === 'agent_list' || tab === 'agent_create' ? 'active' : ''}`}>
-                <a href="/user/agent/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('agent_list'); }}>
+                <a href="/user/agent/list" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('agent_list'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-user-cog" /></span>
                   <span className="text">Manage Agent</span>
                 </a>
@@ -4489,16 +4501,16 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['contacts'] || ['contact_list', 'contact_tag_list', 'contactlist_list'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'contact_list' ? 'active' : ''}`}><a href="/user/contact/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_list'); }}><span className="text">Manage Contacts</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'contact_tag_list' ? 'active' : ''}`}><a href="/user/contact-tag/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_tag_list'); }}><span className="text">Manage Contact Tag</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'contactlist_list' ? 'active' : ''}`}><a href="/user/contactlist/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contactlist_list'); }}><span className="text">Manage Contact List</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'contact_list' ? 'active' : ''}`}><a href="/user/contact/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contacts</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'contact_tag_list' ? 'active' : ''}`}><a href="/user/contact-tag/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_tag_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contact Tag</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'contactlist_list' ? 'active' : ''}`}><a href="/user/contactlist/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contactlist_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contact List</span></a></li>
                   </ul>
                 </div>
               </li>
 
               {/* Saved Replies */}
               <li className={`sidebar-menu-list__item ${tab === 'saved_reply_index' || tab === 'saved_reply_create' ? 'active' : ''}`}>
-                <a href="/user/saved-reply/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('saved_reply_index'); }}>
+                <a href="/user/saved-reply/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('saved_reply_index'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-bolt" /></span>
                   <span className="text">Saved Replies</span>
                 </a>
@@ -4512,9 +4524,9 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['templates'] || ['template_create', 'template_create_carousel', 'template_index'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'template_create' ? 'active' : ''}`}><a href="/user/template/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create'); }}><span className="text">New Template</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'template_create_carousel' ? 'active' : ''}`}><a href="/user/template/create/carousel" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create_carousel'); }}><span className="text">Carousel Template</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'template_index' ? 'active' : ''}`}><a href="/user/template/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_index'); }}><span className="text">All Template</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'template_create' ? 'active' : ''}`}><a href="/user/template/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create'); setIsSidebarMobileOpen(false); }}><span className="text">New Template</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'template_create_carousel' ? 'active' : ''}`}><a href="/user/template/create/carousel" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create_carousel'); setIsSidebarMobileOpen(false); }}><span className="text">Carousel Template</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'template_index' ? 'active' : ''}`}><a href="/user/template/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_index'); setIsSidebarMobileOpen(false); }}><span className="text">All Template</span></a></li>
                   </ul>
                 </div>
               </li>
@@ -4528,10 +4540,10 @@ function Dashboard({ user, setUser, onLogout }) {
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['campaigns'] || tab.startsWith('campaign_')) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
                     <li className={`sidebar-submenu-list__item ${tab === 'campaign_create' ? 'active' : ''}`}>
-                      <a href="/user/campaign/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_create'); }}><span className="text">New Campaign</span></a>
+                      <a href="/user/campaign/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_create'); setIsSidebarMobileOpen(false); }}><span className="text">New Campaign</span></a>
                     </li>
                     <li className={`sidebar-submenu-list__item ${tab === 'campaign_index' ? 'active' : ''}`}>
-                      <a href="/user/campaign/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_index'); }}><span className="text">All Campaign</span></a>
+                      <a href="/user/campaign/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_index'); setIsSidebarMobileOpen(false); }}><span className="text">All Campaign</span></a>
                     </li>
                   </ul>
                 </div>
@@ -4545,9 +4557,9 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['automation'] || ['automation_welcome_message', 'flow_builder', 'automation_ai_bot'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'automation_welcome_message' ? 'active' : ''}`}><a href="/user/automation/welcome-message" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_welcome_message'); }}><span className="text">Welcome Message</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'flow_builder' ? 'active' : ''}`}><a href="/user/flow-builder" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('flow_builder'); }}><span className="text">Flow Builder</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'automation_ai_bot' ? 'active' : ''}`}><a href="/user/automation/ai-bot" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_ai_bot'); }}><span className="text">AI Bots</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'automation_welcome_message' ? 'active' : ''}`}><a href="/user/automation/welcome-message" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_welcome_message'); setIsSidebarMobileOpen(false); }}><span className="text">Welcome Message</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'flow_builder' ? 'active' : ''}`}><a href="/user/flow-builder" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('flow_builder'); setIsSidebarMobileOpen(false); }}><span className="text">Flow Builder</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'automation_ai_bot' ? 'active' : ''}`}><a href="/user/automation/ai-bot" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_ai_bot'); setIsSidebarMobileOpen(false); }}><span className="text">AI Bots</span></a></li>
                   </ul>
                 </div>
               </li>
@@ -4560,8 +4572,8 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['shortlink'] || ['shortlink_create', 'shortlink_index'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'shortlink_create' ? 'active' : ''}`}><a href="/user/shortlink/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_create'); }}><span className="text">Create ShortLink</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'shortlink_index' ? 'active' : ''}`}><a href="/user/shortlink/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_index'); }}><span className="text">Manage ShortLink</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'shortlink_create' ? 'active' : ''}`}><a href="/user/shortlink/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create ShortLink</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'shortlink_index' ? 'active' : ''}`}><a href="/user/shortlink/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_index'); setIsSidebarMobileOpen(false); }}><span className="text">Manage ShortLink</span></a></li>
                   </ul>
                 </div>
               </li>
@@ -4574,8 +4586,8 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['floaters'] || ['floater_create', 'floater_index'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'floater_create' ? 'active' : ''}`}><a href="/user/floater/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_create'); }}><span className="text">Create Floater</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'floater_index' ? 'active' : ''}`}><a href="/user/floater/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_index'); }}><span className="text">Manage Floater</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'floater_create' ? 'active' : ''}`}><a href="/user/floater/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create Floater</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'floater_index' ? 'active' : ''}`}><a href="/user/floater/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_index'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Floater</span></a></li>
                   </ul>
                 </div>
               </li>
@@ -4588,8 +4600,8 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['cta'] || ['cta_url_create', 'cta_url_index'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'cta_url_create' ? 'active' : ''}`}><a href="/user/cta-url/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_create'); }}><span className="text">Create URL</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'cta_url_index' ? 'active' : ''}`}><a href="/user/cta-url/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_index'); }}><span className="text">CTA URl List</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'cta_url_create' ? 'active' : ''}`}><a href="/user/cta-url/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create URL</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'cta_url_index' ? 'active' : ''}`}><a href="/user/cta-url/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_index'); setIsSidebarMobileOpen(false); }}><span className="text">CTA URl List</span></a></li>
                   </ul>
                 </div>
               </li>
@@ -4602,8 +4614,8 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['interactive'] || ['interactive_list_create', 'interactive_list_index'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_create' ? 'active' : ''}`}><a href="/user/interactive-list/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_create'); }}><span className="text">Create List</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_index' ? 'active' : ''}`}><a href="/user/interactive-list/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_index'); }}><span className="text">Interactive List</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_create' ? 'active' : ''}`}><a href="/user/interactive-list/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create List</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_index' ? 'active' : ''}`}><a href="/user/interactive-list/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_index'); setIsSidebarMobileOpen(false); }}><span className="text">Interactive List</span></a></li>
                   </ul>
                 </div>
               </li>
@@ -4623,12 +4635,12 @@ function Dashboard({ user, setUser, onLogout }) {
                       <div className="sidebar-submenu" style={{ display: (openDropdowns['woocommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab)) ? 'block' : 'none', paddingLeft: '12px' }}>
                         <ul className="sidebar-submenu-list">
                           <li className={`sidebar-submenu-list__item ${tab === 'ecommerce_woocommerce_products' ? 'active' : ''}`}>
-                            <a href="/user/ecommerce/woo-commerce/products" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_products'); }}>
+                            <a href="/user/ecommerce/woo-commerce/products" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_products'); setIsSidebarMobileOpen(false); }}>
                               <span className="text">Products</span>
                             </a>
                           </li>
                           <li className={`sidebar-submenu-list__item ${tab === 'ecommerce_woocommerce_config' ? 'active' : ''}`}>
-                            <a href="/user/ecommerce/woo-commerce/config" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_config'); }}>
+                            <a href="/user/ecommerce/woo-commerce/config" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_config'); setIsSidebarMobileOpen(false); }}>
                               <span className="text">Config</span>
                             </a>
                           </li>
@@ -4643,7 +4655,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Deposit */}
               <li className={`sidebar-menu-list__item ${tab === 'deposit_history' ? 'active' : ''}`}>
-                <a href="/user/deposit/history" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('deposit_history'); }}>
+                <a href="/user/deposit/history" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('deposit_history'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-money-bill" /></span>
                   <span className="text">Manage Deposit</span>
                 </a>
@@ -4651,7 +4663,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Withdraw */}
               <li className={`sidebar-menu-list__item ${tab === 'withdraw_history' ? 'active' : ''}`}>
-                <a href="/user/withdraw/history" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('withdraw_history'); }}>
+                <a href="/user/withdraw/history" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('withdraw_history'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-wallet" /></span>
                   <span className="text">Manage Withdraw</span>
                 </a>
@@ -4659,7 +4671,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Transactions Logs */}
               <li className={`sidebar-menu-list__item ${tab === 'transactions' ? 'active' : ''}`}>
-                <a href="/user/transactions" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('transactions'); }}>
+                <a href="/user/transactions" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('transactions'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-exchange-alt" /></span>
                   <span className="text">Transactions Logs</span>
                 </a>
@@ -4667,7 +4679,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* WhatsApp Pricing */}
               <li className={`sidebar-menu-list__item ${tab === 'whatsapp_pricing' ? 'active' : ''}`}>
-                <a href="/user/whatsapp-pricing" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('whatsapp_pricing'); }}>
+                <a href="/user/whatsapp-pricing" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('whatsapp_pricing'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="lab la-whatsapp" /></span>
                   <span className="text">WhatsApp Pricing</span>
                 </a>
@@ -4675,7 +4687,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Manage Referrals */}
               <li className={`sidebar-menu-list__item ${tab === 'referral_index' ? 'active' : ''}`}>
-                <a href="/user/referral/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('referral_index'); }}>
+                <a href="/user/referral/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('referral_index'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-share-alt" /></span>
                   <span className="text">Manage Referrals</span>
                 </a>
@@ -4685,7 +4697,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Whatsapp Accounts */}
               <li className={`sidebar-menu-list__item ${tab === 'whatsapp_account' ? 'active' : ''}`}>
-                <a href="/user/whatsapp-account" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('whatsapp_account'); }}>
+                <a href="/user/whatsapp-account" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('whatsapp_account'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-phone" /></span>
                   <span className="text">Whatsapp Accounts</span>
                 </a>
@@ -4693,7 +4705,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Business Profile */}
               <li className={`sidebar-menu-list__item ${tab === 'business_profile' ? 'active' : ''}`}>
-                <a href="/user/business-profile" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('business_profile'); }}>
+                <a href="/user/business-profile" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('business_profile'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-store" /></span>
                   <span className="text">Business Profile</span>
                 </a>
@@ -4701,7 +4713,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
               {/* Subscription Info */}
               <li className={`sidebar-menu-list__item ${['subscription_index', 'subscription_monthly', 'subscription_yearly'].includes(tab) ? 'active' : ''}`}>
-                <a href="/user/subscription/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('subscription_index'); }}>
+                <a href="/user/subscription/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('subscription_index'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-dollar-sign" /></span>
                   <span className="text">Subscription Info</span>
                 </a>
@@ -4717,17 +4729,17 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
                 <div className="sidebar-submenu" style={{ display: (openDropdowns['help'] || ['help', 'user_guide', 'agentbunny_assistant', 'ticket'].includes(tab)) ? 'block' : 'none' }}>
                   <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'help' ? 'active' : ''}`}><a href="/help" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('help'); }}><span className="text">Help Center</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'user_guide' ? 'active' : ''}`}><a href="/user-guide" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('user_guide'); }}><span className="text">User Guide</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'agentbunny_assistant' ? 'active' : ''}`}><a href="/user/agentbunny-assistant" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('agentbunny_assistant'); }}><span className="text">AgentBunny AI Support</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'ticket' ? 'active' : ''}`}><a href="/ticket" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ticket'); }}><span className="text">Support Ticket</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'help' ? 'active' : ''}`}><a href="/help" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('help'); setIsSidebarMobileOpen(false); }}><span className="text">Help Center</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'user_guide' ? 'active' : ''}`}><a href="/user-guide" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('user_guide'); setIsSidebarMobileOpen(false); }}><span className="text">User Guide</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'agentbunny_assistant' ? 'active' : ''}`}><a href="/user/agentbunny-assistant" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('agentbunny_assistant'); setIsSidebarMobileOpen(false); }}><span className="text">AgentBunny AI Support</span></a></li>
+                    <li className={`sidebar-submenu-list__item ${tab === 'ticket' ? 'active' : ''}`}><a href="/ticket" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ticket'); setIsSidebarMobileOpen(false); }}><span className="text">Support Ticket</span></a></li>
                   </ul>
                 </div>
               </li>
 
               {/* Manage Profile */}
               <li className={`sidebar-menu-list__item ${tab === 'profile_setting' ? 'active' : ''}`}>
-                <a href="/user/profile-setting" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('profile_setting'); }}>
+                <a href="/user/profile-setting" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('profile_setting'); setIsSidebarMobileOpen(false); }}>
                   <span className="icon"><i className="las la-user" /></span>
                   <span className="text">Manage Profile</span>
                 </a>
@@ -4861,13 +4873,13 @@ function Dashboard({ user, setUser, onLogout }) {
                     </div>
 
                     <ul className="user-info-dropdown" style={{ display: isProfileOpen ? 'block' : 'none' }}>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/profile-setting" onClick={(e) => { e.preventDefault(); setTab('profile_setting'); setIsProfileOpen(false); }}><span className="icon"><i className="far fa-user" /></span><span className="text">View Profile</span></a></li>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/subscription/index" onClick={(e) => { e.preventDefault(); setTab('subscription_index'); setIsProfileOpen(false); }}><span className="icon"><i className="fa-solid fa-dollar-sign" /></span><span className="text">Subscription Info</span></a></li>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/whatsapp-account" onClick={(e) => { e.preventDefault(); setTab('whatsapp_account'); setIsProfileOpen(false); }}><span className="icon"><i className="fa-brands fa-whatsapp" /></span><span className="text">WhatsApp Account</span></a></li>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/development-credential" onClick={(e) => { e.preventDefault(); setTab('development_credential'); setIsProfileOpen(false); }}><span className="icon"><i className="fab fa-codepen" /></span><span className="text">Developer Tool</span></a></li>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/ip-white-list/index" onClick={(e) => { e.preventDefault(); setTab('ip_white_list'); setIsProfileOpen(false); }}><span className="icon"><i className="fas fa-mobile" /></span><span className="text">IP White List</span></a></li>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/twofactor" onClick={(e) => { e.preventDefault(); setTab('twofactor'); setIsProfileOpen(false); }}><span className="icon"><i className="fa-solid fa-shield-halved" /></span><span className="text">2FA Setting</span></a></li>
-                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/change-password" onClick={(e) => { e.preventDefault(); setTab('change_password'); setIsProfileOpen(false); }}><span className="icon"><i className="fas fa-key" /></span><span className="text">Change Password</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/profile-setting" onClick={(e) => { e.preventDefault(); setTab('profile_setting'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="far fa-user" /></span><span className="text">View Profile</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/subscription/index" onClick={(e) => { e.preventDefault(); setTab('subscription_index'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="fa-solid fa-dollar-sign" /></span><span className="text">Subscription Info</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/whatsapp-account" onClick={(e) => { e.preventDefault(); setTab('whatsapp_account'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="fa-brands fa-whatsapp" /></span><span className="text">WhatsApp Account</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/development-credential" onClick={(e) => { e.preventDefault(); setTab('development_credential'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="fab fa-codepen" /></span><span className="text">Developer Tool</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/ip-white-list/index" onClick={(e) => { e.preventDefault(); setTab('ip_white_list'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="fas fa-mobile" /></span><span className="text">IP White List</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/twofactor" onClick={(e) => { e.preventDefault(); setTab('twofactor'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="fa-solid fa-shield-halved" /></span><span className="text">2FA Setting</span></a></li>
+                      <li className="user-info-dropdown__item"><a className="user-info-dropdown__link" href="/user/change-password" onClick={(e) => { e.preventDefault(); setTab('change_password'); setIsSidebarMobileOpen(false); setIsProfileOpen(false); }}><span className="icon"><i className="fas fa-key" /></span><span className="text">Change Password</span></a></li>
                       <li className="user-info-dropdown__item"><a className="user-info-dropdown__link text--danger" href="#" onClick={(e) => { e.preventDefault(); onLogout(); setIsProfileOpen(false); }}><span className="icon text--danger"><i className="fa-solid fa-arrow-right-from-bracket" /></span><span className="text text--danger">Sign Out</span></a></li>
                     </ul>
                   </div>
@@ -6053,7 +6065,7 @@ function TrackCustomerOrders() {
           }}
         >
           <i className="las la-globe" style={{ fontSize: '36px', lineHeight: 1 }}></i>
-          <span>All Couriers</span>
+          <span style={{ whiteSpace: 'nowrap' }}>All Couriers</span>
         </button>
 
         {Object.entries(COURIER_LOGOS).map(([name, logo]) => {
@@ -6091,14 +6103,14 @@ function TrackCustomerOrders() {
                 }} 
                 onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
               />
-              <span>{name}</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{name}</span>
             </button>
           );
         })}
       </div>
 
       {/* 2. Main 2-Column workspace */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '24px', alignItems: 'start' }}>
+      <div className="responsive-tracking-grid" style={{ gap: '24px', alignItems: 'start' }}>
         
         {/* Left side: Orders Selector list */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>

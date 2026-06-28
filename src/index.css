@@ -1057,3 +1057,32 @@ body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
 .animate-marquee:hover {
     animation-play-state: paused;
 }
+
+/* ── Custom Mobile Responsive Overrides ─────────────────────────────── */
+.responsive-tracking-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 992px) {
+    .responsive-tracking-grid {
+        grid-template-columns: 1fr 400px;
+    }
+}
+
+/* Force table wrapper to scroll horizontally on mobile devices */
+.table-responsive {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Prevent text wrapping and vertical stretching inside responsive tables on mobile */
+.table-responsive table {
+    min-width: 650px !important;
+}
+
+.table-responsive th,
+.table-responsive td {
+    white-space: nowrap !important;
+}
