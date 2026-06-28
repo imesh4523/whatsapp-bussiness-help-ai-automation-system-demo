@@ -820,6 +820,10 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
     `, [req.user.id]);
     const total_ai_messages = parseInt(aiMsgsRes.rows[0].total);
 
+    // 8. Count successful (Completed) orders
+    const completedOrdersRes = await db.query("SELECT COUNT(*) as total FROM orders WHERE user_id = $1 AND status = 'Completed'", [req.user.id]);
+    const total_withdrawals = parseInt(completedOrdersRes.rows[0].total);
+
     res.json({
       total_earned,
       total_contacts,
@@ -828,7 +832,7 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
       active_flows,
       ai_bots,
       total_deposits,
-      total_withdrawals: 0.00,
+      total_withdrawals,
       total_ai_messages
     });
   } catch (err) {
