@@ -148,9 +148,14 @@ function App() {
     } else if (savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
-      setView('dashboard');
-      if (!isDashboardRoute(path)) {
-        window.history.replaceState(null, '', '/user/dashboard');
+      if (isDashboardRoute(path)) {
+        setView('dashboard');
+      } else {
+        if (path === '/collections') setView('collections');
+        else if (path === '/about') setView('about');
+        else if (path === '/account') setView('account');
+        else if (path === '/pricing') setView('pricing');
+        else setView('home');
       }
       // Fetch fresh profile in the background on app load
       const token = localStorage.getItem('aura_token');
@@ -206,9 +211,12 @@ function App() {
       } else if ((savedAdmin || isAdminRoute(path)) && !localStorage.getItem('admin_token')) {
         setView('admin');
         if (savedAdmin) setAdmin(JSON.parse(savedAdmin));
-      } else if (savedUser) {
+      } else if (savedUser && isDashboardRoute(path)) {
         setView('dashboard');
       } else {
+        if (savedUser) {
+          setUser(JSON.parse(savedUser));
+        }
         if (isDashboardRoute(path)) {
           window.history.replaceState(null, '', '/');
           setView('home');
@@ -305,6 +313,7 @@ function App() {
     else if (newView === 'about') path = '/about';
     else if (newView === 'account') path = '/account';
     else if (newView === 'pricing') path = '/pricing';
+    else if (newView === 'dashboard') path = '/user/dashboard';
     window.history.pushState(null, '', path);
   };
 

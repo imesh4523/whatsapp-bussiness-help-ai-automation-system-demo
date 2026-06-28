@@ -50,13 +50,13 @@ function Header({ cartCount, onOpenCart, user, onLogout, onOpenAuth, currentView
         {/* Right Section Actions */}
         <div className="flex items-center gap-2 md:gap-4">
           
-          {/* Sign In Button */}
+          {/* Sign In / Dashboard Button */}
           <button 
             className="hidden sm:flex items-center gap-2 px-4 py-2 hover:bg-black/5 rounded-full transition-all"
-            onClick={() => user ? onNavigate('account') : onOpenAuth('login')}
+            onClick={() => user ? onNavigate('dashboard') : onOpenAuth('login')}
           >
             <span className="text-xs font-bold tracking-widest uppercase">
-              {user ? 'ACCOUNT' : 'SIGN IN'}
+              {user ? 'DASHBOARD' : 'SIGN IN'}
             </span>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black ${
               user ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'
@@ -82,7 +82,7 @@ function Header({ cartCount, onOpenCart, user, onLogout, onOpenAuth, currentView
 
           {/* Mobile Profile Icon */}
           <button 
-            onClick={() => user ? onNavigate('account') : onOpenAuth('login')} 
+            onClick={() => user ? onNavigate('dashboard') : onOpenAuth('login')} 
             className="sm:hidden w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden"
           >
             {user ? (
