@@ -1,0 +1,14 @@
+﻿import pg from "pg";
+import dotenv from "dotenv";
+dotenv.config();
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const res = await pool.query("SELECT key, value FROM system_settings WHERE key IN ('ai_provider','openrouter_api_key','openrouter_model','gemini_api_key')");
+const map = {};
+res.rows.forEach(r => map[r.key] = r.value);
+console.log("=== AI Settings in DB ===");
+console.log("ai_provider:", map["ai_provider"] || "NOT SET (default: gemini)");
+console.log("openrouter_key:", map["openrouter_api_key"] ? map["openrouter_api_key"].substring(0,20)+"..." : "NOT SET");
+console.log("openrouter_model:", map["openrouter_model"] || "NOT SET");
+console.log("gemini_key:", map["gemini_api_key"] ? "SET" : "NOT SET");
+await pool.end();

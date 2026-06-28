@@ -220,12 +220,59 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
         }
       }
       // Final user message
+      let userContent = [];
+      const userText = imageBuffer
+        ? `The customer uploaded this screenshot/image. Identify which product it matches in our [AVAILABLE INVENTORY]. Confirm if it is in stock, the price, sizes, and ask if they would like to order it. Additional message/caption from customer (if any): "${messageText || ''}"`
+        : messageText;
+
+      userContent.push({
+        type: 'text',
+        text: userText
+      });
+
+      // Add customer uploaded image if present
+      if (imageBuffer && imageMimeType) {
+        userContent.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${imageMimeType};base64,${imageBuffer.toString('base64')}`
+          }
+        });
+      }
+
+      // Add business knowledge base images (up to 5) for visual comparison/sizing guides
+      if (businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
+        const photos = businessProfile.photo_urls.slice(0, 5);
+        for (const photoUrl of photos) {
+          try {
+            const filename = photoUrl.replace('/uploads/', '');
+            const filePath = path.join(__dirname, 'uploads', filename);
+            if (fs.existsSync(filePath)) {
+              const fileBuffer = fs.readFileSync(filePath);
+              const mimeType = photoUrl.endsWith('.png') ? 'image/png' : 'image/jpeg';
+              userContent.push({
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${fileBuffer.toString('base64')}`
+                }
+              });
+            }
+          } catch (imgErr) {
+            console.warn('Failed to load knowledge base photo for OpenRouter:', imgErr.message);
+          }
+        }
+      }
+
+      // Fallback to simple string if no images are present
+      if (userContent.length === 1) {
+        userContent = userContent[0].text;
+      }
+
       orMessages.push({
         role: 'user',
-        content: imageBuffer
-          ? `The customer uploaded an image. Additional message: "${messageText || ''}"`
-          : messageText
+        content: userContent
       });
+
       replyText = await callOpenRouterAPI(orModel, orMessages, {
         temperature: config.temperature,
         max_tokens: 500
