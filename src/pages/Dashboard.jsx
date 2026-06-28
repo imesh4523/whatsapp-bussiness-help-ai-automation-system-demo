@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dashboardPages from '../data/dashboardPages.json';
 import { API_BASE_URL } from '../config';
+import ManageInventory from './ManageInventory';
 
 
 // ── Premium Toast Notification System ───────────────────────────────────────
@@ -151,6 +152,7 @@ const getTabFromPath = (path) => {
     '/user/customer/list': 'customer_list',
     '/user/customer/create': 'customer_create',
     '/user/orders/list': 'orders_list',
+    '/user/inventory': 'manage_inventory',
     '/user/agent/list': 'agent_list',
     '/user/agent/create': 'agent_create',
     '/user/saved-reply/index': 'saved_reply_index',
@@ -208,6 +210,7 @@ const getPathFromTab = (tabKey) => {
     customer_list: '/user/customer/list',
     customer_create: '/user/customer/create',
     orders_list: '/user/orders/list',
+    manage_inventory: '/user/inventory',
     agent_list: '/user/agent/list',
     agent_create: '/user/agent/create',
     saved_reply_index: '/user/saved-reply/index',
@@ -4591,6 +4594,14 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
               </li>
 
+              {/* Manage Inventory */}
+              <li className={`sidebar-menu-list__item ${tab === 'manage_inventory' ? 'active' : ''}`}>
+                <a href="/user/inventory" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('manage_inventory'); setIsSidebarMobileOpen(false); }}>
+                  <span className="icon"><i className="las la-warehouse" /></span>
+                  <span className="text">Manage Inventory</span>
+                </a>
+              </li>
+
               {/* Track Customer Orders */}
               <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
                 <a href="/user/tracking" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); setIsSidebarMobileOpen(false); }}>
@@ -5050,6 +5061,8 @@ function Dashboard({ user, setUser, onLogout }) {
             <div className="dashboard-body">
               {tab === 'whatsapp_account' ? (
                 <WhatsAppAccountManager activeSessionId={activeSessionId} onSessionsUpdated={fetchSessions} user={user} />
+              ) : tab === 'manage_inventory' ? (
+                <ManageInventory user={user} />
               ) : tab === 'inbox' ? (
                 <WhatsAppInbox activeSessionId={activeSessionId} />
               ) : tab === 'orders_list' ? (
