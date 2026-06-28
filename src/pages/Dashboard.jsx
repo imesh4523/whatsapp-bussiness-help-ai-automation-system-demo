@@ -2492,6 +2492,7 @@ function Dashboard({ user, setUser, onLogout }) {
         const data = await res.json();
         setStats(data);
       } else if (res.status === 401 || res.status === 403) {
+        console.error('DEBUG AUTH: Invalid or expired token on dashboard stats fetch. Status:', res.status);
         if (onLogout) onLogout();
       }
     } catch (err) {
@@ -2519,6 +2520,7 @@ function Dashboard({ user, setUser, onLogout }) {
           localStorage.removeItem('agentbunny_active_session_id');
         }
       } else if (res.status === 401 || res.status === 403) {
+        console.error('DEBUG AUTH: Invalid or expired token on WhatsApp sessions fetch. Status:', res.status);
         if (onLogout) onLogout();
       }
     } catch (err) {
@@ -2550,6 +2552,7 @@ function Dashboard({ user, setUser, onLogout }) {
               localStorage.setItem('aura_user', JSON.stringify(updatedUser));
             }
           } else if (res.status === 401 || res.status === 403) {
+            console.error('DEBUG AUTH: Invalid or expired token on profile fetch. Status:', res.status);
             if (onLogout) onLogout();
           }
         } catch (err) {

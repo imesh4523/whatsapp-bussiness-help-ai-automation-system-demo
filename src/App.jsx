@@ -162,6 +162,7 @@ function App() {
             if (res.ok) {
               return res.json();
             } else if (res.status === 401 || res.status === 403) {
+              console.error('DEBUG AUTH: Invalid or expired token on mount. Status code:', res.status);
               // Token is invalid/expired - clear storage and redirect
               localStorage.removeItem('aura_token');
               localStorage.removeItem('aura_user');
