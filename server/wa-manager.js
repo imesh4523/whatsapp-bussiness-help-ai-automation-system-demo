@@ -11,7 +11,7 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import db from './db.js';
 import { encrypt, decrypt } from './crypto.js';
-import { generateAIReply } from './ai.js';
+import { generateAIReply, callActiveAI } from './ai.js';
 import { callGeminiAPI } from './gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -651,14 +651,8 @@ Strictly output JSON or NONE. No markup, no markdown formatting.
 Chat history:
 ${chatHistory}`;
 
-    const payload = {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
-    };
-
     try {
-      const data = await callGeminiAPI('gemini-1.5-flash', payload);
-      const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      const textResult = await callActiveAI(prompt, "application/json");
       if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
         const orderData = JSON.parse(textResult);
         if (orderData && orderData.confirmed) {
@@ -731,14 +725,8 @@ Strictly output JSON or NONE. No markup, no markdown formatting.
 Message text:
 "${text}"`;
 
-    const payload = {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
-    };
-
     try {
-      const data = await callGeminiAPI('gemini-1.5-flash', payload);
-      const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      const textResult = await callActiveAI(prompt, "application/json");
       if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
         const trackingData = JSON.parse(textResult);
         if (trackingData && trackingData.has_tracking && trackingData.tracking_number) {

@@ -93,9 +93,9 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       console.warn('Could not load chat history for context:', histErr.message);
     }
 
-    // 4. Load knowledge files (sizing charts/photos) to send to Gemini as inlineData
+    // 4. Load knowledge files (sizing charts/photos) to send to Gemini as inlineData if customer sent an image
     const imageParts = [];
-    if (businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
+    if (imageBuffer && businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
       // Top 5 photos maximum
       const photos = businessProfile.photo_urls.slice(0, 5);
       for (const photoUrl of photos) {
@@ -245,8 +245,8 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
         });
       }
 
-      // Add business knowledge base images (up to 5) for visual comparison/sizing guides
-      if (businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
+      // Add business knowledge base images (up to 5) for visual comparison if customer sent an image
+      if (imageBuffer && businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
         const photos = businessProfile.photo_urls.slice(0, 5);
         for (const photoUrl of photos) {
           try {
@@ -345,3 +345,31 @@ function getMockAIResponse(prompt) {
 
   return `I understand you're asking about "${prompt}". A support agent is currently checking this for you and will get back to you shortly. In the meantime, feel free to ask about our clothing prices, shipping options, or payment methods!`;
 }
+
+/**
+ * Utility function to route global system/CRM LLM tasks (like JSON extraction) 
+ * through the active global provider (Gemini or OpenRouter).
+ */
+export async function callActiveAI(prompt, responseMimeType = "text/plain") {
+  const provider = await getAIProvider();
+  if (provider === 'openrouter') {
+    const model = await getOpenRouterModel();
+    const messages = [
+      { role: 'user', content: prompt }
+    ];
+    return await callOpenRouterAPI(model, messages, { temperature: 0.1 });
+  } else {
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 }
+    };
+    if (responseMimeType === "application/json") {
+      payload.generationConfig.responseMimeType = "application/json";
+    }
+    const data = await callGeminiAPI('gemini-1.5-flash', payload);
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!replyText) throw new Error('Empty response from Gemini');
+    return replyText.trim();
+  }
+}
+
