@@ -1290,6 +1290,7 @@ function WhatsAppInbox({ activeSessionId }) {
   const fileInputRef = useRef(null);
   const [labelFilter, setLabelFilter] = useState('All'); // 'All', 'Confirmed', 'Cancelled', 'Interested'
   const [chatSearch, setChatSearch] = useState('');
+  const [mobileInboxView, setMobileInboxView] = useState('list');
 
   // Poll chats list and connection status
   useEffect(() => {
@@ -1608,10 +1609,10 @@ function WhatsAppInbox({ activeSessionId }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4" style={{ height: '620px' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4" style={{ height: 'calc(100vh - 210px)', minHeight: '520px', maxHeight: '680px' }}>
         
         {/* Left Side: Chats list */}
-        <div className="lg:col-span-1 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
+        <div className={`lg:col-span-1 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden ${mobileInboxView === 'list' ? 'flex' : 'hidden lg:flex'}`}>
           <div className="p-4 border-b border-gray-100 bg-[#f8fafc]/50">
             <h6 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Active Chats ({filteredChats.length})</h6>
             <div className="relative">
@@ -1634,52 +1635,82 @@ function WhatsAppInbox({ activeSessionId }) {
               filteredChats.map(c => (
                 <div 
                   key={c.id} 
-                  onClick={() => setActiveChatId(c.id)}
-                  className={`p-4 cursor-pointer flex gap-3 transition-colors ${c.id === activeChatId ? 'bg-emerald-50/50 border-r-4 border-[#00832e]' : 'hover:bg-neutral-50'}`}
+                  onClick={() => { setActiveChatId(c.id); setMobileInboxView('chat'); }}
+                  className={`p-4 cursor-pointer flex items-center gap-3.5 transition-colors border-b border-[#f1f5f9] ${c.id === activeChatId ? 'bg-emerald-50/40 border-r-4 border-[#00832e]' : 'hover:bg-neutral-50/80'}`}
                 >
-                  {/* Avatar: profile photo if available, else initials */}
-                  {c.profile_pic_url ? (
-                    <img 
-                      src={c.profile_pic_url} 
-                      alt={c.sender_name || 'Contact'}
-                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className="w-10 h-10 rounded-full bg-[#00832e]/10 text-[#00832e] items-center justify-center font-bold text-sm flex-shrink-0"
-                    style={{ display: c.profile_pic_url ? 'none' : 'flex' }}
-                  >
-                    {c.sender_name ? c.sender_name.substring(0, 2).toUpperCase() : 'WA'}
+                  {/* Avatar wrapper with absolute WhatsApp badge */}
+                  <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
+                    {c.profile_pic_url ? (
+                      <img 
+                        src={c.profile_pic_url} 
+                        alt={c.sender_name || 'Contact'}
+                        className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className="w-12 h-12 rounded-full bg-[#00832e]/10 text-[#00832e] items-center justify-center font-black text-sm flex-shrink-0"
+                      style={{ display: c.profile_pic_url ? 'none' : 'flex' }}
+                    >
+                      {c.sender_name ? c.sender_name.substring(0, 2).toUpperCase() : 'WA'}
+                    </div>
+                    {/* WhatsApp icon badge */}
+                    <div style={{ 
+                      position: 'absolute', 
+                      bottom: '-2px', 
+                      right: '-2px', 
+                      backgroundColor: '#25D366', 
+                      border: '2px solid #ffffff', 
+                      borderRadius: '50%', 
+                      width: '18px', 
+                      height: '18px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}>
+                      <i className="lab la-whatsapp" style={{ fontSize: '11px', color: '#ffffff', lineHeight: 1 }}></i>
+                    </div>
                   </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-0.5">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <h6 className="text-xs font-bold text-neutral-800 truncate mb-0">{c.sender_name || formatPhone(c.sender_phone)}</h6>
+                    <div className="flex justify-between items-baseline mb-1">
+                      <h6 className="text-[13px] font-bold text-neutral-800 truncate mb-0" style={{ fontWeight: '700' }}>
+                        {c.sender_name || formatPhone(c.sender_phone)}
+                      </h6>
+                      <span className="text-[10px] text-gray-400 font-medium ml-1 flex-shrink-0">
+                        {new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-[11px] text-gray-500 truncate mb-0 flex-1 pr-2" style={{ lineHeight: '1.4' }}>
+                        {c.last_message}
+                      </p>
+                      
+                      {/* Tags & Pills on the right side of the list */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         {c.label && c.label !== 'None' && (
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold flex-shrink-0 ${
-                            c.label === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                            c.label === 'Cancelled' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
-                            'bg-blue-50 text-blue-700 border border-blue-100'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
+                            c.label === 'Confirmed' ? 'bg-[#d1fae5] text-[#065f46]' :
+                            c.label === 'Cancelled' ? 'bg-[#fee2e2] text-[#991b1b]' :
+                            'bg-[#dbeafe] text-[#1e40af]'
+                          }`} style={{ fontSize: '8px', fontWeight: '800' }}>
                             {c.label}
                           </span>
                         )}
+
+                        {c.unread_count > 0 && (
+                          <span className="w-5 h-5 rounded-full bg-[#00832e] text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 shadow-sm" style={{ fontWeight: '900' }}>
+                            {c.unread_count}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-[10px] text-gray-400 flex-shrink-0 ml-1">{new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    {/* Phone number removed from list view — editable in chat header */}
-                    <p className="text-[11px] text-gray-500 truncate mb-0">{c.last_message}</p>
                   </div>
-                  {c.unread_count > 0 && (
-                    <span className="w-4 h-4 rounded-full bg-[#00832e] text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                      {c.unread_count}
-                    </span>
-                  )}
                 </div>
               ))
             )}
@@ -1711,12 +1742,20 @@ function WhatsAppInbox({ activeSessionId }) {
         </div>
 
         {/* Right Side: Message logs */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
+        <div className={`lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden ${mobileInboxView === 'chat' ? 'flex' : 'hidden lg:flex'}`}>
           {activeChat ? (
             <>
               {/* Header */}
               <div className="p-4 border-b border-gray-100 bg-[#f8fafc]/50 flex justify-between items-center">
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileInboxView('list')}
+                    className="lg:hidden mr-1 p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border-none cursor-pointer flex items-center justify-center"
+                    style={{ padding: '8px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', marginRight: '6px' }}
+                  >
+                    <i className="las la-arrow-left" style={{ fontSize: '16px', fontWeight: 'bold' }}></i>
+                  </button>
                   {/* Profile photo in chat header */}
                   {activeChat.profile_pic_url ? (
                     <img 
@@ -6122,7 +6161,7 @@ function TrackCustomerOrders() {
               No matching orders found.
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold' }}>
