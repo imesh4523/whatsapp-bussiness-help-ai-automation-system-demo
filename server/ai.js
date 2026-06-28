@@ -78,8 +78,13 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
           'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 8',
           [chatId]
         );
+        // Exclude the current incoming message from history to prevent duplication in LLM prompt
+        let rows = msgRes.rows;
+        if (rows.length > 0 && rows[0].sender === 'customer' && rows[0].text === messageText) {
+          rows = rows.slice(1);
+        }
         // Reverse to sorted chronological order
-        const recentMessages = msgRes.rows.reverse();
+        const recentMessages = rows.reverse();
         historyContext = recentMessages.map(m => 
           `${m.sender === 'customer' ? 'Customer' : 'Assistant'}: ${m.text}`
         ).join('\n');
