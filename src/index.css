@@ -480,4 +480,10 @@ body .dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after {
   display: none !important;
 }
 
+body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
+  margin: 20px 0 !important;
+  padding: 0 !important;
+  justify-content: center !important;
+}
+
 
