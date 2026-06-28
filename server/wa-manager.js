@@ -398,7 +398,7 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
         }
 
         // Generate Gemini AI response
-        const aiReply = await generateAIReply(sessionPhone, senderPhone, text, imageBuffer, imageMimeType);
+        const aiReply = await generateAIReply(sessionId, senderPhone, text, imageBuffer, imageMimeType);
         
         // Calculate dynamic delay based on reply length (typing speed simulator)
         const wordCount = aiReply.split(/\s+/).length;
