@@ -16,7 +16,8 @@ import {
   initWhatsAppSessions,
   triggerMockIncomingMessage,
   getActiveSocket,
-  trackSentMessage
+  trackSentMessage,
+  decrementProductStock
 } from './wa-manager.js';
 
 dotenv.config();
@@ -470,6 +471,10 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
       'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
       [orderId, req.user.id, JSON.stringify(items), totalAmount, JSON.stringify(shippingDetails), 'Processing']
     );
+    
+    // Decrement stock
+    await decrementProductStock(req.user.id, items);
+    
     res.status(201).json({ success: true, message: 'Order created successfully', orderId });
   } catch (err) {
     console.error('Create order error:', err.message);

@@ -839,6 +839,9 @@ ${chatHistory}`;
               [orderId, userId, JSON.stringify(items), amount, JSON.stringify(shippingDetails), 'Confirmed']
             );
 
+            // Decrement inventory stock
+            await decrementProductStock(userId, items);
+
             // Update chat label to 'Confirmed'
             await db.query("UPDATE chats SET label = 'Confirmed' WHERE id = $1", [chatId]);
             console.log(`[AUTO-CRM] Order ${orderId} automatically created for customer ${senderPhone} (Amount: Rs. ${amount})`);
@@ -1007,6 +1010,9 @@ ${chatHistory}`;
               [orderId, userId, JSON.stringify(items), amount, JSON.stringify(shippingDetails), 'Confirmed']
             );
 
+            // Decrement inventory stock
+            await decrementProductStock(userId, items);
+
             // Update chat label to 'Confirmed'
             await db.query("UPDATE chats SET label = 'Confirmed' WHERE id = $1", [chatId]);
             console.log(`[AUTO-CRM ON-THE-FLY] Order ${orderId} automatically created for customer ${senderPhone} (Amount: Rs. ${amount})`);
@@ -1021,4 +1027,35 @@ ${chatHistory}`;
     console.error('[AUTO-CRM ON-THE-FLY] Order extraction failed:', err.message);
   }
   return null;
+}
+
+export async function decrementProductStock(userId, items) {
+  for (const item of items) {
+    const itemName = item.name || item.productName || '';
+    const qty = parseInt(item.qty || item.quantity || 1);
+    if (!itemName) continue;
+
+    try {
+      const searchWord = itemName.split(' ')[0] || '';
+      if (searchWord.length > 2) {
+        const prod = await db.query(
+          "SELECT id, stock_quantity FROM products WHERE (user_id = $1 OR user_id IS NULL) AND name ILIKE $2 LIMIT 1",
+          [userId, `%${searchWord}%`]
+        );
+        if (prod.rows.length > 0) {
+          const prodId = prod.rows[0].id;
+          const currentStock = prod.rows[0].stock_quantity || 0;
+          const newStock = Math.max(0, currentStock - qty);
+          
+          await db.query(
+            "UPDATE products SET stock_quantity = $1 WHERE id = $2",
+            [newStock, prodId]
+          );
+          console.log(`[INVENTORY] Decremented stock for product ID ${prodId} from ${currentStock} to ${newStock} (Ordered Qty: ${qty})`);
+        }
+      }
+    } catch (err) {
+      console.error('[INVENTORY] Failed to decrement stock for item:', itemName, err.message);
+    }
+  }
 }
