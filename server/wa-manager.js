@@ -408,33 +408,38 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
           try {
             await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
             
-            // Parse reply for [IMAGE: id] tag
+            // Parse reply for [IMAGE: id] tags
             let cleanReply = aiReply;
-            let imageToSend = null;
-            const imgMatch = aiReply.match(/\[IMAGE:\s*(\d+)\]/i);
+            const imagesToSend = [];
+            const matches = [...aiReply.matchAll(/\[IMAGE:\s*(\d+)\]/gi)];
             
-            if (imgMatch) {
-              const productId = parseInt(imgMatch[1]);
+            for (const match of matches) {
+              const productId = parseInt(match[1]);
               try {
                 const prodRes = await db.query('SELECT image_url FROM products WHERE id = $1', [productId]);
                 if (prodRes.rows.length > 0 && prodRes.rows[0].image_url) {
                   const imageUrl = prodRes.rows[0].image_url;
+                  let resolvedImage = null;
                   if (imageUrl.startsWith('/uploads/')) {
                     const filename = imageUrl.replace('/uploads/', '');
                     const filePath = path.join(__dirname, 'uploads', filename);
                     if (fs.existsSync(filePath)) {
-                      imageToSend = { local: true, path: filePath };
+                      resolvedImage = { local: true, path: filePath };
                     }
                   } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-                    imageToSend = { local: false, url: imageUrl };
+                    resolvedImage = { local: false, url: imageUrl };
+                  }
+                  if (resolvedImage) {
+                    imagesToSend.push(resolvedImage);
                   }
                 }
-                // Clean the tag from the text message
-                cleanReply = aiReply.replace(/\[IMAGE:\s*\d+\]/gi, '').trim();
               } catch (dbErr) {
                 console.error('Failed to query product image from DB:', dbErr.message);
               }
             }
+            
+            // Clean all tags from the text message
+            cleanReply = aiReply.replace(/\[IMAGE:\s*\d+\]/gi, '').trim();
 
             // Send message via Baileys socket with ephemeral expiration if active
             const sendOpts = {};
@@ -443,19 +448,41 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             }
             
             let result;
-            if (imageToSend) {
+            if (imagesToSend.length > 0) {
               try {
+                // Send the first image with the caption text
+                const firstImg = imagesToSend[0];
                 let fileBuffer;
-                if (imageToSend.local) {
-                  fileBuffer = fs.readFileSync(imageToSend.path);
+                if (firstImg.local) {
+                  fileBuffer = fs.readFileSync(firstImg.path);
                 } else {
-                  const response = await fetch(imageToSend.url);
+                  const response = await fetch(firstImg.url);
                   const arrayBuffer = await response.arrayBuffer();
                   fileBuffer = Buffer.from(arrayBuffer);
                 }
                 result = await sock.sendMessage(msg.key.remoteJid, { image: fileBuffer, caption: cleanReply }, sendOpts);
+                
+                // Send remaining images if any
+                for (let i = 1; i < imagesToSend.length; i++) {
+                  try {
+                    const nextImg = imagesToSend[i];
+                    let nextBuffer;
+                    if (nextImg.local) {
+                      nextBuffer = fs.readFileSync(nextImg.path);
+                    } else {
+                      const response = await fetch(nextImg.url);
+                      const arrayBuffer = await response.arrayBuffer();
+                      nextBuffer = Buffer.from(arrayBuffer);
+                    }
+                    // Send subsequent images with a slight delay
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    await sock.sendMessage(msg.key.remoteJid, { image: nextBuffer }, sendOpts);
+                  } catch (subImgErr) {
+                    console.error('Failed to send subsequent product image:', subImgErr.message);
+                  }
+                }
               } catch (sendImgErr) {
-                console.error('Failed to send WhatsApp product image, falling back to text:', sendImgErr.message);
+                console.error('Failed to send WhatsApp product images, falling back to text:', sendImgErr.message);
                 result = await sock.sendMessage(msg.key.remoteJid, { text: cleanReply }, sendOpts);
               }
             } else {
