@@ -336,8 +336,8 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     } else {
       // --- Gemini path (default) ---
       const modelName = config.defaultModel.toLowerCase().includes('pro')
-        ? 'gemini-1.5-pro'
-        : 'gemini-1.5-flash';
+        ? 'gemini-2.5-pro'
+        : 'gemini-2.5-flash';
       const data = await callGeminiAPI(modelName, payload);
       replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!replyText) {
