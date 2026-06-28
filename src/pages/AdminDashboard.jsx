@@ -261,6 +261,8 @@ function AdminDashboard({ admin, onLogout }) {
   const [configResult, setConfigResult] = useState(null); // 'success' | 'error' | null
   const [domainStatus, setDomainStatus] = useState(null);
   const [testEmailRecipient, setTestEmailRecipient] = useState('');
+  const [testEmailSubject, setTestEmailSubject] = useState('');
+  const [testEmailHtml, setTestEmailHtml] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   // Edit User Profile Modal States
@@ -787,18 +789,26 @@ function AdminDashboard({ admin, onLogout }) {
     }
     setIsSendingTest(true);
     try {
+      const payload = {
+        toEmail: testEmailRecipient.trim()
+      };
+      if (testEmailSubject.trim()) payload.subject = testEmailSubject.trim();
+      if (testEmailHtml.trim()) payload.htmlContent = testEmailHtml.trim();
+
       const res = await fetch(`${API_BASE_URL}/admin/domain/test-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
         },
-        body: JSON.stringify({ toEmail: testEmailRecipient.trim() })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok && data.success) {
         if (window.notifyAdmin) window.notifyAdmin('success', `Test email sent successfully to ${testEmailRecipient}!`);
         setTestEmailRecipient('');
+        setTestEmailSubject('');
+        setTestEmailHtml('');
       } else {
         if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to send test email.');
       }
@@ -2830,32 +2840,56 @@ function AdminDashboard({ admin, onLogout }) {
               {/* Right Column: Console Output & Send Test Email */}
               <div className="space-y-6">
                 {/* Send Test Email Card */}
-                {domainConfig.domainName && (
-                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-                    <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Send Config Verification Email</h4>
-                      <p className="text-[10px] text-gray-500">Send a verification template test mail to ensure deliverability is working.</p>
-                    </div>
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Send Test Email</h4>
+                    <p className="text-[10px] text-gray-500">Send a test email to verify your Resend integration and deliverability status.</p>
+                  </div>
 
-                    <div className="space-y-2">
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Recipient Email</label>
                       <input 
                         type="email"
                         value={testEmailRecipient}
                         onChange={(e) => setTestEmailRecipient(e.target.value)}
-                        placeholder="receiver@gmail.com"
-                        className="w-full px-4 py-2 border border-gray-200 rounded-xl text-xs focus:border-black focus:outline-none"
+                        placeholder="e.g. receiver@gmail.com"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all"
                       />
-                      <button
-                        type="button"
-                        onClick={handleSendDomainTestEmail}
-                        disabled={isSendingTest || !testEmailRecipient}
-                        className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {isSendingTest ? 'Sending Test...' : 'Send Verification Email'}
-                      </button>
                     </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Subject (Optional)</label>
+                      <input 
+                        type="text"
+                        value={testEmailSubject}
+                        onChange={(e) => setTestEmailSubject(e.target.value)}
+                        placeholder="Default: AgentBunny Domain Test Email"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Email HTML Body (Optional)</label>
+                      <textarea 
+                        rows="4"
+                        value={testEmailHtml}
+                        onChange={(e) => setTestEmailHtml(e.target.value)}
+                        placeholder="Write your email body here (HTML is supported)..."
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all resize-none font-sans"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSendDomainTestEmail}
+                      disabled={isSendingTest || !testEmailRecipient}
+                      className="w-full px-4 py-3 bg-[#00832e] hover:bg-[#007027] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSendingTest ? 'Sending Test...' : 'Send Test Email'}
+                    </button>
                   </div>
-                )}
+                </div>
 
                 {/* Console Log Panel */}
                 <div className="bg-[#0b0c10] text-[#4af626] font-mono text-[11px] rounded-3xl p-5 shadow-inner border border-neutral-800 min-h-[300px] flex flex-col justify-between">

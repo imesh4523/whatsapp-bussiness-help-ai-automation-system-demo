@@ -2037,7 +2037,7 @@ app.get('/api/admin/domain/status', authenticateToken, async (req, res) => {
 
 // Test Email Send
 app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => {
-  const { toEmail } = req.body;
+  const { toEmail, subject, htmlContent } = req.body;
   try {
     const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
     if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
@@ -2053,7 +2053,7 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
     const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
     const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agentbunny.com';
 
-    const htmlContent = `
+    const defaultHtml = `
       <div style="font-family: sans-serif; padding: 25px; max-width: 550px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
         <div style="text-align: center; margin-bottom: 20px;">
           <h2 style="color: #00832e; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; font-style: italic;">AgentBunny</h2>
@@ -2070,7 +2070,10 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
       </div>
     `;
 
-    const success = await sendGenericEmail(toEmail, "AgentBunny Domain Test Email ✅", htmlContent);
+    const finalSubject = subject || "AgentBunny Domain Test Email ✅";
+    const finalHtml = htmlContent || defaultHtml;
+
+    const success = await sendGenericEmail(toEmail, finalSubject, finalHtml);
     if (success) {
       res.json({ success: true });
     } else {
