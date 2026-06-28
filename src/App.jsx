@@ -188,6 +188,7 @@ function App() {
         if (path === '/collections') setView('collections');
         else if (path === '/about') setView('about');
         else if (path === '/account') setView('account');
+        else if (path === '/pricing') setView('pricing');
         else setView('home');
       }
     }
@@ -216,6 +217,7 @@ function App() {
           if (path === '/collections') setView('collections');
           else if (path === '/about') setView('about');
           else if (path === '/account') setView('account');
+          else if (path === '/pricing') setView('pricing');
           else setView('home');
         }
       }
@@ -294,12 +296,15 @@ function App() {
 
   const navigate = (newView) => {
     setView(newView);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (newView !== 'pricing') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     
     let path = '/';
     if (newView === 'collections') path = '/collections';
     else if (newView === 'about') path = '/about';
     else if (newView === 'account') path = '/account';
+    else if (newView === 'pricing') path = '/pricing';
     window.history.pushState(null, '', path);
   };
 
@@ -345,10 +350,12 @@ function App() {
   const renderView = () => {
     switch (view) {
       case 'home':
+      case 'pricing':
         return (
           <Home 
             onOpenAuth={(type) => setAuthModal({ isOpen: true, type })}
             onNavigate={navigate}
+            view={view}
           />
         );
       case 'collections':
@@ -374,6 +381,7 @@ function App() {
           <Home 
             onOpenAuth={(type) => setAuthModal({ isOpen: true, type })}
             onNavigate={navigate}
+            view={view}
           />
         );
     }

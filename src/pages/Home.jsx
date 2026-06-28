@@ -410,9 +410,18 @@ const FAQS = [
   }
 ];
 
-function Home({ onOpenAuth, onNavigate }) {
+function Home({ onOpenAuth, onNavigate, view }) {
   const [openFaq, setOpenFaq] = useState(null);
   const [pricingPlans, setPricingPlans] = useState(PLANS);
+
+  useEffect(() => {
+    if (view === 'pricing') {
+      const element = document.getElementById('pricing');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [view]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/plans`)
@@ -664,7 +673,7 @@ function Home({ onOpenAuth, onNavigate }) {
       </section>
 
       {/* ── PRICING SECTION ──────────────────────────────────────────── */}
-      <section className="bg-gray-50 py-24 px-6">
+      <section id="pricing" className="bg-gray-50 py-24 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <span className="text-xs font-black tracking-[0.25em] text-[#25D366] uppercase">Pricing</span>
