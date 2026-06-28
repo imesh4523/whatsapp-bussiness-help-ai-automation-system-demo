@@ -1569,7 +1569,7 @@ function WhatsAppInbox({ activeSessionId }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4" style={{ height: 'calc(100vh - 210px)', minHeight: '520px', maxHeight: '680px' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:mt-4 pb-14 lg:pb-0" style={{ height: 'calc(100vh - 210px)', minHeight: '520px', maxHeight: '680px' }}>
         
         {/* Left Side: Chats list */}
         <div className={`lg:col-span-1 bg-white lg:rounded-3xl lg:border lg:border-gray-100 lg:shadow-sm flex flex-col overflow-hidden ${mobileInboxView === 'list' ? 'flex' : 'hidden lg:flex'}`}>
@@ -2082,6 +2082,48 @@ function WhatsAppInbox({ activeSessionId }) {
         </div>
 
       </div>
+
+      {/* HeyZappy-style Bottom Navigation (Mobile only) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="flex items-center justify-around h-14">
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/user/inbox'; }}
+            className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full border-none bg-transparent cursor-pointer"
+            style={{ border: 'none', background: 'none' }}
+          >
+            <i className="las la-comments" style={{ fontSize: '22px', color: '#00832e' }}></i>
+            <span style={{ fontSize: '10px', color: '#00832e', fontWeight: '700' }}>Chats</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/user/products'; }}
+            className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full border-none bg-transparent cursor-pointer"
+            style={{ border: 'none', background: 'none' }}
+          >
+            <i className="las la-box" style={{ fontSize: '22px', color: '#94a3b8' }}></i>
+            <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>Products</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/user/whatsapp-account'; }}
+            className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full border-none bg-transparent cursor-pointer"
+            style={{ border: 'none', background: 'none' }}
+          >
+            <i className="las la-cog" style={{ fontSize: '22px', color: '#94a3b8' }}></i>
+            <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>Settings</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/user/orders'; }}
+            className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full border-none bg-transparent cursor-pointer"
+            style={{ border: 'none', background: 'none' }}
+          >
+            <i className="las la-shopping-bag" style={{ fontSize: '22px', color: '#94a3b8' }}></i>
+            <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>Orders</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }
