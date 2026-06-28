@@ -234,7 +234,7 @@ function AdminDashboard({ admin, onLogout }) {
   // OpenRouter & AI Provider states
   const [aiProvider, setAiProvider] = useState('gemini');
   const [openrouterApiKey, setOpenrouterApiKey] = useState('');
-  const [openrouterModel, setOpenrouterModel] = useState('google/gemini-2.0-flash-exp:free');
+  const [openrouterModel, setOpenrouterModel] = useState('liquid/lfm-2.5-1.2b-instruct:free');
   const [customModelInput, setCustomModelInput] = useState('');
   const [isOrSaved, setIsOrSaved] = useState(false);
 
@@ -382,9 +382,9 @@ function AdminDashboard({ admin, onLogout }) {
             if (data.openrouterApiKey !== undefined) setOpenrouterApiKey(data.openrouterApiKey);
             if (data.openrouterModel !== undefined) {
               const presets = [
-                'google/gemini-2.0-flash-exp:free','google/gemini-flash-1.5','openai/gpt-4o-mini',
-                'openai/gpt-4o','anthropic/claude-3.5-sonnet','anthropic/claude-3-haiku',
-                'meta-llama/llama-3.1-8b-instruct:free','mistralai/mistral-7b-instruct:free'
+                'liquid/lfm-2.5-1.2b-instruct:free','liquid/lfm-2.5-1.2b-thinking:free',
+                'meta-llama/llama-3.1-8b-instruct','meta-llama/llama-3.3-70b-instruct',
+                'openai/gpt-4o-mini','openai/gpt-4o','anthropic/claude-3.5-sonnet','anthropic/claude-3-haiku'
               ];
               if (presets.includes(data.openrouterModel)) {
                 setOpenrouterModel(data.openrouterModel);
@@ -1864,10 +1864,10 @@ function AdminDashboard({ admin, onLogout }) {
                       <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Select Model</label>
                       <div className="grid grid-cols-1 gap-2">
                         {[
-                          { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash', badge: 'FREE', color: 'bg-green-100 text-green-700' },
-                          { id: 'google/gemini-flash-1.5', name: 'Gemini 1.5 Flash', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
-                          { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B', badge: 'FREE', color: 'bg-green-100 text-green-700' },
-                          { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B', badge: 'FREE', color: 'bg-green-100 text-green-700' },
+                          { id: 'liquid/lfm-2.5-1.2b-instruct:free', name: 'LFM 2.5 Instruct', badge: 'FREE ✅', color: 'bg-green-100 text-green-700' },
+                          { id: 'liquid/lfm-2.5-1.2b-thinking:free', name: 'LFM 2.5 Thinking', badge: 'FREE ✅', color: 'bg-green-100 text-green-700' },
+                          { id: 'meta-llama/llama-3.1-8b-instruct', name: 'Llama 3.1 8B', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
+                          { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', badge: 'Mid', color: 'bg-blue-100 text-blue-700' },
                           { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
                           { id: 'openai/gpt-4o', name: 'GPT-4o', badge: 'Premium', color: 'bg-orange-100 text-orange-700' },
                           { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', badge: 'Best', color: 'bg-purple-100 text-purple-700' },
