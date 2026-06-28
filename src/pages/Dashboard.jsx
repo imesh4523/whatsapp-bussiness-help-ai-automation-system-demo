@@ -2395,9 +2395,9 @@ function WhatsAppOrderManager() {
               <span className="d-block fs-13 text-muted text-xs mt-1">There are no available data to display on this table at the moment.</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs" style={{ minWidth: '850px' }}>
+            <table className="w-full text-left border-collapse text-xs" style={{ minWidth: '1150px' }}>
               <thead>
-                <tr className="bg-neutral-50 border-b border-gray-100 font-bold text-gray-500 uppercase tracking-wider">
+                <tr className="bg-neutral-50 border-b border-gray-100 font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   <th className="p-4">Order ID</th>
                   <th className="p-4">Customer</th>
                   <th className="p-4">Items</th>
@@ -2414,14 +2414,14 @@ function WhatsAppOrderManager() {
                   const ship = o.shipping_details || {};
                   return (
                     <tr key={o.id} className="hover:bg-neutral-50/50 transition-colors">
-                      <td className="p-4 font-mono font-bold text-[#00832e]">
+                      <td className="p-4 font-mono font-bold text-[#00832e] whitespace-nowrap">
                         #{o.id}
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 whitespace-nowrap">
                         <div className="font-bold text-neutral-800">{ship.fullName || ship.name || o.user_name || 'Guest'}</div>
                         <div className="text-[10px] text-gray-400 font-mono">{ship.phone || ship.email || o.user_email}</div>
                       </td>
-                      <td className="p-4 max-w-[240px]">
+                      <td className="p-4 min-w-[220px]">
                         <div className="space-y-1">
                           {items.map((item, idx) => (
                             <div key={idx} className="text-gray-600">
@@ -2433,23 +2433,23 @@ function WhatsAppOrderManager() {
                           ))}
                         </div>
                       </td>
-                      <td className="p-4 font-bold text-neutral-800">
+                      <td className="p-4 font-bold text-neutral-800 whitespace-nowrap">
                         Rs. {parseFloat(o.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 min-w-[250px]">
                         <div className="text-gray-700">{ship.address}</div>
                         <div className="font-medium text-neutral-800">{ship.province || ship.city} {ship.postalCode && `(${ship.postalCode})`}</div>
                         <div className="text-[10px] text-gray-400">{ship.payment_method || 'COD'}</div>
                       </td>
-                      <td className="p-4 text-gray-500 font-mono">
+                      <td className="p-4 text-gray-500 font-mono whitespace-nowrap">
                         {new Date(o.created_at).toLocaleDateString()} {new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusBadgeClass(o.status)}`}>
                           {o.status}
                         </span>
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">
                           <select
                             value={o.status}
