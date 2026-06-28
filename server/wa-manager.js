@@ -696,32 +696,35 @@ async function checkAndExtractOrder(userId, sessionPhone, senderPhone) {
     const customerName = chatRes.rows[0].sender_name;
 
     const msgRes = await db.query(
-      'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 15',
+      'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 20',
       [chatId]
     );
     const messages = msgRes.rows.reverse();
     const chatHistory = messages.map(m => `${m.sender === 'customer' ? 'Customer' : 'Assistant'}: ${m.text}`).join('\n');
 
-    const prompt = `Analyze this chat history and determine if an order was just fully finalized and confirmed.
+    const prompt = `Analyze this chat history and determine if an order was just fully finalized and confirmed by the customer.
+
 Finalized means:
-1. Customer provided recipient name, address, and payment method choice (COD/Cash on Delivery or Bank Transfer).
-2. The order has been finalized and confirmed by the assistant or customer.
+1. Customer confirmed their order summary (said yes/ov/confirm/ok to the final summary).
+2. Recipient name, delivery address, province, and payment method (COD or Bank Transfer) are known.
 
 If NOT fully finalized, return exactly: NONE
-If it is fully finalized, extract details and return a strict JSON block.
-JSON format:
+If it IS fully finalized, extract and return strict JSON ONLY (no markdown, no explanation):
 {
   "confirmed": true,
-  "recipient_name": "extracted name or empty",
+  "recipient_name": "the actual recipient name the customer gave",
   "phone": "${senderPhone}",
-  "address": "extracted delivery address",
-  "payment_method": "COD" or "Bank Transfer",
+  "address": "full delivery address",
+  "province": "province name",
+  "payment_method": "COD or Bank Transfer",
   "items": [
-    { "name": "item name", "qty": 1, "price": 0 }
+    { "productName": "full item name including size and color", "quantity": 1, "price": 0 }
   ],
   "total_amount": 0
 }
-Strictly output JSON or NONE. No markup, no markdown formatting.
+Extract item name WITH size and color from context (e.g. "T-shirt Size M Black" not just "Item").
+If total amount is mentioned, use it. Otherwise 0.
+Strictly output JSON or NONE. No markdown.
 
 Chat history:
 ${chatHistory}`;
@@ -742,6 +745,7 @@ ${chatHistory}`;
               name: orderData.recipient_name || customerName,
               phone: senderPhone,
               address: orderData.address,
+              province: orderData.province || '',
               payment_method: orderData.payment_method
             };
             
@@ -750,11 +754,14 @@ ${chatHistory}`;
               amount = 7500.00; // default estimated item value
             }
 
-            const items = orderData.items && orderData.items.length > 0 ? orderData.items : [{ name: 'Standard Product', qty: 1, price: amount }];
+            const items = orderData.items && orderData.items.length > 0
+              ? orderData.items.map(i => ({ name: i.productName || i.name || 'Product', qty: i.quantity || i.qty || 1, price: i.price || 0 }))
+              : [{ name: 'Standard Product', qty: 1, price: amount }];
 
             await db.query(
               'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
               [orderId, userId, JSON.stringify(items), amount, JSON.stringify(shippingDetails), 'Confirmed']
+
             );
 
             // Update chat label to 'Confirmed'

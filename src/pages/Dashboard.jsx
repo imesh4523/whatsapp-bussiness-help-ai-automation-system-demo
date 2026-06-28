@@ -2205,9 +2205,9 @@ function WhatsAppOrderManager() {
 
   const copyDetails = (order) => {
     const ship = order.shipping_details || {};
-    const itemsText = (Array.isArray(order.items) ? order.items : []).map(i => `${i.productName || i.product || 'Item'} x${i.quantity || 1}`).join(', ');
+    const itemsText = (Array.isArray(order.items) ? order.items : []).map(i => `${i.productName || i.name || i.product || 'Item'} x${i.quantity || i.qty || 1}`).join(', ');
     
-    const details = `Order ID: ${order.id}\nRecipient: ${ship.fullName || order.user_name || 'Customer'}\nPhone: ${ship.phone || ''}\nAddress: ${ship.address || ''}, ${ship.city || ''}\nPayment Method: ${ship.payment_method || 'COD'}\nItems: ${itemsText}\nTotal Amount: Rs. ${parseFloat(order.total_amount).toFixed(2)}`;
+    const details = `Order ID: #${order.id}\nRecipient: ${ship.fullName || ship.name || order.user_name || 'Customer'}\nPhone: ${ship.phone || ship.mobile || ''}\nAddress: ${ship.address || ''}\nProvince: ${ship.province || ship.city || ''}\nPayment Method: ${ship.payment_method || 'COD'}\nItems: ${itemsText}\nTotal Amount: Rs. ${parseFloat(order.total_amount).toFixed(2)}`;
     navigator.clipboard.writeText(details);
     if (window.notify) window.notify('success', 'Copied to clipboard!');
   };
@@ -2219,8 +2219,8 @@ function WhatsAppOrderManager() {
     
     const itemsHtml = items.map(item => `
       <tr>
-        <td style="padding: 8px 0; border-bottom: 1px dashed #cccccc;">${item.productName || item.product || 'Product'}</td>
-        <td style="padding: 8px 0; text-align: center; border-bottom: 1px dashed #cccccc;">${item.quantity || 1}</td>
+        <td style="padding: 8px 0; border-bottom: 1px dashed #cccccc;">${item.productName || item.name || item.product || 'Product'}</td>
+        <td style="padding: 8px 0; text-align: center; border-bottom: 1px dashed #cccccc;">${item.quantity || item.qty || 1}</td>
         <td style="padding: 8px 0; text-align: right; border-bottom: 1px dashed #cccccc;">Rs. ${parseFloat(item.price || order.total_amount).toFixed(2)}</td>
       </tr>
     `).join('');
@@ -2251,12 +2251,13 @@ function WhatsAppOrderManager() {
             </div>
             
             <div class="details">
-              <strong>Order ID:</strong> ${order.id}<br>
+              <strong>Order ID:</strong> #${order.id}<br>
               <strong>Date:</strong> ${new Date(order.created_at).toLocaleString()}<br>
               <hr style="border: 0; border-top: 1px dashed #000000; margin: 10px 0;">
-              <strong>Recipient:</strong> ${ship.fullName || order.user_name || 'WhatsApp Customer'}<br>
-              <strong>Phone:</strong> ${ship.phone || ''}<br>
-              <strong>Address:</strong> ${ship.address || ''}, ${ship.city || ''}<br>
+              <strong>Recipient:</strong> ${ship.fullName || ship.name || order.user_name || 'WhatsApp Customer'}<br>
+              <strong>Phone:</strong> ${ship.phone || ship.mobile || ''}<br>
+              <strong>Address:</strong> ${ship.address || ''}<br>
+              <strong>Province:</strong> ${ship.province || ship.city || ''}<br>
               <strong>Payment:</strong> ${ship.payment_method || 'COD'}<br>
             </div>
 
@@ -2417,17 +2418,17 @@ function WhatsAppOrderManager() {
                         #{o.id}
                       </td>
                       <td className="p-4">
-                        <div className="font-bold text-neutral-800">{ship.fullName || o.user_name || 'Guest'}</div>
-                        <div className="text-[10px] text-gray-400 font-mono">{ship.email || o.user_email}</div>
+                        <div className="font-bold text-neutral-800">{ship.fullName || ship.name || o.user_name || 'Guest'}</div>
+                        <div className="text-[10px] text-gray-400 font-mono">{ship.phone || ship.email || o.user_email}</div>
                       </td>
                       <td className="p-4 max-w-[240px]">
                         <div className="space-y-1">
                           {items.map((item, idx) => (
                             <div key={idx} className="text-gray-600">
-                              <span className="font-bold text-neutral-700">{item.productName || item.product || 'Product'}</span> 
+                              <span className="font-bold text-neutral-700">{item.productName || item.name || item.product || 'Product'}</span> 
                               {item.selectedSize && <span className="mx-1 text-[9px] bg-slate-100 text-slate-600 px-1 rounded font-medium">Size: {item.selectedSize}</span>}
                               {item.selectedColor && <span className="text-[9px] bg-slate-100 text-slate-600 px-1 rounded font-medium">Color: {item.selectedColor}</span>}
-                              <span className="font-mono text-[#00832e] ml-1 font-bold">x{item.quantity}</span>
+                              <span className="font-mono text-[#00832e] ml-1 font-bold">x{item.quantity || item.qty || 1}</span>
                             </div>
                           ))}
                         </div>
@@ -2437,7 +2438,8 @@ function WhatsAppOrderManager() {
                       </td>
                       <td className="p-4">
                         <div className="text-gray-700">{ship.address}</div>
-                        <div className="font-medium text-neutral-800">{ship.city} {ship.postalCode && `(${ship.postalCode})`}</div>
+                        <div className="font-medium text-neutral-800">{ship.province || ship.city} {ship.postalCode && `(${ship.postalCode})`}</div>
+                        <div className="text-[10px] text-gray-400">{ship.payment_method || 'COD'}</div>
                       </td>
                       <td className="p-4 text-gray-500 font-mono">
                         {new Date(o.created_at).toLocaleDateString()} {new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
