@@ -2465,7 +2465,6 @@ function Dashboard({ user, setUser, onLogout }) {
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState('');
   const [isStripeScriptLoaded, setIsStripeScriptLoaded] = useState(false);
-  const [isApexChartsLoaded, setIsApexChartsLoaded] = useState(false);
   const [userTransactions, setUserTransactions] = useState([]);
 
   const [stats, setStats] = useState({
@@ -2477,11 +2476,7 @@ function Dashboard({ user, setUser, onLogout }) {
     ai_bots: 0,
     total_deposits: 0,
     total_withdrawals: 0,
-    total_ai_messages: 0,
-    chart_dates: [],
-    chart_sales: [],
-    chart_response_times: [],
-    chart_downtime: []
+    total_ai_messages: 0
   });
 
   const fetchDashboardStats = async () => {
@@ -3488,7 +3483,6 @@ function Dashboard({ user, setUser, onLogout }) {
       "https://wpp.raybeamdigital.com/assets/global/js/bootstrap.bundle.min.js",
       "https://wpp.raybeamdigital.com/assets/templates/basic/js/main.js?v=1782465659",
       "https://wpp.raybeamdigital.com/assets/global/js/iziToast.min.js",
-      "https://cdn.jsdelivr.net/npm/apexcharts"
     ];
     let mounted = true;
     const safetyTimeout = setTimeout(() => {
@@ -3504,12 +3498,7 @@ function Dashboard({ user, setUser, onLogout }) {
           const s = document.createElement('script');
           s.src = src;
           s.dataset.dashboardAsset = 'true';
-          s.onload = () => {
-            if (src.includes('apexcharts')) {
-              setIsApexChartsLoaded(true);
-            }
-            resolve();
-          };
+          s.onload = resolve;
           s.onerror = resolve;
           document.body.appendChild(s);
         });
@@ -4314,119 +4303,6 @@ function Dashboard({ user, setUser, onLogout }) {
       document.title = currentPage.title;
     }
   }, [currentPage]);
-
-  // ── ApexCharts Analytics Chart Render Helper ─────────────────────────────
-  const renderAnalyticsChart = (statsData) => {
-    if (!window.ApexCharts) {
-      console.warn('ApexCharts not loaded yet');
-      return;
-    }
-    const chartEl = document.getElementById('ai-monitor-chart');
-    if (!chartEl) return;
-
-    chartEl.innerHTML = '';
-
-    const dates = statsData?.chart_dates || [];
-    const sales = statsData?.chart_sales || [];
-    const responseTimes = statsData?.chart_response_times || [];
-    const downtime = statsData?.chart_downtime || [];
-
-    const options = {
-      series: [
-        {
-          name: 'Daily Sales (LKR)',
-          type: 'area',
-          data: sales
-        },
-        {
-          name: 'AI Response Time (s)',
-          type: 'line',
-          data: responseTimes
-        },
-        {
-          name: 'AI Downtime (min)',
-          type: 'bar',
-          data: downtime
-        }
-      ],
-      chart: {
-        height: 350,
-        type: 'line',
-        stacked: false,
-        background: 'transparent',
-        foreColor: '#a1a1aa',
-        toolbar: { show: false }
-      },
-      colors: ['#25d366', '#38bdf8', '#f43f5e'],
-      stroke: {
-        width: [3, 3, 0],
-        curve: 'smooth'
-      },
-      fill: {
-        type: ['gradient', 'solid', 'solid'],
-        gradient: {
-          shadeIntensity: 1,
-          opacityFrom: 0.35,
-          opacityTo: 0.05,
-          stops: [0, 90, 100]
-        }
-      },
-      plotOptions: {
-        bar: {
-          columnWidth: '20%',
-          borderRadius: 4
-        }
-      },
-      xaxis: {
-        categories: dates,
-        axisBorder: { show: false },
-        axisTicks: { show: false }
-      },
-      yaxis: [
-        {
-          title: {
-            text: 'Daily Sales (LKR)',
-            style: { color: '#25d366' }
-          },
-          axisTicks: { show: true },
-          axisBorder: { show: true, color: '#25d366' }
-        },
-        {
-          opposite: true,
-          title: {
-            text: 'AI Response (s) & Downtime (min)',
-            style: { color: '#38bdf8' }
-          }
-        }
-      ],
-      grid: {
-        borderColor: '#27272a',
-        xaxis: { lines: { show: false } },
-        yaxis: { lines: { show: true } }
-      },
-      tooltip: {
-        theme: 'dark',
-        shared: true,
-        intersect: false
-      },
-      legend: {
-        horizontalAlign: 'left',
-        offsetX: 40
-      }
-    };
-
-    const chart = new window.ApexCharts(chartEl, options);
-    chart.render();
-  };
-
-  useEffect(() => {
-    if (tab === 'dashboard' && stats && (isApexChartsLoaded || window.ApexCharts)) {
-      const timer = setTimeout(() => {
-        renderAnalyticsChart(stats);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [tab, stats, isApexChartsLoaded]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const toggleDropdown = (key) =>

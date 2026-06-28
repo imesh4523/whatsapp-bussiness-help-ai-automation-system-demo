@@ -824,62 +824,6 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
     const completedOrdersRes = await db.query("SELECT COUNT(*) as total FROM orders WHERE user_id = $1 AND status = 'Completed'", [req.user.id]);
     const total_withdrawals = parseInt(completedOrdersRes.rows[0].total);
 
-    // 9. Calculate daily sales (past 7 days)
-    const salesRes = await db.query(`
-      SELECT DATE(created_at) AS date, COALESCE(SUM(total_amount), 0) AS sales
-      FROM orders
-      WHERE user_id = $1 AND (status = 'Completed' OR status = 'Confirmed')
-      AND created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY DATE(created_at)
-      ORDER BY DATE(created_at)
-    `, [req.user.id]);
-
-    // 10. Calculate daily AI response times to plot (past 7 days)
-    const dailyAiRes = await db.query(`
-      SELECT DATE(m2.timestamp) AS date, AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) AS avg_time
-      FROM messages m1
-      JOIN messages m2 ON m2.chat_id = m1.chat_id AND m2.id = m1.id + 1
-      JOIN chats c ON m1.chat_id = c.id
-      JOIN whatsapp_sessions ws ON c.session_id = ws.id
-      WHERE ws.user_id = $1 AND m1.sender = 'customer' AND m2.sender = 'bot'
-      AND m2.timestamp > m1.timestamp
-      AND m2.timestamp - m1.timestamp < INTERVAL '5 minutes'
-      AND m2.timestamp >= NOW() - INTERVAL '7 days'
-      GROUP BY DATE(m2.timestamp)
-      ORDER BY DATE(m2.timestamp)
-    `, [req.user.id]);
-
-    // Let's populate fallback list for past 7 days if empty
-    const chart_sales = [];
-    const chart_response_times = [];
-    const chart_downtime = [];
-    const chart_dates = [];
-
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const dayStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      chart_dates.push(dayStr);
-
-      // Find sales
-      const saleRow = salesRes.rows.find(r => {
-        const rowDate = new Date(r.date).toISOString().split('T')[0];
-        return rowDate === dateStr;
-      });
-      chart_sales.push(saleRow ? parseFloat(saleRow.sales) : 0);
-
-      // Find response time
-      const aiRow = dailyAiRes.rows.find(r => {
-        const rowDate = new Date(r.date).toISOString().split('T')[0];
-        return rowDate === dateStr;
-      });
-      chart_response_times.push(aiRow ? parseFloat(parseFloat(aiRow.avg_time).toFixed(2)) : parseFloat((Math.random() * 0.8 + 1.2).toFixed(2)));
-
-      // Simulate downtime
-      chart_downtime.push(Math.random() > 0.85 ? Math.floor(Math.random() * 3 + 1) : 0);
-    }
-
     res.json({
       total_earned,
       total_contacts,
@@ -889,11 +833,7 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
       ai_bots,
       total_deposits,
       total_withdrawals,
-      total_ai_messages,
-      chart_dates,
-      chart_sales,
-      chart_response_times,
-      chart_downtime
+      total_ai_messages
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
