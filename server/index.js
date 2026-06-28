@@ -2145,21 +2145,28 @@ app.post('/api/payments/confirm-session', authenticateToken, async (req, res) =>
 
     const transaction = trans.rows[0];
     if (transaction.status === 'Pending') {
-      // Upgrade user plan and complete transaction in DB
-      await db.query("UPDATE transactions SET status = 'Completed' WHERE stripe_session_id = $1", [sessionId]);
-      
       let cycle = billingCycle || 'Monthly';
+      
       if (sessionId && !sessionId.startsWith('cs_test_')) {
         try {
           const stripe = await getDynamicStripe();
           const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
-          if (stripeSession && stripeSession.metadata && stripeSession.metadata.billingCycle) {
+          
+          if (!stripeSession || stripeSession.payment_status !== 'paid') {
+            return res.status(400).json({ error: 'Payment has not been completed or verified by Stripe.' });
+          }
+          
+          if (stripeSession.metadata && stripeSession.metadata.billingCycle) {
             cycle = stripeSession.metadata.billingCycle;
           }
         } catch (stripeErr) {
-          console.warn('Could not fetch Stripe session for billing cycle:', stripeErr.message);
+          console.error('Stripe session verification failed:', stripeErr.message);
+          return res.status(400).json({ error: 'Failed to verify payment with Stripe.' });
         }
       }
+
+      // Upgrade user plan and complete transaction in DB
+      await db.query("UPDATE transactions SET status = 'Completed' WHERE stripe_session_id = $1", [sessionId]);
 
       const expiry = new Date();
       if (cycle === 'Yearly') {
@@ -3178,6 +3185,18 @@ async function downgradeUserToFree(userId, reason) {
 
 // Run checks every 10 minutes to auto-charge expired users
 setInterval(processSubscriptionRenewals, 10 * 60 * 1000);
+
+// Serve static assets from React client build folder in production
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
+
+// Handle client-side routing, send index.html for all other routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return next();
+  }
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 // Start Express Server & initialize sessions
 app.listen(PORT, () => {
