@@ -761,12 +761,27 @@ ${chatHistory}`;
             await db.query(
               'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
               [orderId, userId, JSON.stringify(items), amount, JSON.stringify(shippingDetails), 'Confirmed']
-
             );
 
             // Update chat label to 'Confirmed'
             await db.query("UPDATE chats SET label = 'Confirmed' WHERE id = $1", [chatId]);
             console.log(`[AUTO-CRM] Order ${orderId} automatically created for customer ${senderPhone} (Amount: Rs. ${amount})`);
+
+            // Send actual order ID confirmation to customer
+            try {
+              const sock = getActiveSocket(sessionPhone);
+              if (sock) {
+                const jid = `${senderPhone}@s.whatsapp.net`;
+                const confirmMsg = `✅ ඔබගේ ඇණවුම් ID: *#${orderId}*\nමේක save කරගන්න සර්/මැඩම්! 📦\nඅපගේ කණ්ඩායම ඉක්මනින් ඔබව සම්බන්ධ කරගන්නවා!`;
+                await sock.sendMessage(jid, { text: confirmMsg });
+                await db.query(
+                  'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
+                  [chatId, confirmMsg, 'bot']
+                );
+              }
+            } catch (msgErr) {
+              console.warn('[AUTO-CRM] Could not send order ID confirmation to customer:', msgErr.message);
+            }
           }
         }
       }
