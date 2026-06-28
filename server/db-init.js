@@ -49,6 +49,7 @@ async function init() {
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         price NUMERIC(10,2) NOT NULL,
+        response_limit INTEGER DEFAULT 500,
         features JSONB NOT NULL,
         disabled_features JSONB NOT NULL
       );
@@ -82,6 +83,29 @@ async function init() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_renewal BOOLEAN DEFAULT TRUE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50) DEFAULT 'Monthly';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_message_count INTEGER DEFAULT 0;
+      
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS response_limit INTEGER DEFAULT 500;
+      
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS firstname VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS lastname VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS dial_code VARCHAR(10);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS zip VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(255);
+
+      UPDATE users 
+      SET 
+        firstname = COALESCE(firstname, SPLIT_PART(full_name, ' ', 1)),
+        lastname = COALESCE(lastname, SUBSTRING(full_name FROM POSITION(' ' IN full_name) + 1))
+      WHERE firstname IS NULL OR lastname IS NULL;
+
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_quantity INTEGER DEFAULT 10;
+      UPDATE products SET user_id = 1 WHERE user_id IS NULL;
+      
       
       CREATE TABLE IF NOT EXISTS user_payment_methods (
         id SERIAL PRIMARY KEY,
@@ -100,6 +124,32 @@ async function init() {
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         claimed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        subject VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        status VARCHAR(50) DEFAULT 'Open',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ticket_replies (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        sender_role VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS email_templates (
+        key VARCHAR(255) PRIMARY KEY,
+        subject VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     
     console.log('Database tables verified/created successfully.');
@@ -114,7 +164,7 @@ async function init() {
       const demoHash = await bcrypt.hash('demo1234', 10);
       const insertUserRes = await db.query(
         'INSERT INTO users (email, password_hash, full_name, plan, status) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [demoEmail, demoHash, 'Demo User', 'Premium', 'Active']
+        [demoEmail, demoHash, 'Demo User', 'Growth', 'Active']
       );
       const userId = insertUserRes.rows[0].id;
       
@@ -198,43 +248,54 @@ async function init() {
       console.log('Seeding pricing plans...');
       const defaultPlans = [
         {
-          id: 'Free',
-          name: 'Free Tier',
-          price: 0.00,
+          id: 'Starter',
+          name: 'Starter Plan',
+          price: 2500.00,
+          response_limit: 500,
           features: JSON.stringify([
-            "✓ 1 Active WhatsApp Session",
-            "✓ Standard Customer Inbox",
-            "✓ Mock AI replies simulator"
+            "1 WhatsApp Number",
+            "500 AI Responses/mo",
+            "Product Catalog (up to 50)",
+            "Order Management",
+            "Basic Analytics",
+            "Email Support"
           ]),
           disabled_features: JSON.stringify([
-            "✗ WooCommerce sync",
-            "✗ Custom agent templates"
+            "✗ Broadcast Campaigns",
+            "✗ Custom AI Persona"
           ])
         },
         {
-          id: 'Premium',
-          name: 'Premium Plan',
-          price: 4990.00,
+          id: 'Growth',
+          name: 'Growth Plan',
+          price: 5500.00,
+          response_limit: 2500,
           features: JSON.stringify([
-            "✓ 3 Active WhatsApp Sessions",
-            "✓ Advanced CRM Customer list",
-            "✓ Unlimited Gemini AI replies",
-            "✓ Dynamic templates & quick replies"
+            "3 WhatsApp Numbers",
+            "2,500 AI Responses/mo",
+            "Unlimited Products",
+            "Broadcast Campaigns",
+            "Advanced Analytics",
+            "Priority Support",
+            "Custom AI Persona"
           ]),
           disabled_features: JSON.stringify([
-            "✗ Multi-agent WooCommerce sync"
+            "✗ Multi-store Management"
           ])
         },
         {
           id: 'Enterprise',
-          name: 'Enterprise Elite',
-          price: 12990.00,
+          name: 'Enterprise Plan',
+          price: 15000.00,
+          response_limit: 999999,
           features: JSON.stringify([
-            "✓ 10 Active WhatsApp Sessions",
-            "✓ WooCommerce store product sync",
-            "✓ Dedicated AI Custom Agents",
-            "✓ Higher webhook rate limits",
-            "✓ 24/7 Priority support hotline"
+            "Unlimited Numbers",
+            "Unlimited AI Responses",
+            "Multi-store Management",
+            "API Access",
+            "Dedicated Account Manager",
+            "White-label Option",
+            "SLA Guarantee"
           ]),
           disabled_features: JSON.stringify([])
         }
@@ -242,8 +303,37 @@ async function init() {
 
       for (const plan of defaultPlans) {
         await db.query(
-          'INSERT INTO plans (id, name, price, features, disabled_features) VALUES ($1, $2, $3, $4, $5)',
-          [plan.id, plan.name, plan.price, plan.features, plan.disabled_features]
+          'INSERT INTO plans (id, name, price, response_limit, features, disabled_features) VALUES ($1, $2, $3, $4, $5, $6)',
+          [plan.id, plan.name, plan.price, plan.response_limit, plan.features, plan.disabled_features]
+        );
+      }
+    }
+
+    // Seed default email templates if empty
+    const templateCheck = await db.query('SELECT COUNT(*) FROM email_templates');
+    if (parseInt(templateCheck.rows[0].count) === 0) {
+      console.log('Seeding default email templates...');
+      const defaultTemplates = [
+        {
+          key: 'welcome',
+          subject: 'Welcome to AgentBunny!',
+          body: 'Hello {{fullName}},\n\nWelcome to AgentBunny! Start automating your WhatsApp business today.\n\nBest Regards,\nAgentBunny Team'
+        },
+        {
+          key: 'invoice',
+          subject: 'Your Subscription Invoice',
+          body: 'Hello {{fullName}},\n\nYour subscription invoice for your plan has been processed successfully. Thank you for your business!\n\nBest Regards,\nAgentBunny Team'
+        },
+        {
+          key: 'reset_password',
+          subject: 'Reset Your Password',
+          body: 'Hello {{fullName}},\n\nYou requested a password reset. Please use the following link to reset your password:\n\n{{resetLink}}\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
+        }
+      ];
+      for (const t of defaultTemplates) {
+        await db.query(
+          'INSERT INTO email_templates (key, subject, body) VALUES ($1, $2, $3)',
+          [t.key, t.subject, t.body]
         );
       }
     }

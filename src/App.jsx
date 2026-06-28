@@ -4,6 +4,8 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Collections from './pages/Collections';
 import About from './pages/About';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 import Account from './pages/Account';
 import Dashboard from './pages/Dashboard';
 import ProductModal from './components/ProductModal';
@@ -62,7 +64,20 @@ function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && data.length > 0) {
-            setProducts(data);
+            const mapped = data.map(p => {
+              const imgArray = p.image_url ? p.image_url.split(',').filter(Boolean) : [];
+              const firstImg = imgArray[0] || 'https://wpp.raybeamdigital.com/assets/images/default-product.jpg';
+              const resolvedFirstImg = firstImg.startsWith('/') ? `${API_BASE_URL.replace('/api', '')}${firstImg}` : firstImg;
+              const resolvedImages = imgArray.map(img => img.startsWith('/') ? `${API_BASE_URL.replace('/api', '')}${img}` : img);
+
+              return {
+                ...p,
+                image: resolvedFirstImg,
+                images: resolvedImages.length > 0 ? resolvedImages : [resolvedFirstImg],
+                stock: p.stock_quantity ?? 10
+              };
+            });
+            setProducts(mapped);
           }
         }
       } catch (e) {
@@ -76,13 +91,53 @@ function App() {
 
   // Sync user and route path from URL on mount
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const impersonateToken = params.get('impersonate_token');
+    const adminToken = params.get('admin_token');
+    const userData = params.get('user_data');
+    const socialToken = params.get('social_token');
+    const socialUser = params.get('social_user');
+    const socialError = params.get('social_error');
+
+    if (socialError) {
+      const errorMsg = socialError === 'suspended' ? 'Your account has been suspended.' 
+                     : socialError === 'not_configured' ? 'Google OAuth is not configured on the administrator panel.'
+                     : 'An error occurred during Google authentication.';
+      if (window.notify) window.notify('error', errorMsg);
+      else alert(errorMsg);
+      window.history.replaceState(null, '', '/');
+    }
+
+    if (socialToken && socialUser) {
+      localStorage.setItem('aura_token', socialToken);
+      localStorage.setItem('aura_user', socialUser);
+      window.history.replaceState(null, '', '/user/dashboard');
+      
+      const parsed = JSON.parse(socialUser);
+      setUser(parsed);
+      setView('dashboard');
+      return;
+    }
+
+    if (impersonateToken && adminToken && userData) {
+      localStorage.setItem('admin_token', adminToken);
+      localStorage.setItem('aura_token', impersonateToken);
+      localStorage.setItem('aura_user', userData);
+      window.history.replaceState(null, '', '/user/dashboard');
+      
+      const parsed = JSON.parse(userData);
+      setUser(parsed);
+      setView('dashboard');
+      return;
+    }
+
     const savedUser = localStorage.getItem('aura_user');
     const savedAdmin = localStorage.getItem('agentbunny_admin');
     const path = window.location.pathname;
 
     if (isTrackOrderRoute(path)) {
       setView('track-order');
-    } else if (savedAdmin) {
+    } else if (savedAdmin && !localStorage.getItem('admin_token')) {
       setAdmin(JSON.parse(savedAdmin));
       setView('admin');
       if (!isAdminRoute(path)) {
@@ -137,7 +192,7 @@ function App() {
 
       if (isTrackOrderRoute(path)) {
         setView('track-order');
-      } else if (savedAdmin || isAdminRoute(path)) {
+      } else if ((savedAdmin || isAdminRoute(path)) && !localStorage.getItem('admin_token')) {
         setView('admin');
         if (savedAdmin) setAdmin(JSON.parse(savedAdmin));
       } else if (savedUser) {
@@ -238,10 +293,9 @@ function App() {
     window.history.pushState(null, '', path);
   };
 
-  const handleCreateOrder = async (shippingDetails, orderNo) => {
+  const handleCreateOrder = async (shippingDetails) => {
     try {
       const orderPayload = {
-        orderId: orderNo,
         items: cart.map(item => ({
           product: item.product.id,
           quantity: item.quantity,
@@ -249,8 +303,7 @@ function App() {
           selectedColor: item.selectedColor
         })),
         shippingDetails,
-        totalAmount: cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-        status: 'Pending'
+        totalAmount: cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
       };
 
       const res = await fetch(`${API_BASE_URL}/orders`, {
@@ -263,12 +316,20 @@ function App() {
       });
       
       if (res.ok) {
-        console.log('Order created successfully in backend.');
+        const data = await res.json();
+        console.log('Order created successfully in backend.', data.orderId);
+        clearCart();
+        return data.orderId;
       }
+      throw new Error('Failed to create order on server');
     } catch (e) {
       console.warn('Order sync failed: using local success fallback');
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+      const localId = `${dateStr}0050`;
+      clearCart();
+      return localId;
     }
-    clearCart();
   };
 
   const renderView = () => {
@@ -276,9 +337,7 @@ function App() {
       case 'home':
         return (
           <Home 
-            products={products} 
-            loading={loading}
-            onProductClick={setSelectedProduct} 
+            onOpenAuth={(type) => setAuthModal({ isOpen: true, type })}
             onNavigate={navigate}
           />
         );
@@ -294,14 +353,16 @@ function App() {
         );
       case 'about':
         return <About />;
+      case 'terms':
+        return <Terms />;
+      case 'privacy':
+        return <Privacy />;
       case 'account':
         return <Account user={user} onLogout={handleLogout} />;
       default:
         return (
           <Home 
-            products={products} 
-            loading={loading}
-            onProductClick={setSelectedProduct} 
+            onOpenAuth={(type) => setAuthModal({ isOpen: true, type })}
             onNavigate={navigate}
           />
         );

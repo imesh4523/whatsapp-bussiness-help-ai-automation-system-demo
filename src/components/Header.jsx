@@ -12,26 +12,29 @@ function Header({ cartCount, onOpenCart, user, onLogout, onOpenAuth, currentView
           onClick={() => onNavigate('home')} 
           className="text-2xl font-black tracking-tighter text-black hover:opacity-70 transition-opacity"
         >
-          AURA.
+          <span className="flex items-center gap-1.5">
+            <span className="text-3xl leading-none">🐰</span>
+            <span>AgentBunny.</span>
+          </span>
         </button>
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex gap-8 text-xs font-bold tracking-widest uppercase">
           <button 
-            onClick={() => onNavigate('collections')} 
+            onClick={() => onNavigate('features')} 
             className={`transition-colors hover:text-black ${
-              currentView === 'collections' ? 'text-black border-b-2 border-black pb-0.5' : 'text-gray-500'
+              currentView === 'features' ? 'text-black border-b-2 border-black pb-0.5' : 'text-gray-500'
             }`}
           >
-            Collections
+            Features
           </button>
           <button 
-            onClick={() => onNavigate('new-arrivals')} 
+            onClick={() => onNavigate('pricing')} 
             className={`transition-colors hover:text-black flex items-center gap-1 ${
-              currentView === 'new-arrivals' ? 'text-black border-b-2 border-black pb-0.5' : 'text-gray-500'
+              currentView === 'pricing' ? 'text-black border-b-2 border-black pb-0.5' : 'text-gray-500'
             }`}
           >
-            New Arrivals
+            Pricing
             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
           </button>
           <button 
@@ -118,16 +121,16 @@ function Header({ cartCount, onOpenCart, user, onLogout, onOpenAuth, currentView
         }`}>
           <div className="flex flex-col gap-6 mt-12 text-lg font-bold tracking-widest uppercase">
             <button 
-              onClick={() => { setMenuOpen(false); onNavigate('collections'); }} 
+              onClick={() => { setMenuOpen(false); onNavigate('features'); }} 
               className="text-left py-2 border-b border-gray-100 hover:text-black"
             >
-              Collections
+              Features
             </button>
             <button 
-              onClick={() => { setMenuOpen(false); onNavigate('new-arrivals'); }} 
+              onClick={() => { setMenuOpen(false); onNavigate('pricing'); }} 
               className="text-left py-2 border-b border-gray-100 flex justify-between items-center hover:text-black"
             >
-              New Arrivals
+              Pricing
               <span className="w-2 h-2 rounded-full bg-green-500"></span>
             </button>
             <button 
@@ -138,7 +141,7 @@ function Header({ cartCount, onOpenCart, user, onLogout, onOpenAuth, currentView
             </button>
           </div>
           <div className="text-center text-xs tracking-widest text-gray-400 uppercase border-t border-gray-100 pt-6">
-            © 2026 AURA STUDIO
+            © 2026 AgentBunny
           </div>
         </div>
       </div>

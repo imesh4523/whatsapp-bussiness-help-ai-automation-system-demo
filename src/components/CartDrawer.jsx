@@ -89,16 +89,18 @@ function CartDrawer({ isOpen, onClose, cart, updateQuantity, removeItem, onCheck
     }
   };
 
-  const handleOrderSubmission = () => {
+  const handleOrderSubmission = async () => {
     setSubmittingOrder(true);
-    // Simulate order placement API call
-    setTimeout(() => {
-      const generatedOrderNo = Math.floor(100000 + Math.random() * 900000).toString();
-      setOrderNumber(generatedOrderNo);
-      setSubmittingOrder(false);
+    try {
+      const realOrderNo = await onCheckout(shippingDetails);
+      setOrderNumber(realOrderNo);
       setStep('success');
-      onCheckout(shippingDetails, generatedOrderNo);
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+      if (window.notify) window.notify('error', 'Failed to place order.');
+    } finally {
+      setSubmittingOrder(false);
+    }
   };
 
   const renderContent = () => {

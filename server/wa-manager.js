@@ -4,13 +4,15 @@ import { fileURLToPath } from 'url';
 import makeWASocket, { 
   DisconnectReason, 
   useMultiFileAuthState, 
-  fetchLatestBaileysVersion 
+  fetchLatestBaileysVersion,
+  downloadContentFromMessage
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import QRCode from 'qrcode';
 import db from './db.js';
 import { encrypt, decrypt } from './crypto.js';
 import { generateAIReply } from './ai.js';
+import { callGeminiAPI } from './gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +21,23 @@ const SESSIONS_DIR = path.join(__dirname, 'sessions');
 // Ensure sessions directory exists
 if (!fs.existsSync(SESSIONS_DIR)) {
   fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+}
+
+async function generateOrderNo(db) {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}${mm}${dd}`;
+
+  const countRes = await db.query(
+    "SELECT COUNT(*) FROM orders WHERE created_at::date = CURRENT_DATE"
+  );
+  const count = parseInt(countRes.rows[0].count) || 0;
+  const seq = 50 + count;
+  const seqStr = String(seq).padStart(4, '0');
+
+  return `${dateStr}${seqStr}`;
 }
 
 // In-memory socket store
@@ -227,8 +246,12 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       // Skip group chats — only process individual/personal conversations
       if (msg.key.remoteJid.endsWith('@g.us')) continue;
 
-      const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-      if (!text) continue;
+      let text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+      const imageMessage = msg.message.imageMessage;
+      if (imageMessage) {
+        text = imageMessage.caption || '[Sent an image]';
+      }
+      if (!text && !imageMessage) continue;
 
       // Extract clean phone number from JID (format: '94770135410790:1@s.whatsapp.net')
       // Must strip both '@domain' and ':device' suffixes
@@ -322,12 +345,60 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
         console.warn('Could not read AI config for message auto-reply:', confErr.message);
       }
 
+      // Check user AI message response limits
+      if (isAIActive) {
+        try {
+          const userRes = await db.query(
+            'SELECT plan, status, ai_message_count FROM users WHERE id = $1',
+            [userId]
+          );
+          if (userRes.rows.length > 0) {
+            const user = userRes.rows[0];
+            if (user.status === 'Frozen') {
+              console.log(`User ${userId} is Frozen. Skipping auto-reply.`);
+              return;
+            }
+            const planRes = await db.query(
+              'SELECT response_limit FROM plans WHERE id = $1',
+              [user.plan]
+            );
+            const responseLimit = planRes.rows.length > 0 ? planRes.rows[0].response_limit : 500;
+            if (user.ai_message_count >= responseLimit) {
+              console.log(`User ${userId} exceeded response limit (${user.ai_message_count}/${responseLimit}). Freezing account.`);
+              await db.query("UPDATE users SET status = 'Frozen' WHERE id = $1", [userId]);
+              await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} exceeded response limit (${user.ai_message_count}/${responseLimit})`]);
+              return;
+            }
+          }
+        } catch (limitErr) {
+          console.error('Failed to enforce AI response limit checks:', limitErr.message);
+        }
+      }
+
       if (isAIActive) {
         // Send presence/typing state
         await sock.sendPresenceUpdate('composing', msg.key.remoteJid);
         
+        let imageBuffer = null;
+        let imageMimeType = null;
+        if (imageMessage) {
+          try {
+            console.log(`Downloading image media from incoming WhatsApp message...`);
+            const stream = await downloadContentFromMessage(imageMessage, 'image');
+            let buffer = Buffer.from([]);
+            for await (const chunk of stream) {
+              buffer = Buffer.concat([buffer, chunk]);
+            }
+            imageBuffer = buffer;
+            imageMimeType = imageMessage.mimetype || 'image/jpeg';
+            console.log(`Successfully downloaded image buffer (${imageBuffer.length} bytes)`);
+          } catch (downloadErr) {
+            console.error('Failed to download WhatsApp media image message:', downloadErr.message);
+          }
+        }
+
         // Generate Gemini AI response
-        const aiReply = await generateAIReply(sessionPhone, senderPhone, text);
+        const aiReply = await generateAIReply(sessionPhone, senderPhone, text, imageBuffer, imageMimeType);
         
         // Calculate dynamic delay based on reply length (typing speed simulator)
         const wordCount = aiReply.split(/\s+/).length;
@@ -355,6 +426,27 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [aiReply, chatId]);
             await checkAndExtractOrder(userId, sessionId, senderPhone);
             
+            // Increment usage and freeze if limit met
+            try {
+              const userRes = await db.query('SELECT plan, ai_message_count FROM users WHERE id = $1', [userId]);
+              if (userRes.rows.length > 0) {
+                const user = userRes.rows[0];
+                const planRes = await db.query('SELECT response_limit FROM plans WHERE id = $1', [user.plan]);
+                const responseLimit = planRes.rows.length > 0 ? planRes.rows[0].response_limit : 500;
+                
+                const newCount = (user.ai_message_count || 0) + 1;
+                await db.query('UPDATE users SET ai_message_count = $1 WHERE id = $2', [newCount, userId]);
+                
+                if (newCount >= responseLimit) {
+                  await db.query("UPDATE users SET status = 'Frozen' WHERE id = $1", [userId]);
+                  await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} hit response limit (${newCount}/${responseLimit})`]);
+                  console.log(`User ${userId} has hit the message limit and is now Frozen.`);
+                }
+              }
+            } catch (dbErr) {
+              console.error('Error incrementing user message usage:', dbErr.message);
+            }
+
             console.log(`AI Replied on session ${sessionId}: ${aiReply}`);
           } catch (sendErr) {
             console.error('Failed to send outbound WhatsApp reply:', sendErr.message);
@@ -462,21 +554,55 @@ export async function triggerMockIncomingMessage(userId, sessionId, customerPhon
   // 3. Trigger simulated AI processing
   setTimeout(async () => {
     try {
-      const aiReply = await generateAIReply('agentbunny_agent', customerPhone, messageText);
-      
-      // Save BOT reply
-      await db.query(
-        'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
-        [chatId, aiReply, 'bot']
+      // Check user AI message response limits
+      const userRes = await db.query(
+        'SELECT plan, status, ai_message_count FROM users WHERE id = $1',
+        [userId]
       );
-      await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [aiReply, chatId]);
-      
-      const wsRes = await db.query('SELECT ws.user_id FROM chats c JOIN whatsapp_sessions ws ON c.session_id = ws.id WHERE c.id = $1', [chatId]);
-      if (wsRes.rows.length > 0) {
-        await checkAndExtractOrder(wsRes.rows[0].user_id, 'agentbunny_agent', customerPhone);
-      }
+      if (userRes.rows.length > 0) {
+        const user = userRes.rows[0];
+        if (user.status === 'Frozen') {
+          console.log(`[SIMULATOR] User ${userId} is Frozen. Skipping auto-reply.`);
+          return;
+        }
+        const planRes = await db.query(
+          'SELECT response_limit FROM plans WHERE id = $1',
+          [user.plan]
+        );
+        const responseLimit = planRes.rows.length > 0 ? planRes.rows[0].response_limit : 500;
+        if (user.ai_message_count >= responseLimit) {
+          console.log(`[SIMULATOR] User ${userId} exceeded response limit (${user.ai_message_count}/${responseLimit}). Freezing account.`);
+          await db.query("UPDATE users SET status = 'Frozen' WHERE id = $1", [userId]);
+          await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} exceeded response limit during simulation (${user.ai_message_count}/${responseLimit})`]);
+          return;
+        }
 
-      console.log(`[SIMULATOR] AI auto-replied to ${customerPhone}: ${aiReply}`);
+        // Generate Gemini AI response
+        const aiReply = await generateAIReply('agentbunny_agent', customerPhone, messageText);
+        
+        // Save BOT reply
+        await db.query(
+          'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
+          [chatId, aiReply, 'bot']
+        );
+        await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [aiReply, chatId]);
+        
+        const wsRes = await db.query('SELECT ws.user_id FROM chats c JOIN whatsapp_sessions ws ON c.session_id = ws.id WHERE c.id = $1', [chatId]);
+        if (wsRes.rows.length > 0) {
+          await checkAndExtractOrder(wsRes.rows[0].user_id, 'agentbunny_agent', customerPhone);
+        }
+
+        // Increment usage and freeze if limit met
+        const newCount = (user.ai_message_count || 0) + 1;
+        await db.query('UPDATE users SET ai_message_count = $1 WHERE id = $2', [newCount, userId]);
+        if (newCount >= responseLimit) {
+          await db.query("UPDATE users SET status = 'Frozen' WHERE id = $1", [userId]);
+          await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} hit response limit during simulation (${newCount}/${responseLimit})`]);
+          console.log(`[SIMULATOR] User ${userId} has hit the message limit and is now Frozen.`);
+        }
+
+        console.log(`[SIMULATOR] AI auto-replied to ${customerPhone}: ${aiReply}`);
+      }
     } catch (err) {
       console.error('[SIMULATOR] Failed to process AI response:', err.message);
     }
@@ -500,15 +626,6 @@ async function checkAndExtractOrder(userId, sessionPhone, senderPhone) {
     );
     const messages = msgRes.rows.reverse();
     const chatHistory = messages.map(m => `${m.sender === 'customer' ? 'Customer' : 'Assistant'}: ${m.text}`).join('\n');
-
-    let apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      const dbKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
-      if (dbKeyRes.rows.length > 0) apiKey = dbKeyRes.rows[0].value;
-    }
-    if (!apiKey) return;
-
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const prompt = `Analyze this chat history and determine if an order was just fully finalized and confirmed.
 Finalized means:
@@ -539,14 +656,8 @@ ${chatHistory}`;
       generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = await callGeminiAPI('gemini-1.5-flash', payload);
       const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
         const orderData = JSON.parse(textResult);
@@ -557,7 +668,7 @@ ${chatHistory}`;
             [userId, senderPhone]
           );
           if (dupCheck.rows.length === 0) {
-            const orderId = `ord_${Date.now()}_${Math.round(Math.random() * 1000)}`;
+            const orderId = await generateOrderNo(db);
             const shippingDetails = {
               name: orderData.recipient_name || customerName,
               phone: senderPhone,
@@ -583,6 +694,8 @@ ${chatHistory}`;
           }
         }
       }
+    } catch (apiErr) {
+      console.error('[AUTO-CRM] Gemini API Key rotation failed in Order Extractor:', apiErr.message);
     }
   } catch (err) {
     console.error('[AUTO-CRM] Order extraction failed:', err.message);
@@ -604,17 +717,6 @@ export async function checkAndExtractTracking(userId, sessionPhone, customerPhon
     if (orderRes.rows.length === 0) return;
     const orderId = orderRes.rows[0].id;
 
-    // 2. Fetch Gemini API Key
-    let apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      const dbKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
-      if (dbKeyRes.rows.length > 0) apiKey = dbKeyRes.rows[0].value;
-    }
-    if (!apiKey) return;
-
-    // 3. Prompt Gemini to check for tracking number and courier name
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
     const prompt = `Analyze this message sent by the shop assistant to the customer and determine if it contains a delivery/package tracking number or tracking link, and optionally a courier/delivery service name.
 If NOT found, return exactly: NONE
 If found, extract the details and return a strict JSON block.
@@ -634,14 +736,8 @@ Message text:
       generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = await callGeminiAPI('gemini-1.5-flash', payload);
       const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
         const trackingData = JSON.parse(textResult);
@@ -674,6 +770,8 @@ Message text:
           console.log(`[AUTO-TRACKING] Linked tracking number ${trackingNumber} (${courierName}) to order ${orderId}`);
         }
       }
+    } catch (apiErr) {
+      console.error('[AUTO-TRACKING] Gemini API Key rotation failed in Tracking Extractor:', apiErr.message);
     }
   } catch (err) {
     console.error('[AUTO-TRACKING] Failed to extract tracking details:', err.message);

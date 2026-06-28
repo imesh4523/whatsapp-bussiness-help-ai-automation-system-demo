@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
+import { callGeminiAPI } from './gemini-client.js';
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ const __dirname = path.dirname(__filename);
  * @param {string} messageText - The user prompt/message
  * @returns {Promise<string>} - The AI generated message
  */
-export async function generateAIReply(sessionPhone, senderPhone, messageText) {
+export async function generateAIReply(sessionPhone, senderPhone, messageText, imageBuffer = null, imageMimeType = null) {
   // 1. Fetch the user's AI config or default config
   let config = {
     defaultModel: 'Gemini 1.5 Pro',
@@ -26,6 +27,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
   };
 
   let businessProfile = null;
+  let userId = null;
 
   try {
     const wsRes = await db.query(
@@ -33,7 +35,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       [sessionPhone]
     );
     if (wsRes.rows.length > 0) {
-      const userId = wsRes.rows[0].user_id;
+      userId = wsRes.rows[0].user_id;
       const configRes = await db.query(
         'SELECT * FROM ai_configs WHERE user_id = $1',
         [userId]
@@ -58,30 +60,10 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
     console.warn('Failed to fetch user-specific AI config or profile from db, using default config:', dbErr.message);
   }
 
-  // 2. Fetch API Key (check process.env first, fallback to system_settings in DB)
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    try {
-      const dbKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
-      if (dbKeyRes.rows.length > 0 && dbKeyRes.rows[0].value) {
-        apiKey = dbKeyRes.rows[0].value;
-      }
-    } catch (dbKeyErr) {
-      console.warn('Failed to fetch global GEMINI_API_KEY from database system_settings:', dbKeyErr.message);
-    }
-  }
-
-  if (!apiKey) {
-    console.log('GEMINI_API_KEY is not defined. Simulating human-like response...');
-    return getMockAIResponse(messageText);
-  }
-
-  // 3. Make fetch call to official Google Gemini REST API
+  // 2. Determine target model name
   const modelName = config.defaultModel.toLowerCase().includes('pro') 
     ? 'gemini-1.5-pro' 
     : 'gemini-1.5-flash';
-
-  const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
 
   try {
     // We get conversation history for this specific contact to maintain context
@@ -138,6 +120,28 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\n\n[ORDER PLACEMENT GUIDELINES]\nIf the customer expresses buying/ordering intent:\n1. Politely request their Recipient Name and Delivery Address.\n2. Ask if they prefer Cash on Delivery (COD) or Bank Transfer.\n3. Keep the conversation extremely natural, warm, and like a real human assistant.\n4. Once you have finalized the order details (item name, size, recipient name, delivery address, payment preference, total price), summarize it to the user. Do not trigger the summary until you have gathered all these fields!`;
     }
 
+    // Load products from DB for inventory matching
+    let inventoryInfo = "";
+    if (userId) {
+      try {
+        const productsRes = await db.query(
+          'SELECT id, name, price, description, category, colors, sizes, stock_quantity FROM products WHERE user_id = $1 OR user_id IS NULL ORDER BY id ASC',
+          [userId]
+        );
+        if (productsRes.rows.length > 0) {
+          inventoryInfo = productsRes.rows.map(p => 
+            `- Product ID: ${p.id}, Name: ${p.name}, Price: Rs. ${p.price}, Colors: ${p.colors?.join(', ') || 'Any'}, Sizes: ${p.sizes?.join(', ') || 'Any'}, Stock Available: ${p.stock_quantity ?? 10}`
+          ).join('\n');
+        }
+      } catch (prodErr) {
+        console.warn('Failed to load products for AI inventory info:', prodErr.message);
+      }
+    }
+
+    if (inventoryInfo) {
+      systemPrompt += `\n\n[AVAILABLE INVENTORY & STOCK LEVELS]\n${inventoryInfo}\n\nINSTRUCTIONS for Stock & Inventory:\n1. If a customer inquires about stock, availability, pricing, sizes, or colors of a product, refer strictly to this inventory list.\n2. Confirm if we have the item in stock (Stock Available > 0).\n3. If it is in stock, say something like: "Yes sir, this product is in stock! Price is Rs. X, available sizes are Y. Would you like to order it?".\n4. If it is out of stock (Stock Available = 0), politely inform the customer that it is temporarily sold out but they can pre-order or open a support ticket.`;
+    }
+
     // Fetch latest customer order tracking details to feed into AI memory context
     if (userId) {
       try {
@@ -158,14 +162,27 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       }
     }
 
+    const customerImageParts = [];
+    if (imageBuffer && imageMimeType) {
+      customerImageParts.push({
+        inlineData: {
+          mimeType: imageMimeType,
+          data: imageBuffer.toString('base64')
+        }
+      });
+    }
+
     const payload = {
       contents: [
         {
           role: 'user',
           parts: [
+            ...customerImageParts,
             ...imageParts,
             {
-              text: `Here is the conversation history:\n${historyContext}\n\nCustomer: ${messageText}\nAssistant:`
+              text: imageBuffer 
+                ? `The customer uploaded this screenshot/image. Identify which product it matches in our [AVAILABLE INVENTORY]. Confirm if it is in stock, the price, sizes, and ask if they would like to order it. Additional message/caption from customer (if any): "${messageText || ''}"`
+                : `Here is the conversation history:\n${historyContext}\n\nCustomer: ${messageText}\nAssistant:`
             }
           ]
         }
@@ -183,20 +200,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText) {
       }
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gemini API returned ${response.status}: ${errText}`);
-    }
-
-    const data = await response.json();
+    const data = await callGeminiAPI(modelName, payload);
     const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!replyText) {

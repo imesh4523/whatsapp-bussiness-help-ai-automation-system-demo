@@ -8,9 +8,12 @@ function Footer({ onNavigate }) {
         
         {/* Brand Column */}
         <div className="md:col-span-2">
-          <h2 className="text-2xl font-black tracking-widest uppercase mb-4">AURA.</h2>
+          <span className="flex items-center gap-1.5">
+            <span className="text-3xl leading-none">🐰</span>
+            <span>AgentBunny.</span>
+          </span>
           <p className="text-gray-500 font-light max-w-sm mb-6 leading-relaxed">
-            Elevate your everyday wardrobe with premium materials, clean silhouettes, and timeless designs tailored for modern sophistication.
+            WhatsApp AI Sales Agents and automation systems for growing local businesses. Engage customers, check stock, and collect orders on autopilot.
           </p>
           <div className="flex items-center gap-4 text-gray-400">
             <a href="https://instagram.com" className="hover:text-black transition-colors" target="_blank" rel="noreferrer">
@@ -25,50 +28,29 @@ function Footer({ onNavigate }) {
           </div>
         </div>
 
-        {/* Navigation Quick Links */}
+        {/* Links Columns */}
         <div>
-          <h3 className="text-xs font-bold tracking-widest uppercase text-gray-400 mb-4">Sitemap</h3>
-          <ul className="space-y-3">
-            <li>
-              <button 
-                onClick={() => onNavigate('collections')}
-                className="text-sm text-gray-600 hover:text-black hover:translate-x-1 transition-all flex items-center gap-1"
-              >
-                Collections
-              </button>
-            </li>
-            <li>
-              <button 
-                onClick={() => onNavigate('new-arrivals')}
-                className="text-sm text-gray-600 hover:text-black hover:translate-x-1 transition-all flex items-center gap-1"
-              >
-                New Arrivals
-              </button>
-            </li>
-            <li>
-              <button 
-                onClick={() => onNavigate('about')}
-                className="text-sm text-gray-600 hover:text-black hover:translate-x-1 transition-all flex items-center gap-1"
-              >
-                About Us
-              </button>
-            </li>
+          <h3 className="text-xs font-bold tracking-widest uppercase text-gray-400 mb-4">SaaS Platform</h3>
+          <ul className="space-y-3 text-sm text-gray-600">
+            <li onClick={() => onNavigate('features')} className="hover:text-black transition-colors cursor-pointer">Features</li>
+            <li onClick={() => onNavigate('pricing')} className="hover:text-black transition-colors cursor-pointer">Pricing Plans</li>
+            <li onClick={() => onNavigate('about')} className="hover:text-black transition-colors cursor-pointer">About Us</li>
           </ul>
         </div>
 
-        {/* Customer Support */}
         <div>
           <h3 className="text-xs font-bold tracking-widest uppercase text-gray-400 mb-4">Support</h3>
           <ul className="space-y-3 text-sm text-gray-600">
-            <li className="hover:text-black transition-colors cursor-pointer">Shipping & Delivery</li>
-            <li className="hover:text-black transition-colors cursor-pointer">Returns & Exchanges</li>
-            <li className="hover:text-black transition-colors cursor-pointer">Privacy Preference</li>
+            <li className="hover:text-black transition-colors cursor-pointer">User Guide</li>
+            <li className="hover:text-black transition-colors cursor-pointer">FAQ</li>
+            <li onClick={() => onNavigate('terms')} className="hover:text-black transition-colors cursor-pointer">Terms of Service</li>
+            <li onClick={() => onNavigate('privacy')} className="hover:text-black transition-colors cursor-pointer">Privacy Policy</li>
             <li>
               <a 
-                href="mailto:hello@aurastudio.com" 
+                href="mailto:hello@agentbunny.com" 
                 className="hover:text-black transition-colors flex items-center gap-1"
               >
-                hello@aurastudio.com
+                hello@agentbunny.com
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </a>
             </li>
@@ -78,7 +60,7 @@ function Footer({ onNavigate }) {
 
       {/* Copyright Bar */}
       <div className="max-w-7xl mx-auto pt-8 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-semibold tracking-wider text-gray-400 uppercase">
-        <div>© 2026 AURA STUDIO. All rights reserved.</div>
+        <div>© 2026 AgentBunny. All rights reserved.</div>
         <div className="flex items-center gap-6">
           <span className="hover:text-black transition-colors cursor-pointer">Terms of Use</span>
           <span className="hover:text-black transition-colors cursor-pointer">Privacy Policy</span>

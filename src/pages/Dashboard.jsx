@@ -4870,6 +4870,46 @@ function Dashboard({ user, setUser, onLogout }) {
               </div>
             </div>
 
+            {user?.status === 'Frozen' && (
+              <div className="animate-fade-in" style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fee2e2',
+                padding: '12px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                color: '#991b1b',
+                fontSize: '13px',
+                fontWeight: '600',
+                margin: '20px 20px 0 20px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.05)'
+              }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#fca5a5', color: '#991b1b', fontSize: '14px', fontWeight: 'bold' }}>!</span>
+                <span>Your account is frozen because you have exceeded your plan's AI Response Limit. Please upgrade or renew your plan to restore AI replies.</span>
+                <button 
+                  onClick={() => setTab('subscription_index')}
+                  style={{
+                    marginLeft: 'auto',
+                    backgroundColor: '#ef4444',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+                >
+                  Upgrade Now
+                </button>
+              </div>
+            )}
+
             {/* Page content injected from scraped HTML / mockups */}
             <div className="dashboard-body">
               {tab === 'whatsapp_account' ? (
@@ -4897,7 +4937,7 @@ function Dashboard({ user, setUser, onLogout }) {
                     .replace('__TOTAL_CONTACTS__', (stats?.total_contacts ?? 0).toString())
                     .replace('__TOTAL_TAGS__', (stats?.total_tags ?? 0).toString())
                     .replace('__TOTAL_LISTS__', (stats?.total_lists ?? 0).toString())
-                    .replace('__TOTAL_AI_MESSAGES__', (stats?.total_ai_messages ?? 0).toString())
+                    .replace('__TOTAL_AI_MESSAGES__', (user?.ai_message_count ?? 0).toString())
                     .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
                     .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
                     .replace('__CAMPAIGN_SENT__', (stats?.campaign_sent ?? 0).toString())
@@ -4941,7 +4981,7 @@ function Dashboard({ user, setUser, onLogout }) {
                     .replace('__TOTAL_CONTACTS__', (stats?.total_contacts ?? 0).toString())
                     .replace('__TOTAL_TAGS__', (stats?.total_tags ?? 0).toString())
                     .replace('__TOTAL_LISTS__', (stats?.total_lists ?? 0).toString())
-                    .replace('__TOTAL_AI_MESSAGES__', (stats?.total_ai_messages ?? 0).toString())
+                    .replace('__TOTAL_AI_MESSAGES__', (user?.ai_message_count ?? 0).toString())
                     .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
                     .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
                     .replace('__CAMPAIGN_SENT__', (stats?.campaign_sent ?? 0).toString())

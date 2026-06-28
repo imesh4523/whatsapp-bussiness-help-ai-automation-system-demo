@@ -61,6 +61,37 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+const checkMaintenance = async (req, res, next) => {
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/auth') || req.path.startsWith('/api/orders/public/track')) {
+    return next();
+  }
+  try {
+    const r = await db.query("SELECT value FROM system_settings WHERE key = 'maintenance_mode'");
+    const isMaintenance = r.rows.length > 0 ? r.rows[0].value === 'true' : false;
+    if (isMaintenance) {
+      const authHeader = req.headers['authorization'];
+      const token = authHeader && authHeader.split(' ')[1];
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key');
+          const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [decoded.id]);
+          if (adminCheck.rows.length > 0 && adminCheck.rows[0].plan === 'Enterprise') {
+            return next();
+          }
+        } catch (jwtErr) {
+          // ignore
+        }
+      }
+      return res.status(503).json({ error: 'System is under maintenance. Please try again later.' });
+    }
+  } catch (err) {
+    // ignore
+  }
+  next();
+};
+
+app.use(checkMaintenance);
+
 // Multer: memory storage for media uploads (no disk write needed)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -81,6 +112,23 @@ function authenticateToken(req, res, next) {
   });
 }
 
+async function generateOrderNo(db) {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}${mm}${dd}`;
+
+  const countRes = await db.query(
+    "SELECT COUNT(*) FROM orders WHERE created_at::date = CURRENT_DATE"
+  );
+  const count = parseInt(countRes.rows[0].count) || 0;
+  const seq = 50 + count;
+  const seqStr = String(seq).padStart(4, '0');
+
+  return `${dateStr}${seqStr}`;
+}
+
 // ── Auth Endpoints ───────────────────────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, fullName } = req.body;
@@ -94,10 +142,14 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Email already exists' });
     }
 
+    const nameParts = fullName.trim().split(/\s+/);
+    const firstname = nameParts[0] || '';
+    const lastname = nameParts.slice(1).join(' ') || '';
+
     const passwordHash = await bcrypt.hash(password, 10);
     const userRes = await db.query(
-      'INSERT INTO users (email, password_hash, full_name, plan, status) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, full_name, plan, status',
-      [email, passwordHash, fullName, 'Free', 'Active']
+      'INSERT INTO users (email, password_hash, full_name, firstname, lastname, plan, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, email, full_name, plan, status',
+      [email, passwordHash, fullName, firstname, lastname, 'Starter', 'Active']
     );
     const newUser = userRes.rows[0];
 
@@ -173,9 +225,144 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.get('/api/auth/google', async (req, res) => {
+  const redirect = req.query.redirect || 'http://localhost:5173';
+  try {
+    const clientIdRes = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_id'");
+    const redirectRes = await db.query("SELECT value FROM system_settings WHERE key = 'google_redirect_uri'");
+    const activeRes = await db.query("SELECT value FROM system_settings WHERE key = 'google_auth_active'");
+
+    const clientId = clientIdRes.rows.length > 0 ? clientIdRes.rows[0].value : '';
+    const redirectUri = redirectRes.rows.length > 0 ? redirectRes.rows[0].value : '';
+    const active = activeRes.rows.length > 0 ? activeRes.rows[0].value === 'true' : false;
+
+    if (!active || !clientId || !redirectUri) {
+      return res.redirect(`${redirect}?social_error=not_configured`);
+    }
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=profile%20email&state=${encodeURIComponent(redirect)}`;
+    res.redirect(authUrl);
+  } catch (err) {
+    console.error('Google Auth Init Error:', err.message);
+    res.redirect(`${redirect}?social_error=server_error`);
+  }
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const code = req.query.code;
+  const state = req.query.state || 'http://localhost:5173';
+
+  if (!code) {
+    return res.redirect(`${state}?social_error=missing_code`);
+  }
+
+  try {
+    const clientIdRes = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_id'");
+    const secretRes = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_secret'");
+    const redirectRes = await db.query("SELECT value FROM system_settings WHERE key = 'google_redirect_uri'");
+
+    const clientId = clientIdRes.rows.length > 0 ? clientIdRes.rows[0].value : '';
+    const clientSecret = secretRes.rows.length > 0 ? secretRes.rows[0].value : '';
+    const redirectUri = redirectRes.rows.length > 0 ? redirectRes.rows[0].value : '';
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return res.redirect(`${state}?social_error=not_configured`);
+    }
+
+    // Trade code for tokens
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code'
+      })
+    });
+
+    const tokenData = await tokenResponse.json();
+    if (tokenData.error) {
+      console.error('Google token exchange error:', tokenData.error_description || tokenData.error);
+      return res.redirect(`${state}?social_error=token_error`);
+    }
+
+    // Fetch user info using accessToken
+    const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`
+      }
+    });
+
+    const googleUser = await userinfoResponse.json();
+    if (!googleUser.email) {
+      return res.redirect(`${state}?social_error=email_missing`);
+    }
+
+    const email = googleUser.email.toLowerCase();
+    const fullName = googleUser.name || 'Google User';
+
+    // Check if user exists in DB
+    const checkUser = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    let user;
+
+    if (checkUser.rows.length > 0) {
+      user = checkUser.rows[0];
+      if (user.status === 'Suspended') {
+        return res.redirect(`${state}?social_error=suspended`);
+      }
+    } else {
+      // Create a new user profile
+      const nameParts = fullName.trim().split(/\s+/);
+      const firstname = nameParts[0] || '';
+      const lastname = nameParts.slice(1).join(' ') || '';
+      // Secure null password hash for social login accounts
+      const randomPassword = Math.random().toString(36).slice(-10);
+      const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+      const insertRes = await db.query(
+        'INSERT INTO users (email, password_hash, full_name, firstname, lastname, plan, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+        [email, passwordHash, fullName, firstname, lastname, 'Starter', 'Active']
+      );
+      user = insertRes.rows[0];
+
+      // Seed default AI config for new user
+      await db.query(
+        'INSERT INTO ai_configs (user_id, default_model, temperature, typing_delay, global_ai_active) VALUES ($1, $2, $3, $4, $5)',
+        [user.id, 'Gemini 1.5 Pro', 0.6, 150, true]
+      );
+      
+      await logAuditEvent('New User Social Registration', `User ${email} registered via Google OAuth`);
+    }
+
+    // Create JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: 'user' },
+      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
+      { expiresIn: '7d' }
+    );
+
+    const userData = {
+      id: user.id,
+      email: user.email,
+      name: user.full_name,
+      plan: user.plan,
+      status: user.status
+    };
+
+    res.redirect(`${state}?social_token=${encodeURIComponent(token)}&social_user=${encodeURIComponent(JSON.stringify(userData))}`);
+  } catch (err) {
+    console.error('Google Auth Callback Error:', err.message);
+    res.redirect(`${state}?social_error=server_error`);
+  }
+});
+
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1', [req.user.id]);
+    const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle, firstname, lastname, mobile, dial_code, city, state, zip, country, ai_message_count FROM users WHERE id = $1', [req.user.id]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -188,13 +375,62 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       status: user.status,
       auto_renewal: user.auto_renewal,
       plan_expires_at: user.plan_expires_at,
-      billing_cycle: user.billing_cycle
+      billing_cycle: user.billing_cycle,
+      firstname: user.firstname || '',
+      lastname: user.lastname || '',
+      mobile: user.mobile || '',
+      dial_code: user.dial_code || '',
+      city: user.city || '',
+      state: user.state || '',
+      zip: user.zip || '',
+      country: user.country || '',
+      ai_message_count: user.ai_message_count || 0
     });
   } catch (err) {
     console.error('Get me error:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+app.post('/api/user/profile-setting', authenticateToken, async (req, res) => {
+  const { firstname, lastname, dial_code, mobile, city, state, zip, country } = req.body;
+  try {
+    const fullName = `${firstname} ${lastname}`.trim();
+    const result = await db.query(
+      `UPDATE users 
+       SET firstname = $1, lastname = $2, dial_code = $3, mobile = $4, city = $5, state = $6, zip = $7, country = $8, full_name = $9
+       WHERE id = $10 RETURNING *`,
+      [firstname, lastname, dial_code, mobile, city, state, zip, country, fullName, req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = result.rows[0];
+    res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.full_name,
+        plan: user.plan,
+        status: user.status,
+        firstname: user.firstname || '',
+        lastname: user.lastname || '',
+        mobile: user.mobile || '',
+        dial_code: user.dial_code || '',
+        city: user.city || '',
+        state: user.state || '',
+        zip: user.zip || '',
+        country: user.country || ''
+      }
+    });
+  } catch (err) {
+    console.error('Profile update error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ── Storefront Products & Orders ─────────────────────────────────────────────
 app.get('/api/products', async (req, res) => {
@@ -227,13 +463,14 @@ app.get('/api/orders/public/track/:id', async (req, res) => {
 });
 
 app.post('/api/orders', authenticateToken, async (req, res) => {
-  const { orderId, items, shippingDetails, totalAmount } = req.body;
+  const { items, shippingDetails, totalAmount } = req.body;
   try {
+    const orderId = await generateOrderNo(db);
     await db.query(
       'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
-      [orderId, req.user.id, JSON.stringify(items), totalAmount, JSON.stringify(shippingDetails), 'Pending']
+      [orderId, req.user.id, JSON.stringify(items), totalAmount, JSON.stringify(shippingDetails), 'Processing']
     );
-    res.status(201).json({ message: 'Order created successfully' });
+    res.status(201).json({ success: true, message: 'Order created successfully', orderId });
   } catch (err) {
     console.error('Create order error:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -268,11 +505,12 @@ app.post('/api/orders/:id/cancel', authenticateToken, async (req, res) => {
 app.get('/api/orders', authenticateToken, async (req, res) => {
   try {
     const ordersRes = await db.query(`
-      SELECT o.*, u.name as user_name, u.email as user_email 
+      SELECT o.*, u.full_name as user_name, u.email as user_email 
       FROM orders o 
       LEFT JOIN users u ON o.user_id = u.id 
+      WHERE o.user_id = $1
       ORDER BY o.created_at DESC
-    `);
+    `, [req.user.id]);
     res.json(ordersRes.rows);
   } catch (err) {
     console.error('Fetch all orders error:', err.message);
@@ -871,11 +1109,11 @@ app.get('/api/crm/orders', authenticateToken, async (req, res) => {
 app.post('/api/crm/orders', authenticateToken, async (req, res) => {
   try {
     const { items, total_amount, shipping_details, status } = req.body;
-    const orderId = `ord_${Date.now()}_${Math.round(Math.random() * 1000)}`;
+    const orderId = await generateOrderNo(db);
     
     await db.query(
       'INSERT INTO orders (id, user_id, items, total_amount, shipping_details, status) VALUES ($1, $2, $3, $4, $5, $6)',
-      [orderId, req.user.id, JSON.stringify(items || []), total_amount || 0, JSON.stringify(shipping_details || {}), status || 'Pending']
+      [orderId, req.user.id, JSON.stringify(items || []), total_amount || 0, JSON.stringify(shipping_details || {}), status || 'Processing']
     );
 
     res.json({ success: true, message: 'Order created successfully.', orderId });
@@ -931,6 +1169,179 @@ app.delete('/api/crm/orders/:orderId', authenticateToken, async (req, res) => {
 
     await db.query('DELETE FROM orders WHERE id = $1', [req.params.orderId]);
     res.json({ success: true, message: 'Order deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CRM Products (Inventory) CRUD Endpoints ──────────────────────────────
+app.get('/api/crm/products', authenticateToken, async (req, res) => {
+  try {
+    const products = await db.query(
+      'SELECT * FROM products WHERE user_id = $1 OR user_id IS NULL ORDER BY id ASC',
+      [req.user.id]
+    );
+    res.json(products.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/crm/products', authenticateToken, upload.array('images', 3), async (req, res) => {
+  const { name, price, description, category, sizes, colors, stock_quantity } = req.body;
+  try {
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    let imageUrls = [];
+
+    // Process new file uploads
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const filename = `product-${req.user.id}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+        fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+        imageUrls.push(`/uploads/${filename}`);
+      }
+    }
+
+    const finalImageUrl = imageUrls.join(',') || 'https://wpp.raybeamdigital.com/assets/images/default-product.jpg';
+
+    let parsedSizes = [];
+    if (sizes) {
+      try {
+        parsedSizes = JSON.parse(sizes);
+      } catch (e) {
+        parsedSizes = typeof sizes === 'string' ? sizes.split(',').map(s => s.trim()).filter(Boolean) : [];
+      }
+    }
+
+    let parsedColors = [];
+    if (colors) {
+      try {
+        parsedColors = JSON.parse(colors);
+      } catch (e) {
+        parsedColors = typeof colors === 'string' ? colors.split(',').map(c => c.trim()).filter(Boolean) : [];
+      }
+    }
+
+    const result = await db.query(
+      `INSERT INTO products (name, price, description, category, image_url, sizes, colors, stock_quantity, user_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        name, 
+        price || 0, 
+        description || '', 
+        category || 'General', 
+        finalImageUrl,
+        parsedSizes,
+        parsedColors,
+        stock_quantity !== undefined ? parseInt(stock_quantity) : 10,
+        req.user.id
+      ]
+    );
+    res.status(201).json({ success: true, message: 'Product added successfully.', product: result.rows[0] });
+  } catch (err) {
+    console.error('Add product error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/crm/products/:id', authenticateToken, upload.array('images', 3), async (req, res) => {
+  const { id } = req.params;
+  const { name, price, description, category, sizes, colors, stock_quantity, existing_images } = req.body;
+  try {
+    const check = await db.query('SELECT user_id FROM products WHERE id = $1', [id]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    if (check.rows[0].user_id && check.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    let imageUrls = [];
+
+    // Parse existing image paths
+    if (existing_images) {
+      try {
+        imageUrls = JSON.parse(existing_images);
+      } catch (e) {
+        if (typeof existing_images === 'string') {
+          imageUrls = existing_images.split(',').filter(Boolean);
+        }
+      }
+    }
+
+    // Process new file uploads
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const filename = `product-${req.user.id}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+        fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+        imageUrls.push(`/uploads/${filename}`);
+      }
+    }
+
+    // Enforce max 3 images limit
+    imageUrls = imageUrls.slice(0, 3);
+    const finalImageUrl = imageUrls.join(',') || 'https://wpp.raybeamdigital.com/assets/images/default-product.jpg';
+
+    let parsedSizes = [];
+    if (sizes) {
+      try {
+        parsedSizes = JSON.parse(sizes);
+      } catch (e) {
+        parsedSizes = typeof sizes === 'string' ? sizes.split(',').map(s => s.trim()).filter(Boolean) : [];
+      }
+    }
+
+    let parsedColors = [];
+    if (colors) {
+      try {
+        parsedColors = JSON.parse(colors);
+      } catch (e) {
+        parsedColors = typeof colors === 'string' ? colors.split(',').map(c => c.trim()).filter(Boolean) : [];
+      }
+    }
+
+    const result = await db.query(
+      `UPDATE products 
+       SET name = $1, price = $2, description = $3, category = $4, image_url = $5, sizes = $6, colors = $7, stock_quantity = $8, user_id = $9
+       WHERE id = $10 RETURNING *`,
+      [
+        name, 
+        price || 0, 
+        description || '', 
+        category || 'General', 
+        finalImageUrl,
+        parsedSizes,
+        parsedColors,
+        stock_quantity !== undefined ? parseInt(stock_quantity) : 10,
+        req.user.id,
+        id
+      ]
+    );
+    res.json({ success: true, message: 'Product updated successfully.', product: result.rows[0] });
+  } catch (err) {
+    console.error('Update product error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/crm/products/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const check = await db.query('SELECT user_id FROM products WHERE id = $1', [id]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    if (check.rows[0].user_id && check.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await db.query('DELETE FROM products WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Product deleted successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1042,6 +1453,146 @@ app.get('/api/ai-config', authenticateToken, async (req, res) => {
   }
 });
 
+// ── Coupon Management Admin API ──────────────────────────────────────────────
+app.get('/api/admin/coupons', async (req, res) => {
+  try {
+    const r = await db.query('SELECT * FROM coupons ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/coupons', async (req, res) => {
+  const { code, planName, trialDays, expiresAt, maxUses } = req.body;
+  if (!code || !planName || !trialDays) {
+    return res.status(400).json({ error: 'Code, Plan Name, and Trial Days are required.' });
+  }
+
+  try {
+    const cleanCode = code.trim().toUpperCase();
+    const result = await db.query(
+      `INSERT INTO coupons (code, plan_name, trial_days, expires_at, max_uses)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (code) DO UPDATE SET 
+         plan_name = $2,
+         trial_days = $3,
+         expires_at = $4,
+         max_uses = $5
+       RETURNING *`,
+      [cleanCode, planName, parseInt(trialDays, 10), expiresAt || null, maxUses ? parseInt(maxUses, 10) : null]
+    );
+    await logAuditEvent('Coupon Created/Updated', `Admin created or updated coupon code ${cleanCode}`);
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/coupons/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const couponRes = await db.query('SELECT code FROM coupons WHERE id = $1', [id]);
+    if (couponRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Coupon not found.' });
+    }
+    const code = couponRes.rows[0].code;
+    await db.query('DELETE FROM coupons WHERE id = $1', [id]);
+    await logAuditEvent('Coupon Deleted', `Admin deleted coupon code ${code}`);
+    res.json({ success: true, message: 'Coupon deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── User Coupon Claiming API ─────────────────────────────────────────────────
+app.post('/api/user/claim-coupon', authenticateToken, async (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ error: 'Coupon code is required.' });
+  }
+
+  try {
+    const cleanCode = code.trim().toUpperCase();
+
+    // Fetch coupon
+    const couponRes = await db.query('SELECT * FROM coupons WHERE code = $1', [cleanCode]);
+    if (couponRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Invalid coupon code.' });
+    }
+
+    const coupon = couponRes.rows[0];
+
+    // Check expiration date
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'This coupon code has expired.' });
+    }
+
+    // Check max uses
+    if (coupon.max_uses !== null && coupon.uses_count >= coupon.max_uses) {
+      return res.status(400).json({ error: 'This coupon code has reached its maximum claims limit.' });
+    }
+
+    // Check if user already claimed it
+    const claimRes = await db.query('SELECT * FROM coupon_claims WHERE user_id = $1 AND coupon_id = $2', [req.user.id, coupon.id]);
+    if (claimRes.rows.length > 0) {
+      return res.status(400).json({ error: 'You have already claimed this coupon code.' });
+    }
+
+    // Process claim inside transaction
+    await db.query('BEGIN');
+
+    // 1. Add claim record
+    await db.query(
+      'INSERT INTO coupon_claims (user_id, coupon_id) VALUES ($1, $2)',
+      [req.user.id, coupon.id]
+    );
+
+    // 2. Increment coupon uses count
+    await db.query(
+      'UPDATE coupons SET uses_count = uses_count + 1 WHERE id = $1',
+      [coupon.id]
+    );
+
+    // 3. Update user plan
+    const days = parseInt(coupon.trial_days, 10);
+    const planName = coupon.plan_name;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
+
+    const updateRes = await db.query(
+      `UPDATE users 
+       SET plan = $1, plan_expires_at = $2 
+       WHERE id = $3 
+       RETURNING id, email, full_name, plan, plan_expires_at, status`,
+      [planName, expiresAt, req.user.id]
+    );
+
+    const updatedUser = updateRes.rows[0];
+
+    await db.query('COMMIT');
+
+    await logAuditEvent('Coupon Claimed', `User ${req.user.email} successfully claimed coupon ${cleanCode} (Granted ${days} days of ${planName} plan)`);
+
+    res.json({
+      success: true,
+      message: `Coupon claimed successfully! You have been granted ${days} days of ${planName} plan.`,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.full_name,
+        plan: updatedUser.plan,
+        status: updatedUser.status
+      }
+    });
+
+  } catch (err) {
+    await db.query('ROLLBACK');
+    console.error('Coupon claiming error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.post('/api/ai-config', authenticateToken, async (req, res) => {
   const { defaultModel, systemPrompt, temperature, typingDelay, globalAIActive } = req.body;
   try {
@@ -1075,15 +1626,15 @@ app.get('/api/plans', async (req, res) => {
 
 app.post('/api/admin/plans/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, price, features, disabledFeatures } = req.body;
+  const { name, price, responseLimit, features, disabledFeatures } = req.body;
   try {
     await db.query(
       `UPDATE plans 
-       SET name = $1, price = $2, features = $3, disabled_features = $4 
-       WHERE id = $5`,
-      [name, parseFloat(price), JSON.stringify(features), JSON.stringify(disabledFeatures), id]
+       SET name = $1, price = $2, response_limit = $3, features = $4, disabled_features = $5 
+       WHERE id = $6`,
+      [name, parseFloat(price), parseInt(responseLimit), JSON.stringify(features), JSON.stringify(disabledFeatures), id]
     );
-    await logAuditEvent('Plan Updated', `Admin updated plan ${id} (${name}) details: price set to රු ${price}`);
+    await logAuditEvent('Plan Updated', `Admin updated plan ${id} (${name}) details: price set to රු ${price}, response limit set to ${responseLimit}`);
     res.json({ success: true, message: `Plan ${id} updated successfully.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1116,22 +1667,84 @@ app.get('/api/admin/audit-logs', async (req, res) => {
 app.get('/api/admin/system-settings', async (req, res) => {
   try {
     const keyQuery = await db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'");
-    const apiKey = keyQuery.rows.length > 0 ? keyQuery.rows[0].value : '';
-    res.json({ geminiApiKey: apiKey });
+    let apiKey = keyQuery.rows.length > 0 ? keyQuery.rows[0].value : '';
+    if (apiKey.startsWith('[') && apiKey.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(apiKey);
+        if (Array.isArray(parsed)) {
+          apiKey = parsed.join('\n');
+        }
+      } catch (e) {}
+    }
+
+    const clientIdQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_id'");
+    const clientSecretQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_secret'");
+    const redirectUriQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_redirect_uri'");
+    const authActiveQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_auth_active'");
+
+    res.json({
+      geminiApiKey: apiKey,
+      googleClientId: clientIdQuery.rows.length > 0 ? clientIdQuery.rows[0].value : '',
+      googleClientSecret: clientSecretQuery.rows.length > 0 ? clientSecretQuery.rows[0].value : '',
+      googleRedirectUri: redirectUriQuery.rows.length > 0 ? redirectUriQuery.rows[0].value : 'http://localhost:5000/api/auth/google/callback',
+      googleAuthActive: authActiveQuery.rows.length > 0 ? authActiveQuery.rows[0].value === 'true' : false
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/admin/system-settings', async (req, res) => {
-  const { geminiApiKey } = req.body;
+  const { geminiApiKey, googleClientId, googleClientSecret, googleRedirectUri, googleAuthActive } = req.body;
   try {
-    await db.query(`
-      INSERT INTO system_settings (key, value)
-      VALUES ('gemini_api_key', $1)
-      ON CONFLICT (key) DO UPDATE SET value = $1
-    `, [geminiApiKey]);
-    await logAuditEvent('Gemini API Key Updated', 'Admin updated global Gemini API Key');
+    if (geminiApiKey !== undefined) {
+      let dbValue = geminiApiKey || '';
+      if (dbValue.includes('\n')) {
+        const lines = dbValue.split('\n').map(l => l.trim()).filter(Boolean);
+        dbValue = JSON.stringify(lines);
+      } else if (dbValue.trim() !== '') {
+        dbValue = JSON.stringify([dbValue.trim()]);
+      }
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('gemini_api_key', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [dbValue]);
+    }
+
+    if (googleClientId !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('google_client_id', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [googleClientId]);
+    }
+
+    if (googleClientSecret !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('google_client_secret', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [googleClientSecret]);
+    }
+
+    if (googleRedirectUri !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('google_redirect_uri', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [googleRedirectUri]);
+    }
+
+    if (googleAuthActive !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('google_auth_active', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [googleAuthActive ? 'true' : 'false']);
+    }
+
+    await logAuditEvent('System Settings Updated', 'Admin updated global system settings');
     res.json({ success: true, message: 'System settings updated successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1168,6 +1781,17 @@ app.get('/api/admin/overview', async (req, res) => {
     const totalUsers = parseInt(usersCount.rows[0].count);
     const calculatedARPU = totalUsers > 0 ? (calculatedMRR / totalUsers) : 0;
 
+    // Weekly, Monthly, and Yearly completed transaction revenue aggregation
+    const weeklyRevRes = await db.query("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE status = 'Completed' AND created_at >= NOW() - INTERVAL '7 days'");
+    const monthlyRevRes = await db.query("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE status = 'Completed' AND created_at >= NOW() - INTERVAL '30 days'");
+    const yearlyRevRes = await db.query("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE status = 'Completed' AND created_at >= NOW() - INTERVAL '365 days'");
+    const allTimeRevRes = await db.query("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE status = 'Completed'");
+
+    const weeklyRevenue = parseFloat(weeklyRevRes.rows[0].total);
+    const monthlyRevenue = parseFloat(monthlyRevRes.rows[0].total);
+    const yearlyRevenue = parseFloat(yearlyRevRes.rows[0].total);
+    const allTimeRevenue = parseFloat(allTimeRevRes.rows[0].total);
+
     res.json({
       totalUsers,
       totalSessions: parseInt(sessionsCount.rows[0].count),
@@ -1181,8 +1805,197 @@ app.get('/api/admin/overview', async (req, res) => {
         Enterprise: enterpriseCount
       },
       mrr: calculatedMRR,
-      arpu: calculatedARPU
+      arpu: calculatedARPU,
+      weeklyRevenue,
+      monthlyRevenue,
+      yearlyRevenue,
+      allTimeRevenue
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin Editing of User Business Profiles ──────────────────────────────────
+app.get('/api/admin/user-profile/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = userRes.rows[0];
+
+    const profileRes = await db.query('SELECT * FROM business_profiles WHERE user_id = $1', [userId]);
+    const configRes = await db.query('SELECT * FROM ai_configs WHERE user_id = $1', [userId]);
+
+    res.json({
+      user,
+      profile: profileRes.rows[0] || null,
+      aiConfig: configRes.rows[0] || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/user-profile/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { businessName, description, address, sizesInfo, systemPrompt, temperature, typingDelay, defaultModel } = req.body;
+  try {
+    // 1. Update/Insert Business Profile
+    await db.query(`
+      INSERT INTO business_profiles (user_id, business_name, description, address, sizes_info)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (user_id) DO UPDATE 
+      SET business_name = $2, description = $3, address = $4, sizes_info = $5
+    `, [userId, businessName, description, address, sizesInfo]);
+
+    // 2. Update/Insert AI Config
+    await db.query(`
+      INSERT INTO ai_configs (user_id, default_model, system_prompt, temperature, typing_delay)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (user_id) DO UPDATE 
+      SET default_model = $2, system_prompt = $3, temperature = $4, typing_delay = $5
+    `, [userId, defaultModel || 'Gemini 1.5 Pro', systemPrompt, temperature || 0.6, typingDelay || 150]);
+
+    await logAuditEvent('Admin Edit User Profile', `Admin updated user profile and AI settings for user ID ${userId}`);
+    res.json({ success: true, message: 'User profile updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Support Tickets API Endpoints ─────────────────────────────────────────────
+// User endpoints
+app.get('/api/support/tickets', authenticateToken, async (req, res) => {
+  try {
+    const tickets = await db.query('SELECT * FROM support_tickets WHERE user_id = $1 ORDER BY updated_at DESC', [req.user.id]);
+    res.json(tickets.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/support/tickets', authenticateToken, async (req, res) => {
+  const { subject, description } = req.body;
+  try {
+    const result = await db.query(
+      'INSERT INTO support_tickets (user_id, subject, description, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, subject, description, 'Open']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/support/tickets/:ticketId', authenticateToken, async (req, res) => {
+  const { ticketId } = req.params;
+  try {
+    const ticketRes = await db.query('SELECT * FROM support_tickets WHERE id = $1 AND user_id = $2', [ticketId, req.user.id]);
+    if (ticketRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    const replies = await db.query('SELECT r.*, u.full_name as author_name FROM ticket_replies r LEFT JOIN users u ON r.user_id = u.id WHERE r.ticket_id = $1 ORDER BY r.created_at ASC', [ticketId]);
+    res.json({
+      ticket: ticketRes.rows[0],
+      replies: replies.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/support/tickets/:ticketId/reply', authenticateToken, async (req, res) => {
+  const { ticketId } = req.params;
+  const { message } = req.body;
+  try {
+    const ticketCheck = await db.query('SELECT * FROM support_tickets WHERE id = $1 AND user_id = $2', [ticketId, req.user.id]);
+    if (ticketCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    
+    const replyRes = await db.query(
+      'INSERT INTO ticket_replies (ticket_id, user_id, message, sender_role) VALUES ($1, $2, $3, $4) RETURNING *',
+      [ticketId, req.user.id, message, 'user']
+    );
+    
+    await db.query('UPDATE support_tickets SET status = $1, updated_at = NOW() WHERE id = $2', ['Open', ticketId]);
+    
+    res.json(replyRes.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin endpoints
+app.get('/api/admin/tickets', authenticateToken, async (req, res) => {
+  try {
+    const tickets = await db.query(`
+      SELECT t.*, u.full_name as user_name, u.email as user_email 
+      FROM support_tickets t 
+      LEFT JOIN users u ON t.user_id = u.id 
+      ORDER BY t.updated_at DESC
+    `);
+    res.json(tickets.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/tickets/:ticketId', authenticateToken, async (req, res) => {
+  const { ticketId } = req.params;
+  try {
+    const ticketRes = await db.query(`
+      SELECT t.*, u.full_name as user_name, u.email as user_email 
+      FROM support_tickets t 
+      LEFT JOIN users u ON t.user_id = u.id 
+      WHERE t.id = $1
+    `, [ticketId]);
+    if (ticketRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    const replies = await db.query(`
+      SELECT r.*, u.full_name as author_name 
+      FROM ticket_replies r 
+      LEFT JOIN users u ON r.user_id = u.id 
+      WHERE r.ticket_id = $1 
+      ORDER BY r.created_at ASC
+    `, [ticketId]);
+    res.json({
+      ticket: ticketRes.rows[0],
+      replies: replies.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/tickets/:ticketId/reply', authenticateToken, async (req, res) => {
+  const { ticketId } = req.params;
+  const { message } = req.body;
+  try {
+    const authorId = req.user.id;
+
+    const replyRes = await db.query(
+      'INSERT INTO ticket_replies (ticket_id, user_id, message, sender_role) VALUES ($1, $2, $3, $4) RETURNING *',
+      [ticketId, authorId, message, 'admin']
+    );
+    
+    await db.query('UPDATE support_tickets SET status = $1, updated_at = NOW() WHERE id = $2', ['Replied', ticketId]);
+    
+    res.json(replyRes.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/tickets/:ticketId/close', authenticateToken, async (req, res) => {
+  const { ticketId } = req.params;
+  try {
+    await db.query('UPDATE support_tickets SET status = $1, updated_at = NOW() WHERE id = $2', ['Closed', ticketId]);
+    res.json({ success: true, message: 'Ticket closed successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2006,6 +2819,127 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
     await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, id]);
     await logAuditEvent('User Plan Overridden', `Admin manually updated User ${email} (ID ${id}) plan to ${plan}`);
     res.json({ success: true, message: `User plan upgraded to ${plan}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users/:id/impersonate', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  const targetUserId = req.params.id;
+  try {
+    const targetUserRes = await db.query('SELECT * FROM users WHERE id = $1', [targetUserId]);
+    if (targetUserRes.rows.length === 0) return res.status(404).json({ error: 'Target user not found' });
+    const targetUser = targetUserRes.rows[0];
+    const token = jwt.sign(
+      { id: targetUser.id, email: targetUser.email, fullName: targetUser.full_name },
+      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
+      { expiresIn: '2h' }
+    );
+    await logAuditEvent('User Impersonated', `Admin impersonated Merchant User ${targetUser.email} (ID ${targetUser.id})`);
+    res.json({ success: true, token, user: { id: targetUser.id, email: targetUser.email, fullName: targetUser.full_name } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/ai-usage', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  try {
+    const result = await db.query(`
+      SELECT u.id as user_id, u.full_name as user_name, u.email as user_email, COUNT(m.id) as ai_messages_count
+      FROM messages m
+      JOIN chats c ON m.chat_id = c.id
+      JOIN whatsapp_sessions ws ON c.session_id = ws.id
+      JOIN users u ON ws.user_id = u.id
+      WHERE m.sender = 'bot'
+      GROUP BY u.id, u.full_name, u.email
+      ORDER BY ai_messages_count DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/revenue-stats', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  try {
+    const totalRevRes = await db.query("SELECT SUM(amount) as total_revenue FROM transactions WHERE status = 'Completed'");
+    const mrrRes = await db.query("SELECT SUM(amount) as mrr FROM transactions WHERE status = 'Completed' AND created_at > NOW() - INTERVAL '30 days'");
+    res.json({
+      total_revenue: parseFloat(totalRevRes.rows[0].total_revenue) || 0,
+      mrr: parseFloat(mrrRes.rows[0].mrr) || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/settings/maintenance', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  const { active } = req.body;
+  try {
+    await db.query(
+      "INSERT INTO system_settings (key, value) VALUES ('maintenance_mode', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+      [active ? 'true' : 'false']
+    );
+    await logAuditEvent('Maintenance Mode Toggled', `Admin toggled maintenance mode to ${active ? 'ON' : 'OFF'}`);
+    res.json({ success: true, message: `Maintenance mode updated to ${active}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/settings/maintenance', async (req, res) => {
+  try {
+    const r = await db.query("SELECT value FROM system_settings WHERE key = 'maintenance_mode'");
+    const active = r.rows.length > 0 ? r.rows[0].value === 'true' : false;
+    res.json({ active });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/email-templates', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  try {
+    const r = await db.query('SELECT * FROM email_templates ORDER BY key ASC');
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/email-templates/:key', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  const { key } = req.params;
+  const { subject, body } = req.body;
+  try {
+    await db.query(
+      'UPDATE email_templates SET subject = $1, body = $2, updated_at = CURRENT_TIMESTAMP WHERE key = $3',
+      [subject, body, key]
+    );
+    await logAuditEvent('Email Template Updated', `Admin updated email template: ${key}`);
+    res.json({ success: true, message: 'Template updated successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
