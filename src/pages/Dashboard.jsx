@@ -4763,9 +4763,9 @@ function Dashboard({ user, setUser, onLogout }) {
                   {sessions.length > 0 && (
                     <div className="user-info" style={{ marginRight: '16px', position: 'relative' }}>
                       <div className="user-info__right" onClick={() => setIsSessionDropdownOpen(!isSessionDropdownOpen)}>
-                        <div className="user-info__button" style={{ cursor: 'pointer', padding: '8px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
-                          <span className="icon" style={{ marginRight: '8px', color: '#00832e', display: 'flex', alignItems: 'center' }}><i className="fa-brands fa-whatsapp fa-xl"></i></span>
-                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', paddingRight: '4px' }}>
+                        <div className="user-info__button px-3 py-2 md:px-4 md:py-2" style={{ cursor: 'pointer', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}>
+                          <span className="icon mr-0 md:mr-2" style={{ color: '#00832e', display: 'flex', alignItems: 'center' }}><i className="fa-brands fa-whatsapp fa-xl"></i></span>
+                          <span className="hidden md:inline-block" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', paddingRight: '4px' }}>
                             {sessions.find(s => s.id === activeSessionId)?.session_name || 'WhatsApp Account'}
                             {sessions.find(s => s.id === activeSessionId)?.phone && ` (${formatPhone(sessions.find(s => s.id === activeSessionId).phone)})`}
                           </span>
@@ -4786,7 +4786,7 @@ function Dashboard({ user, setUser, onLogout }) {
                             style={{ 
                               position: 'absolute', 
                               top: '115%', 
-                              left: 0, 
+                              right: 0, 
                               minWidth: '240px', 
                               backgroundColor: '#ffffff', 
                               borderRadius: '16px', 
