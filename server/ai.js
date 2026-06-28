@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
 import { callGeminiAPI } from './gemini-client.js';
+import { callOpenRouterAPI, getAIProvider, getOpenRouterModel } from './openrouter-client.js';
 
 dotenv.config();
 
@@ -60,10 +61,8 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     console.warn('Failed to fetch user-specific AI config or profile from db, using default config:', dbErr.message);
   }
 
-  // 2. Determine target model name
-  const modelName = config.defaultModel.toLowerCase().includes('pro') 
-    ? 'gemini-1.5-pro' 
-    : 'gemini-1.5-flash';
+  // 2. Determine AI provider
+  const aiProvider = await getAIProvider();
 
   try {
     // We get conversation history for this specific contact to maintain context
@@ -200,16 +199,52 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       }
     };
 
-    const data = await callGeminiAPI(modelName, payload);
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!replyText) {
-      throw new Error('Empty response from Gemini candidate parts.');
+    let replyText = null;
+
+    if (aiProvider === 'openrouter') {
+      // --- OpenRouter path ---
+      const orModel = await getOpenRouterModel();
+      // Build OpenAI-style messages from system prompt + history + user message
+      const orMessages = [
+        { role: 'system', content: systemPrompt }
+      ];
+      // Add conversation history
+      if (historyContext) {
+        const lines = historyContext.split('\n').filter(Boolean);
+        for (const line of lines) {
+          if (line.startsWith('Customer: ')) {
+            orMessages.push({ role: 'user', content: line.replace('Customer: ', '') });
+          } else if (line.startsWith('Assistant: ')) {
+            orMessages.push({ role: 'assistant', content: line.replace('Assistant: ', '') });
+          }
+        }
+      }
+      // Final user message
+      orMessages.push({
+        role: 'user',
+        content: imageBuffer
+          ? `The customer uploaded an image. Additional message: "${messageText || ''}"`
+          : messageText
+      });
+      replyText = await callOpenRouterAPI(orModel, orMessages, {
+        temperature: config.temperature,
+        max_tokens: 500
+      });
+    } else {
+      // --- Gemini path (default) ---
+      const modelName = config.defaultModel.toLowerCase().includes('pro')
+        ? 'gemini-1.5-pro'
+        : 'gemini-1.5-flash';
+      const data = await callGeminiAPI(modelName, payload);
+      replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!replyText) {
+        throw new Error('Empty response from Gemini candidate parts.');
+      }
     }
 
     return replyText.trim();
   } catch (err) {
-    console.error('Gemini API call failed, falling back to mock reply:', err.message);
+    console.error('AI API call failed, falling back to mock reply:', err.message);
     return getMockAIResponse(messageText);
   }
 }

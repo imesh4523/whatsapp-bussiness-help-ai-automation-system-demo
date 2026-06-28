@@ -1681,13 +1681,19 @@ app.get('/api/admin/system-settings', async (req, res) => {
     const clientSecretQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_secret'");
     const redirectUriQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_redirect_uri'");
     const authActiveQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_auth_active'");
+    const orKeyQuery = await db.query("SELECT value FROM system_settings WHERE key = 'openrouter_api_key'");
+    const orModelQuery = await db.query("SELECT value FROM system_settings WHERE key = 'openrouter_model'");
+    const aiProviderQuery = await db.query("SELECT value FROM system_settings WHERE key = 'ai_provider'");
 
     res.json({
       geminiApiKey: apiKey,
       googleClientId: clientIdQuery.rows.length > 0 ? clientIdQuery.rows[0].value : '',
       googleClientSecret: clientSecretQuery.rows.length > 0 ? clientSecretQuery.rows[0].value : '',
       googleRedirectUri: redirectUriQuery.rows.length > 0 ? redirectUriQuery.rows[0].value : 'http://localhost:5000/api/auth/google/callback',
-      googleAuthActive: authActiveQuery.rows.length > 0 ? authActiveQuery.rows[0].value === 'true' : false
+      googleAuthActive: authActiveQuery.rows.length > 0 ? authActiveQuery.rows[0].value === 'true' : false,
+      openrouterApiKey: orKeyQuery.rows.length > 0 ? orKeyQuery.rows[0].value : '',
+      openrouterModel: orModelQuery.rows.length > 0 ? orModelQuery.rows[0].value : 'google/gemini-2.0-flash-exp:free',
+      aiProvider: aiProviderQuery.rows.length > 0 ? aiProviderQuery.rows[0].value : 'gemini'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1695,7 +1701,7 @@ app.get('/api/admin/system-settings', async (req, res) => {
 });
 
 app.post('/api/admin/system-settings', async (req, res) => {
-  const { geminiApiKey, googleClientId, googleClientSecret, googleRedirectUri, googleAuthActive } = req.body;
+  const { geminiApiKey, googleClientId, googleClientSecret, googleRedirectUri, googleAuthActive, openrouterApiKey, openrouterModel, aiProvider } = req.body;
   try {
     if (geminiApiKey !== undefined) {
       let dbValue = geminiApiKey || '';
@@ -1710,6 +1716,30 @@ app.post('/api/admin/system-settings', async (req, res) => {
         VALUES ('gemini_api_key', $1)
         ON CONFLICT (key) DO UPDATE SET value = $1
       `, [dbValue]);
+    }
+
+    if (openrouterApiKey !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('openrouter_api_key', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [openrouterApiKey?.trim() || '']);
+    }
+
+    if (openrouterModel !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('openrouter_model', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [openrouterModel?.trim() || 'google/gemini-2.0-flash-exp:free']);
+    }
+
+    if (aiProvider !== undefined) {
+      await db.query(`
+        INSERT INTO system_settings (key, value)
+        VALUES ('ai_provider', $1)
+        ON CONFLICT (key) DO UPDATE SET value = $1
+      `, [aiProvider === 'openrouter' ? 'openrouter' : 'gemini']);
     }
 
     if (googleClientId !== undefined) {

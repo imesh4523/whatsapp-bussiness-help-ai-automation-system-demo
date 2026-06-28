@@ -231,6 +231,12 @@ function AdminDashboard({ admin, onLogout }) {
   const [auditLogs, setAuditLogs] = useState([]);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [isApiKeySaved, setIsApiKeySaved] = useState(false);
+  // OpenRouter & AI Provider states
+  const [aiProvider, setAiProvider] = useState('gemini');
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [openrouterModel, setOpenrouterModel] = useState('google/gemini-2.0-flash-exp:free');
+  const [customModelInput, setCustomModelInput] = useState('');
+  const [isOrSaved, setIsOrSaved] = useState(false);
 
   // Google Login configuration states
   const [googleClientId, setGoogleClientId] = useState('');
@@ -372,6 +378,21 @@ function AdminDashboard({ admin, onLogout }) {
             if (data.googleClientSecret !== undefined) setGoogleClientSecret(data.googleClientSecret);
             if (data.googleRedirectUri !== undefined) setGoogleRedirectUri(data.googleRedirectUri);
             if (data.googleAuthActive !== undefined) setGoogleAuthActive(data.googleAuthActive);
+            if (data.aiProvider !== undefined) setAiProvider(data.aiProvider);
+            if (data.openrouterApiKey !== undefined) setOpenrouterApiKey(data.openrouterApiKey);
+            if (data.openrouterModel !== undefined) {
+              const presets = [
+                'google/gemini-2.0-flash-exp:free','google/gemini-flash-1.5','openai/gpt-4o-mini',
+                'openai/gpt-4o','anthropic/claude-3.5-sonnet','anthropic/claude-3-haiku',
+                'meta-llama/llama-3.1-8b-instruct:free','mistralai/mistral-7b-instruct:free'
+              ];
+              if (presets.includes(data.openrouterModel)) {
+                setOpenrouterModel(data.openrouterModel);
+              } else {
+                setOpenrouterModel('custom');
+                setCustomModelInput(data.openrouterModel);
+              }
+            }
           }
         })
         .catch(err => console.warn(err));
@@ -666,18 +687,30 @@ function AdminDashboard({ admin, onLogout }) {
     try {
       const res = await fetch(`${API_BASE_URL}/admin/system-settings`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ geminiApiKey })
       });
       if (res.ok) {
         setIsApiKeySaved(true);
         setTimeout(() => setIsApiKeySaved(false), 2000);
       }
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleSaveOpenRouter = async (e) => {
+    e.preventDefault();
+    const resolvedModel = openrouterModel === 'custom' ? customModelInput.trim() : openrouterModel;
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/system-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openrouterApiKey, openrouterModel: resolvedModel, aiProvider })
+      });
+      if (res.ok) {
+        setIsOrSaved(true);
+        setTimeout(() => setIsOrSaved(false), 2500);
+      }
+    } catch (e) { console.error(e); }
   };
 
   const handleSaveGoogleConfig = async (e) => {
@@ -1749,44 +1782,153 @@ function AdminDashboard({ admin, onLogout }) {
                 </form>
               </div>
 
-              {/* Quick Info */}
-              <div className="space-y-6">
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-800">
-                    <Shield className="w-5 h-5 text-[#00832e]" />
-                    <h4 className="text-sm font-black uppercase tracking-wider">Global Gemini API Key</h4>
-                  </div>
-                  <p className="text-xs text-gray-500 font-light leading-relaxed">
-                    Set the global Gemini API Key used by all user bots across the platform. Regular users cannot see or edit this key.
-                  </p>
-                  <form onSubmit={handleSaveGeminiKey} className="space-y-3 pt-2">
-                    <textarea 
+              {/* AI Provider Configuration */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-5">
+                <div className="flex items-center gap-2 text-neutral-800">
+                  <Shield className="w-5 h-5 text-[#00832e]" />
+                  <h4 className="text-sm font-black uppercase tracking-wider">AI Provider & API Keys</h4>
+                </div>
+                <p className="text-xs text-gray-500 font-light leading-relaxed">
+                  Select which AI provider powers all user bots. Switch between Gemini (direct) or OpenRouter (access to 100+ models).
+                </p>
+
+                {/* Provider Toggle */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider('gemini')}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                      aiProvider === 'gemini'
+                        ? 'border-[#00832e] bg-[#00832e]/5 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="text-xl">🔵</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-neutral-700">Gemini</span>
+                    <span className="text-[10px] text-gray-400">Google AI Direct</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider('openrouter')}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                      aiProvider === 'openrouter'
+                        ? 'border-purple-500 bg-purple-50 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="text-xl">🌐</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-neutral-700">OpenRouter</span>
+                    <span className="text-[10px] text-gray-400">100+ Models</span>
+                  </button>
+                </div>
+
+                {/* Gemini Section */}
+                {aiProvider === 'gemini' && (
+                  <form onSubmit={handleSaveGeminiKey} className="space-y-3 pt-1">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Gemini API Keys (one per line for rotation)</label>
+                    <textarea
                       value={geminiApiKey}
                       onChange={(e) => setGeminiApiKey(e.target.value)}
                       placeholder="Enter Gemini API Keys (one per line for automatic rotation & failover)..."
-                      rows={5}
+                      rows={4}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-xs font-mono focus:border-[#00832e] focus:outline-none"
                     />
-                    <button 
+                    <button
                       type="submit"
                       className="w-full bg-black text-white hover:bg-neutral-800 transition-all py-2.5 rounded-xl text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2"
                     >
                       {isApiKeySaved ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Save className="w-4 h-4" />}
-                      {isApiKeySaved ? 'Saved API Key!' : 'Save API Key'}
+                      {isApiKeySaved ? 'Saved!' : 'Save Gemini Key'}
                     </button>
                   </form>
-                </div>
+                )}
 
-                {/* Google OAuth Configuration Settings */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-800">
-                    <Shield className="w-5 h-5 text-[#00832e]" />
-                    <h4 className="text-sm font-black uppercase tracking-wider">Google Login Configuration</h4>
-                  </div>
-                  <p className="text-xs text-gray-500 font-light leading-relaxed">
-                    Configure Google OAuth Client credentials for social login & signup on the authentication page.
-                  </p>
-                  
+                {/* OpenRouter Section */}
+                {aiProvider === 'openrouter' && (
+                  <form onSubmit={handleSaveOpenRouter} className="space-y-4 pt-1">
+                    {/* API Key */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">OpenRouter API Key</label>
+                      <input
+                        type="password"
+                        value={openrouterApiKey}
+                        onChange={(e) => setOpenrouterApiKey(e.target.value)}
+                        placeholder="sk-or-v1-..."
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-xs font-mono focus:border-purple-400 focus:outline-none"
+                      />
+                      <p className="text-[10px] text-gray-400">Get your key at <span className="text-purple-500 font-medium">openrouter.ai/keys</span></p>
+                    </div>
+
+                    {/* Model Selector */}
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Select Model</label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {[
+                          { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash', badge: 'FREE', color: 'bg-green-100 text-green-700' },
+                          { id: 'google/gemini-flash-1.5', name: 'Gemini 1.5 Flash', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
+                          { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B', badge: 'FREE', color: 'bg-green-100 text-green-700' },
+                          { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B', badge: 'FREE', color: 'bg-green-100 text-green-700' },
+                          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
+                          { id: 'openai/gpt-4o', name: 'GPT-4o', badge: 'Premium', color: 'bg-orange-100 text-orange-700' },
+                          { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', badge: 'Best', color: 'bg-purple-100 text-purple-700' },
+                          { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', badge: 'Fast', color: 'bg-indigo-100 text-indigo-700' },
+                          { id: 'custom', name: 'Custom Model ID', badge: 'Any', color: 'bg-gray-100 text-gray-700' },
+                        ].map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setOpenrouterModel(m.id)}
+                            className={`flex items-center justify-between px-4 py-2.5 rounded-xl border-2 text-left transition-all ${
+                              openrouterModel === m.id
+                                ? 'border-purple-500 bg-purple-50'
+                                : 'border-gray-100 hover:border-gray-300 bg-gray-50'
+                            }`}
+                          >
+                            <span className="text-xs font-semibold text-neutral-700">{m.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.color}`}>{m.badge}</span>
+                              {openrouterModel === m.id && <div className="w-2 h-2 rounded-full bg-purple-500" />}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Custom model input */}
+                      {openrouterModel === 'custom' && (
+                        <div className="pt-1">
+                          <input
+                            type="text"
+                            value={customModelInput}
+                            onChange={(e) => setCustomModelInput(e.target.value)}
+                            placeholder="e.g. deepseek/deepseek-r1:free"
+                            className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl text-xs font-mono focus:border-purple-500 focus:outline-none"
+                          />
+                          <p className="text-[10px] text-gray-400 mt-1">Find all model IDs at <span className="text-purple-500 font-medium">openrouter.ai/models</span></p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white transition-all py-2.5 rounded-xl text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2"
+                    >
+                      {isOrSaved ? <CheckCircle className="w-4 h-4 text-white" /> : <Save className="w-4 h-4" />}
+                      {isOrSaved ? 'Saved!' : 'Save OpenRouter Settings'}
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* Google OAuth Configuration Settings */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 text-neutral-800">
+                  <Shield className="w-5 h-5 text-[#00832e]" />
+                  <h4 className="text-sm font-black uppercase tracking-wider">Google Login Configuration</h4>
+                </div>
+                <p className="text-xs text-gray-500 font-light leading-relaxed">
+                  Configure Google OAuth Client credentials for social login &amp; signup on the authentication page.
+                </p>
+                
                   <form onSubmit={handleSaveGoogleConfig} className="space-y-3 pt-2">
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Google Client ID</label>
@@ -1840,27 +1982,26 @@ function AdminDashboard({ admin, onLogout }) {
                       {isGoogleSaved ? 'Saved Settings!' : 'Save Credentials'}
                     </button>
                   </form>
-                </div>
+              </div>
 
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-800">
-                    <Cpu className="w-5 h-5 text-[#00832e]" />
-                    <h4 className="text-sm font-bold uppercase tracking-wider">Prompt Injector Model</h4>
-                  </div>
-                  <p className="text-xs text-gray-500 font-light leading-relaxed">
-                    This default prompt template is injected into user sessions if they do not customize their specific bot prompts. You can test prompts inside the user sandbox before applying system wide.
-                  </p>
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 text-neutral-800">
+                  <Cpu className="w-5 h-5 text-[#00832e]" />
+                  <h4 className="text-sm font-bold uppercase tracking-wider">Prompt Injector Model</h4>
                 </div>
+                <p className="text-xs text-gray-500 font-light leading-relaxed">
+                  This default prompt template is injected into user sessions if they do not customize their specific bot prompts. You can test prompts inside the user sandbox before applying system wide.
+                </p>
+              </div>
 
-                <div className="bg-amber-50/50 border border-amber-200/50 rounded-3xl p-6 space-y-4 text-amber-800">
-                  <div className="flex items-center gap-2 font-bold text-amber-800">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider">System Safety Warning</h4>
-                  </div>
-                  <p className="text-xs leading-relaxed font-light text-amber-700">
-                    Overwriting global configurations will refresh the system prompt mapping for all uncustomized user bots on their next incoming webhook message. Please verify parameter syntax.
-                  </p>
+              <div className="bg-amber-50/50 border border-amber-200/50 rounded-3xl p-6 space-y-4 text-amber-800">
+                <div className="flex items-center gap-2 font-bold text-amber-800">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider">System Safety Warning</h4>
                 </div>
+                <p className="text-xs leading-relaxed font-light text-amber-700">
+                  Overwriting global configurations will refresh the system prompt mapping for all uncustomized user bots on their next incoming webhook message. Please verify parameter syntax.
+                </p>
               </div>
             </div>
           )}
