@@ -1118,7 +1118,7 @@ function WhatsAppAccountManager({ activeSessionId, onSessionsUpdated, user }) {
             </button>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8" style={{ gap: '24px' }}>
             <div className="space-y-6" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div className="space-y-2">
                 <p className="text-sm text-gray-400 font-light leading-relaxed" style={{ color: '#64748b', fontSize: '13px', lineHeight: '1.6' }}>
