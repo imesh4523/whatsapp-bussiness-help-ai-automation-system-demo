@@ -159,7 +159,16 @@ function App() {
           headers: { 'Authorization': `Bearer ${token}` }
         })
           .then(res => {
-            if (res.ok) return res.json();
+            if (res.ok) {
+              return res.json();
+            } else if (res.status === 401 || res.status === 403) {
+              // Token is invalid/expired - clear storage and redirect
+              localStorage.removeItem('aura_token');
+              localStorage.removeItem('aura_user');
+              setUser(null);
+              setView('home');
+              setAuthModal({ isOpen: true, type: 'login' });
+            }
           })
           .then(updatedUser => {
             if (updatedUser) {

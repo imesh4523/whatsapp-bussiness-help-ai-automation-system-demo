@@ -2491,6 +2491,8 @@ function Dashboard({ user, setUser, onLogout }) {
       if (res.ok) {
         const data = await res.json();
         setStats(data);
+      } else if (res.status === 401 || res.status === 403) {
+        if (onLogout) onLogout();
       }
     } catch (err) {
       console.error('Failed to fetch dashboard stats:', err);
@@ -2516,6 +2518,8 @@ function Dashboard({ user, setUser, onLogout }) {
           setActiveSessionId('');
           localStorage.removeItem('agentbunny_active_session_id');
         }
+      } else if (res.status === 401 || res.status === 403) {
+        if (onLogout) onLogout();
       }
     } catch (err) {
       console.error('Fetch sessions failed:', err);
@@ -2529,7 +2533,6 @@ function Dashboard({ user, setUser, onLogout }) {
       fetchSessions();
       fetchDashboardStats();
 
-      // Fetch fresh user profile details to sync any administrative plan upgrades/changes
       const fetchUserProfile = async () => {
         try {
           const res = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -2546,6 +2549,8 @@ function Dashboard({ user, setUser, onLogout }) {
               if (setUser) setUser(updatedUser);
               localStorage.setItem('aura_user', JSON.stringify(updatedUser));
             }
+          } else if (res.status === 401 || res.status === 403) {
+            if (onLogout) onLogout();
           }
         } catch (err) {
           console.error('Failed to fetch user profile:', err);
