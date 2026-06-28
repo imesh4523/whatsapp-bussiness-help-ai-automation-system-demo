@@ -2476,7 +2476,11 @@ function Dashboard({ user, setUser, onLogout }) {
     ai_bots: 0,
     total_deposits: 0,
     total_withdrawals: 0,
-    total_ai_messages: 0
+    total_ai_messages: 0,
+    campaign_sent: 0,
+    campaign_failed: 0,
+    campaign_success_rate: 0,
+    campaign_total: 0
   });
 
   const fetchDashboardStats = async () => {
@@ -4896,6 +4900,10 @@ function Dashboard({ user, setUser, onLogout }) {
                     .replace('__TOTAL_AI_MESSAGES__', (stats?.total_ai_messages ?? 0).toString())
                     .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
                     .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
+                    .replace('__CAMPAIGN_SENT__', (stats?.campaign_sent ?? 0).toString())
+                    .replace('__CAMPAIGN_FAILED__', (stats?.campaign_failed ?? 0).toString())
+                    .replace('__CAMPAIGN_SUCCESS_RATE__', (stats?.campaign_success_rate ?? 0).toString())
+                    .replace('__CAMPAIGN_TOTAL__', (stats?.campaign_total ?? 0).toString())
                     .replace('__SAVED_CARDS_LIST__', renderSavedCardsHtml())
                 }} />
               ) : (
@@ -4936,6 +4944,10 @@ function Dashboard({ user, setUser, onLogout }) {
                     .replace('__TOTAL_AI_MESSAGES__', (stats?.total_ai_messages ?? 0).toString())
                     .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
                     .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
+                    .replace('__CAMPAIGN_SENT__', (stats?.campaign_sent ?? 0).toString())
+                    .replace('__CAMPAIGN_FAILED__', (stats?.campaign_failed ?? 0).toString())
+                    .replace('__CAMPAIGN_SUCCESS_RATE__', (stats?.campaign_success_rate ?? 0).toString())
+                    .replace('__CAMPAIGN_TOTAL__', (stats?.campaign_total ?? 0).toString())
                     .replace('__SAVED_CARDS_LIST__', renderSavedCardsHtml())
                 }} />
               )}
