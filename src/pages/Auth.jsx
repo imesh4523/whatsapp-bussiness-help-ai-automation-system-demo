@@ -7,8 +7,8 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
   const [currentType, setCurrentType] = useState(type === 'register' ? 'signup' : type); // 'login', 'signup', 'forgot'
   const [formData, setFormData] = useState({
     fullName: '',
-    email: 'demo@agentbunny.com',
-    password: 'demo1234',
+    email: '',
+    password: '',
     confirmPassword: ''
   });
   const [error, setError] = useState('');
@@ -126,20 +126,6 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
               className="w-full bg-black text-white hover:bg-neutral-800 transition-colors py-3.5 rounded-xl text-xs font-bold tracking-widest uppercase active:scale-[0.99] mt-2"
             >
               {loading ? 'Signing In...' : 'Sign In'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                onSuccess({
-                  name: 'Cheak Imesh',
-                  email: 'demo@agentbunny.com'
-                });
-              }}
-              className="w-full bg-[#00832e] text-white hover:bg-emerald-800 transition-colors py-3.5 rounded-xl text-xs font-bold tracking-widest uppercase active:scale-[0.99] mt-2 flex items-center justify-center gap-2"
-            >
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-              Quick Demo Login
             </button>
 
             <div className="pt-4 flex flex-col items-center gap-3">
