@@ -575,9 +575,6 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
               } catch (trackErr) {
                 console.error('Failed to send tracking link message:', trackErr.message);
               }
-            } else {
-              // Fallback check extract just in case it wasn't intercepted
-              await checkAndExtractOrder(userId, sessionId, senderPhone);
             }
             
             // Increment usage and freeze if limit met
@@ -815,7 +812,7 @@ ${chatHistory}`;
         if (orderData && orderData.confirmed) {
           // Check for duplicate in last 5 minutes
           const dupCheck = await db.query(
-            "SELECT id FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2) AND created_at > NOW() - INTERVAL '5 minutes'",
+            "SELECT id FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2) AND created_at > NOW() - INTERVAL '15 seconds'",
             [userId, senderPhone]
           );
           if (dupCheck.rows.length === 0) {
@@ -981,9 +978,9 @@ ${chatHistory}`;
       if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
         const orderData = JSON.parse(textResult);
         if (orderData && orderData.confirmed) {
-          // Check for duplicate in last 5 minutes
+          // Check for duplicate in last 5 seconds
           const dupCheck = await db.query(
-            "SELECT id FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2) AND created_at > NOW() - INTERVAL '5 minutes'",
+            "SELECT id FROM orders WHERE user_id = $1 AND (shipping_details->>'phone' = $2) AND created_at > NOW() - INTERVAL '5 seconds'",
             [userId, senderPhone]
           );
           if (dupCheck.rows.length === 0) {

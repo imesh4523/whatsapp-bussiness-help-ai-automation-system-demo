@@ -2395,7 +2395,7 @@ function WhatsAppOrderManager() {
               <span className="d-block fs-13 text-muted text-xs mt-1">There are no available data to display on this table at the moment.</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs" style={{ minWidth: '850px' }}>
               <thead>
                 <tr className="bg-neutral-50 border-b border-gray-100 font-bold text-gray-500 uppercase tracking-wider">
                   <th className="p-4">Order ID</th>
