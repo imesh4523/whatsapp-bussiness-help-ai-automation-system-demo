@@ -2924,7 +2924,7 @@ function Dashboard({ user, setUser, onLogout }) {
       shortLinkLimit = '3';
       floaterLimit = '3';
     } else if (displayPlan === 'Elite') {
-      accountLimit = 'Unlimited';
+      accountLimit = '10';
       agentLimit = 'Unlimited';
       contactLimit = 'Unlimited';
       templateLimit = 'Unlimited';
