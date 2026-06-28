@@ -408,12 +408,60 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
           try {
             await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
             
+            // Parse reply for [IMAGE: id] tag
+            let cleanReply = aiReply;
+            let imageToSend = null;
+            const imgMatch = aiReply.match(/\[IMAGE:\s*(\d+)\]/i);
+            
+            if (imgMatch) {
+              const productId = parseInt(imgMatch[1]);
+              try {
+                const prodRes = await db.query('SELECT image_url FROM products WHERE id = $1', [productId]);
+                if (prodRes.rows.length > 0 && prodRes.rows[0].image_url) {
+                  const imageUrl = prodRes.rows[0].image_url;
+                  if (imageUrl.startsWith('/uploads/')) {
+                    const filename = imageUrl.replace('/uploads/', '');
+                    const filePath = path.join(__dirname, 'uploads', filename);
+                    if (fs.existsSync(filePath)) {
+                      imageToSend = { local: true, path: filePath };
+                    }
+                  } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+                    imageToSend = { local: false, url: imageUrl };
+                  }
+                }
+                // Clean the tag from the text message
+                cleanReply = aiReply.replace(/\[IMAGE:\s*\d+\]/gi, '').trim();
+              } catch (dbErr) {
+                console.error('Failed to query product image from DB:', dbErr.message);
+              }
+            }
+
             // Send message via Baileys socket with ephemeral expiration if active
             const sendOpts = {};
             if (ephemeralExpiration) {
               sendOpts.ephemeralExpiration = ephemeralExpiration;
             }
-            const result = await sock.sendMessage(msg.key.remoteJid, { text: aiReply }, sendOpts);
+            
+            let result;
+            if (imageToSend) {
+              try {
+                let fileBuffer;
+                if (imageToSend.local) {
+                  fileBuffer = fs.readFileSync(imageToSend.path);
+                } else {
+                  const response = await fetch(imageToSend.url);
+                  const arrayBuffer = await response.arrayBuffer();
+                  fileBuffer = Buffer.from(arrayBuffer);
+                }
+                result = await sock.sendMessage(msg.key.remoteJid, { image: fileBuffer, caption: cleanReply }, sendOpts);
+              } catch (sendImgErr) {
+                console.error('Failed to send WhatsApp product image, falling back to text:', sendImgErr.message);
+                result = await sock.sendMessage(msg.key.remoteJid, { text: cleanReply }, sendOpts);
+              }
+            } else {
+              result = await sock.sendMessage(msg.key.remoteJid, { text: cleanReply }, sendOpts);
+            }
+
             if (result && result.key && result.key.id) {
               trackSentMessage(result.key.id);
             }
@@ -421,9 +469,9 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             // Log outbound message to DB
             await db.query(
               'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
-              [chatId, aiReply, 'bot']
+              [chatId, cleanReply, 'bot']
             );
-            await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [aiReply, chatId]);
+            await db.query('UPDATE chats SET last_message = $1, unread_count = 0 WHERE id = $2', [cleanReply, chatId]);
             await checkAndExtractOrder(userId, sessionId, senderPhone);
             
             // Increment usage and freeze if limit met
