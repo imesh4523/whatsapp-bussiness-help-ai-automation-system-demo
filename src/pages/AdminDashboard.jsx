@@ -384,7 +384,9 @@ function AdminDashboard({ admin, onLogout }) {
               const presets = [
                 'liquid/lfm-2.5-1.2b-instruct:free','liquid/lfm-2.5-1.2b-thinking:free',
                 'meta-llama/llama-3.1-8b-instruct','meta-llama/llama-3.3-70b-instruct',
-                'openai/gpt-4o-mini','openai/gpt-4o','anthropic/claude-3.5-sonnet','anthropic/claude-3-haiku'
+                'openai/gpt-4o-mini','openai/gpt-4o',
+                'google/gemini-2.5-flash',
+                'anthropic/claude-3.5-sonnet','anthropic/claude-3-haiku'
               ];
               if (presets.includes(data.openrouterModel)) {
                 setOpenrouterModel(data.openrouterModel);
@@ -1866,12 +1868,12 @@ function AdminDashboard({ admin, onLogout }) {
                         {[
                           { id: 'liquid/lfm-2.5-1.2b-instruct:free', name: 'LFM 2.5 Instruct', badge: 'FREE ✅', color: 'bg-green-100 text-green-700' },
                           { id: 'liquid/lfm-2.5-1.2b-thinking:free', name: 'LFM 2.5 Thinking', badge: 'FREE ✅', color: 'bg-green-100 text-green-700' },
+                          { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash 🖼️', badge: 'Best Value', color: 'bg-yellow-100 text-yellow-700' },
+                          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini 🖼️', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
+                          { id: 'openai/gpt-4o', name: 'GPT-4o 🖼️', badge: 'Premium', color: 'bg-orange-100 text-orange-700' },
+                          { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku 🖼️', badge: 'Fast', color: 'bg-indigo-100 text-indigo-700' },
                           { id: 'meta-llama/llama-3.1-8b-instruct', name: 'Llama 3.1 8B', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
                           { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', badge: 'Mid', color: 'bg-blue-100 text-blue-700' },
-                          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', badge: 'Cheap', color: 'bg-blue-100 text-blue-700' },
-                          { id: 'openai/gpt-4o', name: 'GPT-4o', badge: 'Premium', color: 'bg-orange-100 text-orange-700' },
-                          { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', badge: 'Best', color: 'bg-purple-100 text-purple-700' },
-                          { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', badge: 'Fast', color: 'bg-indigo-100 text-indigo-700' },
                           { id: 'custom', name: 'Custom Model ID', badge: 'Any', color: 'bg-gray-100 text-gray-700' },
                         ].map(m => (
                           <button
