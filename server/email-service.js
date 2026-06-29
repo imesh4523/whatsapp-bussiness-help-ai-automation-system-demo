@@ -4,7 +4,7 @@ import { resetExpiredLimits, rotateResendKey } from './resend-rotator.js';
 /**
  * Send a generic HTML email using the Resend email provider configured in settings
  */
-export async function sendGenericEmail(toEmail, subject, htmlContent, textContent = '', isCampaign = false, attachments = []) {
+export async function sendGenericEmail(toEmail, subject, htmlContent, textContent = '', isCampaign = false, attachments = [], templateKey = null) {
   try {
     // Fetch settings from database
     const serviceRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_service'");
@@ -15,37 +15,17 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
       return true;
     }
 
-    // Reset expired daily limits
-    await resetExpiredLimits();
+    // Resolve dedicated active key based on category / purpose
+    const emailType = getEmailTypeFromKey(templateKey, isCampaign);
+    const { getActiveResendKeyForType } = await import('./resend-rotator.js');
+    const activeKeyObj = await getActiveResendKeyForType(emailType);
 
-    let keyRes = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
-    let apiKey = keyRes.rows.length > 0 ? keyRes.rows[0].value?.trim() : null;
-    if (!apiKey) {
-      throw new Error("Resend API Key is not set in system settings.");
+    if (!activeKeyObj) {
+      throw new Error(`No active Resend API Key found for category: ${emailType}`);
     }
 
-    // Check if the current key has exceeded its daily limit
-    let activeKeyObj = null;
-    const keyInfoRes = await db.query("SELECT id, daily_sent_count, status, sender_email FROM resend_api_keys WHERE api_key = $1", [apiKey]);
-    if (keyInfoRes.rows.length > 0) {
-      activeKeyObj = keyInfoRes.rows[0];
-      if (activeKeyObj.daily_sent_count >= 100 || activeKeyObj.status === 'LimitReached') {
-        console.log(`[Email Service] API Key limit reached (${activeKeyObj.daily_sent_count}/100). Auto-rotating...`);
-        try {
-          apiKey = await rotateResendKey(apiKey, `Daily limit reached (${activeKeyObj.daily_sent_count}/100)`);
-          const newKeyRes = await db.query("SELECT id, daily_sent_count, status, sender_email FROM resend_api_keys WHERE api_key = $1", [apiKey]);
-          if (newKeyRes.rows.length > 0) activeKeyObj = newKeyRes.rows[0];
-        } catch (rotError) {
-          console.error(`[Email Service] Auto-rotation failed, falling back to current key:`, rotError.message);
-        }
-      }
-    }
-
-    let rawFromEmail = activeKeyObj?.sender_email;
-    if (!rawFromEmail) {
-      const senderRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
-      rawFromEmail = senderRes.rows.length > 0 ? senderRes.rows[0].value?.trim() : 'noreply@agentbunny.com';
-    }
+    let apiKey = activeKeyObj.api_key;
+    let rawFromEmail = activeKeyObj.sender_email;
 
     const senderNameRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender_name'");
     const senderDisplayName = senderNameRes.rows.length > 0 ? senderNameRes.rows[0].value?.trim() : 'AgentBunny';
@@ -68,7 +48,7 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
       customHeaders["Precedence"] = "bulk";
     }
 
-    console.log(`[Email Service] Sending email to ${toEmail} via Resend...`);
+    console.log(`[Email Service] Sending email to ${toEmail} via Resend (${emailType} pool)...`);
 
     const requestBody = {
       from: fromEmail,
@@ -108,8 +88,13 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
       const errMsg = sendRes.data?.message || JSON.stringify(sendRes.data);
       console.warn(`[Email Service] Rate limit / Quota exceeded error: ${errMsg}. Rotating...`);
       try {
-        apiKey = await rotateResendKey(apiKey, `Quota/Limit Error: ${errMsg}`);
+        apiKey = await rotateResendKey(apiKey, `Quota/Limit Error for type ${emailType}: ${errMsg}`);
         sendRes = await doSend(apiKey);
+        const refetchedSenderRes = await db.query("SELECT sender_email FROM resend_api_keys WHERE api_key = $1", [apiKey]);
+        if (refetchedSenderRes.rows.length > 0 && refetchedSenderRes.rows[0].sender_email) {
+          rawFromEmail = refetchedSenderRes.rows[0].sender_email;
+          requestBody.from = `${senderDisplayName} <${rawFromEmail}>`;
+        }
       } catch (rotError) {
         console.error(`[Email Service] Rotation retry failed:`, rotError.message);
       }
@@ -121,17 +106,38 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
 
     console.log(`[Email Service] Resend sent successfully. Message ID: ${sendRes.data.id}`);
 
-    // Increment count in database
-    await db.query(
-      "UPDATE resend_api_keys SET daily_sent_count = daily_sent_count + 1 WHERE api_key = $1",
-      [apiKey]
-    );
+    // Increment count in database (only if it is a pooled key, skip for fallback settings)
+    if (activeKeyObj.id) {
+      await db.query(
+        "UPDATE resend_api_keys SET daily_sent_count = daily_sent_count + 1 WHERE id = $1",
+        [activeKeyObj.id]
+      );
+    }
 
     return true;
   } catch (err) {
     console.error(`[Email Service] Error sending email to ${toEmail}:`, err.message);
     return false;
   }
+}
+
+/**
+ * Maps template keys to the relevant pool category (Transactional, Billing, Marketing).
+ */
+function getEmailTypeFromKey(key, isCampaign) {
+  if (isCampaign) return 'Marketing';
+  if (!key) return 'All';
+  const k = key.toLowerCase();
+  if (['welcome', 'reset_password', 'password_reset_success', 'inactivity_followup', 'quota_warning_80', 'quota_warning_100'].includes(k)) {
+    return 'Transactional';
+  }
+  if (['invoice', 'price_update'].includes(k)) {
+    return 'Billing';
+  }
+  if (['promotional', 'offer_discount'].includes(k)) {
+    return 'Marketing';
+  }
+  return 'All';
 }
 
 /**
@@ -512,7 +518,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
 </html>
     `;
 
-    const success = await sendGenericEmail(toEmail, subject, htmlContent, '', false, attachments);
+    const success = await sendGenericEmail(toEmail, subject, htmlContent, '', false, attachments, key);
     return success;
   } catch (err) {
     console.error(`[Email Service] sendTemplatedEmail failed for key: ${key}`, err.message);

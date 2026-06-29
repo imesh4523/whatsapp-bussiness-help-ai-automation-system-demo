@@ -295,3 +295,57 @@ export async function manuallyActivateKey(keyId) {
     throw err;
   }
 }
+
+/**
+ * Fetch the active Resend key and sender email matching the requested purpose/type category.
+ * Falls back to 'All' or system settings if no specific active key is found.
+ */
+export async function getActiveResendKeyForType(emailType) {
+  try {
+    await resetExpiredLimits();
+
+    // 1. Find key matching the exact purpose (e.g. Transactional, Marketing, Billing)
+    let res = await db.query(
+      `SELECT * FROM resend_api_keys 
+       WHERE status = 'Active' 
+         AND daily_sent_count < 100 
+         AND email_type = $1 
+         AND sender_email IS NOT NULL 
+       ORDER BY id ASC LIMIT 1`,
+      [emailType]
+    );
+    if (res.rows.length > 0) {
+      return res.rows[0];
+    }
+
+    // 2. Fallback to 'All' general type keys
+    if (emailType !== 'All') {
+      res = await db.query(
+        `SELECT * FROM resend_api_keys 
+         WHERE status = 'Active' 
+           AND daily_sent_count < 100 
+           AND email_type = 'All' 
+           AND sender_email IS NOT NULL 
+         ORDER BY id ASC LIMIT 1`
+      );
+      if (res.rows.length > 0) {
+        return res.rows[0];
+      }
+    }
+
+    // 3. Fallback to global setting values
+    const globalKeyRes = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
+    const globalSenderRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
+    
+    const apiKey = globalKeyRes.rows[0]?.value?.trim();
+    const senderEmail = globalSenderRes.rows[0]?.value?.trim();
+
+    if (apiKey) {
+      return { api_key: apiKey, sender_email: senderEmail || 'noreply@agentbunny.com', isFallback: true };
+    }
+    return null;
+  } catch (err) {
+    console.error('[Resend Rotator] Error resolving active key for type:', err.message);
+    return null;
+  }
+}
