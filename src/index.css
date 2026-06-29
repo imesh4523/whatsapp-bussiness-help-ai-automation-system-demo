@@ -1116,3 +1116,15 @@ body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
     animation: scanline 2.5s ease-in-out infinite;
 }
 
+/* Force mobile sidebar over dark backdrop overlay */
+@media (max-width: 991px) {
+  body div#root .sidebar-menu,
+  body div#root .sidebar-menu.show-sidebar {
+    z-index: 10005 !important;
+    position: fixed !important;
+    left: 0 !important;
+    width: 280px !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
+  }
+}
