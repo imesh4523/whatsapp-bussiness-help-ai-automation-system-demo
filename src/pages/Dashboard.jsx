@@ -5599,6 +5599,7 @@ function BusinessProfile() {
     photo_urls: []
   });
   const [logoFile, setLogoFile] = useState(null);
+  const [addMoreText, setAddMoreText] = useState('');
   const [photoFiles, setPhotoFiles] = useState([]);
   const [deletedPhotos, setDeletedPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -5634,7 +5635,13 @@ function BusinessProfile() {
     try {
       const formData = new FormData();
       formData.append('business_name', profile.business_name || '');
-      formData.append('description', profile.description || '');
+      
+      let finalDescription = profile.description || '';
+      if (addMoreText.trim()) {
+        finalDescription = finalDescription.trim() ? finalDescription.trim() + '\n' + addMoreText.trim() : addMoreText.trim();
+      }
+      formData.append('description', finalDescription);
+      
       formData.append('address', profile.address || '');
       formData.append('sizes_info', profile.sizes_info || '');
       formData.append('bank_details', profile.bank_details || '');
@@ -5661,6 +5668,7 @@ function BusinessProfile() {
         setLogoFile(null);
         setPhotoFiles([]);
         setDeletedPhotos([]);
+        setAddMoreText('');
         setStatus({ type: 'success', message: 'Profile updated successfully!' });
       } else {
         const err = await res.json();
@@ -5719,6 +5727,19 @@ function BusinessProfile() {
               onChange={(e) => setProfile({ ...profile, description: e.target.value })}
               style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '100px', resize: 'vertical' }}
               placeholder="Describe your brand products, specialties, store policies, etc."
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', padding: '15px', border: '1px dashed #cbd5e1', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
+            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <i className="las la-plus-circle" style={{ fontSize: '18px' }}></i> Add More Details (Quick Append Helper)
+            </label>
+            <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Type new business rules, details or catalog changes here. Saving will automatically append it to the main About/Description text box above.</p>
+            <textarea
+              value={addMoreText}
+              onChange={(e) => setAddMoreText(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '13px', height: '60px', resize: 'vertical', backgroundColor: '#ffffff' }}
+              placeholder="e.g. Added details about islandwide courier tracking rules."
             />
           </div>
 
