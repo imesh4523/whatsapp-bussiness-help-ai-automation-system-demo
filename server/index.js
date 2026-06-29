@@ -357,7 +357,7 @@ app.get('/api/auth/google', async (req, res) => {
       return res.redirect(`${redirect}?social_error=not_configured`);
     }
 
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=profile%20email&state=${encodeURIComponent(redirect)}`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=profile%20email&prompt=select_account&state=${encodeURIComponent(redirect)}`;
     res.redirect(authUrl);
   } catch (err) {
     console.error('Google Auth Init Error:', err.message);
