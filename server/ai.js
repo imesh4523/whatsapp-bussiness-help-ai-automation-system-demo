@@ -214,8 +214,8 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
 1. Refer STRICTLY to the [SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)].
 2. If any shipping field (Recipient Name, Phone Number, Delivery Address, Province, or Payment Method) is ALREADY saved in memory, DO NOT ask the customer for that detail again!
 3. Only ask for details that are missing from the [SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)].
-4. If all details are present, do NOT ask any details; proceed directly to order summary confirmation!
-5. If the customer explicitly mentions that they want to change or update a detail (e.g., they say "change my address to X" or give a new name/phone), reply that you have updated it, and use the new details. Do NOT re-ask details they didn't ask to change!`;
+4. If all details are present, do NOT ask for details. Instead, show them the order summary using these saved details and ask: "සර්, මම ඔයාගේ ඇණවුම මීට පෙර ලබා දුන් මෙම විස්තර වලටම ලියාපදිංචි කරන්නද? [පැරණි විස්තර පෙන්වන්න]".
+5. If the customer explicitly mentions that they want to change or update a detail (e.g., they say "change my address to X" or give a new name/phone), reply that you have updated it, show the updated summary, and use the new details. Do NOT re-ask details they didn't ask to change!`;
     } else {
       systemPrompt += `\n\n[SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)]\nNo saved shipping details are present yet.\n\nCONVERSATIONAL MEMORY RULES:
 1. If the customer provides their name, phone, address, province, or payment method in their chat message, check it and do NOT ask for it again! Only ask for the remaining missing fields.`;

@@ -3144,7 +3144,10 @@ function Dashboard({ user, setUser, onLogout }) {
   }, []);
 
   // ── Stripe & Payments Integration Helpers ──────────────────────────────────
+  const [isCardsLoading, setIsCardsLoading] = useState(false);
+
   const fetchSavedCards = async () => {
+    setIsCardsLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/payments/methods`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
@@ -3155,6 +3158,8 @@ function Dashboard({ user, setUser, onLogout }) {
       }
     } catch (err) {
       console.error('Error fetching saved cards:', err);
+    } finally {
+      setIsCardsLoading(false);
     }
   };
 
@@ -3633,47 +3638,70 @@ function Dashboard({ user, setUser, onLogout }) {
     }
   }, [tab]);
 
-  useEffect(() => {
+  const updateModalPaymentSection = (cardsList, isLoading) => {
     const modal = document.getElementById('purchaseModal');
-    if (modal) {
-      const paymentSection = modal.querySelector('#modal-payment-section');
-      if (paymentSection) {
-        let paymentHtml = '';
-        if (savedCards && savedCards.length > 0) {
-          paymentHtml = `
-            <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; display: block; margin-bottom: 6px;">Select Payment Card</label>
-            <div class="saved-cards-radio-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
-              ${savedCards.map((card, idx) => `
-                <label style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid ${card.is_default ? '#00832e' : '#cbd5e1'}; background: ${card.is_default ? 'rgba(0, 131, 46, 0.02)' : '#ffffff'}; border-radius: 8px; cursor: pointer; font-size: 12px; color: #1e293b; margin: 0;">
-                  <span style="display: flex; align-items: center; gap: 6px;">
-                    <input type="radio" name="payment_card_id" value="${card.stripe_payment_method_id}" ${card.is_default ? 'checked' : ''} style="accent-color: #00832e; width: 14px; height: 14px; margin: 0;">
-                    <strong style="text-transform: uppercase;">${card.card_brand}</strong> ending in **** ${card.card_last4}
-                  </span>
-                  ${card.is_default ? '<span style="font-size: 9px; font-weight: 700; color: #00832e; background: rgba(0, 131, 46, 0.1); padding: 1px 4px; border-radius: 4px;">DEFAULT</span>' : ''}
-                </label>
-              `).join('')}
-            </div>
-            <div id="modal-add-new-card-btn" class="premium-add-card-btn-inline">
-              <i class="las la-plus-circle"></i> Add New Payment Card
-            </div>
-          `;
-        } else {
-          paymentHtml = `
-            <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; display: block; margin-bottom: 6px;">Select Payment Card</label>
-            <div id="modal-add-new-card-btn" class="premium-add-card-box">
-              <div class="icon-wrap">
-                <i class="las la-plus-circle"></i>
-              </div>
-              <div class="text-content">
-                <h6>Add Credit Card</h6>
-              </div>
-            </div>
-          `;
-        }
-        paymentSection.innerHTML = paymentHtml;
-      }
+    if (!modal) return;
+    const paymentSection = modal.querySelector('#modal-payment-section');
+    if (!paymentSection) return;
+
+    let paymentHtml = '';
+    if (isLoading) {
+      paymentHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; margin: 0;">Select Payment Card</label>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center; padding: 24px; gap: 10px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; color: #00832e;">
+          <i class="las la-spinner la-spin" style="font-size: 18px;"></i>
+          <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Checking saved cards...</span>
+        </div>
+      `;
+    } else if (cardsList && cardsList.length > 0) {
+      paymentHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; margin: 0;">Select Payment Card</label>
+          <button type="button" id="modal-refresh-cards-btn" style="background: none; border: none; padding: 2px 6px; cursor: pointer; color: #00832e; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;">
+            <i class="las la-sync-alt" style="font-size: 13px;"></i> Refresh Cards
+          </button>
+        </div>
+        <div class="saved-cards-radio-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
+          ${cardsList.map((card, idx) => `
+            <label style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid ${card.is_default ? '#00832e' : '#cbd5e1'}; background: ${card.is_default ? 'rgba(0, 131, 46, 0.02)' : '#ffffff'}; border-radius: 8px; cursor: pointer; font-size: 12px; color: #1e293b; margin: 0;">
+              <span style="display: flex; align-items: center; gap: 6px;">
+                <input type="radio" name="payment_card_id" value="${card.stripe_payment_method_id}" ${card.is_default ? 'checked' : ''} style="accent-color: #00832e; width: 14px; height: 14px; margin: 0;">
+                <strong style="text-transform: uppercase;">${card.card_brand}</strong> ending in **** ${card.card_last4}
+              </span>
+              ${card.is_default ? '<span style="font-size: 9px; font-weight: 700; color: #00832e; background: rgba(0, 131, 46, 0.1); padding: 1px 4px; border-radius: 4px;">DEFAULT</span>' : ''}
+            </label>
+          `).join('')}
+        </div>
+        <div id="modal-add-new-card-btn" class="premium-add-card-btn-inline">
+          <i class="las la-plus-circle"></i> Add New Payment Card
+        </div>
+      `;
+    } else {
+      paymentHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; margin: 0;">Select Payment Card</label>
+          <button type="button" id="modal-refresh-cards-btn" style="background: none; border: none; padding: 2px 6px; cursor: pointer; color: #00832e; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;">
+            <i class="las la-sync-alt" style="font-size: 13px;"></i> Refresh Cards
+          </button>
+        </div>
+        <div id="modal-add-new-card-btn" class="premium-add-card-box">
+          <div class="icon-wrap">
+            <i class="las la-plus-circle"></i>
+          </div>
+          <div class="text-content">
+            <h6>Add Credit Card</h6>
+          </div>
+        </div>
+      `;
     }
-  }, [savedCards]);
+    paymentSection.innerHTML = paymentHtml;
+  };
+
+  useEffect(() => {
+    updateModalPaymentSection(savedCards, isCardsLoading);
+  }, [savedCards, isCardsLoading]);
 
   const renderSavedCardsHtml = () => {
     if (!savedCards || savedCards.length === 0) {
@@ -3974,6 +4002,8 @@ function Dashboard({ user, setUser, onLogout }) {
       '.dashboard .sidebar-menu:not(:hover) .sidebar-logo{margin:20px 0!important; padding:0!important; justify-content:center!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-logo__link::after{display:none!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-menu-list__item.has-dropdown>.sidebar-menu-list__link::after{display:block!important;}',
+      // High-performance mobile viewport locks to prevent horizontal side-swipes and sidebar wiggling
+      '@media(max-width:991px){html,body{overflow-x:hidden!important;position:relative!important;width:100%!important;}.sidebar-menu{position:fixed!important;top:0!important;bottom:0!important;left:-280px!important;width:280px!important;height:100%!important;z-index:9999!important;transition:left 0.3s cubic-bezier(0.4,0,0.2,1)!important;overflow-y:auto!important;box-shadow:0 0 20px rgba(0,0,0,0.15)!important;}.sidebar-menu.show-sidebar{left:0!important;}}',
       // Inbox whatsapp-empty-screen
       '.whatsapp-empty-screen{position:relative;min-height:calc(100vh - 140px);display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(circle at top left,rgba(0,122,109,.08),transparent 32%),radial-gradient(circle at bottom right,rgba(37,211,102,.10),transparent 28%),linear-gradient(180deg,#f7faf9 0%,#f3f6f5 100%);padding:32px 18px;}',
       '.whatsapp-empty-screen__backdrop,.whatsapp-empty-screen__glow{position:absolute;border-radius:999px;pointer-events:none;}',
@@ -4944,6 +4974,25 @@ function Dashboard({ user, setUser, onLogout }) {
       </div>
 
       <div className="dashboard__inner flex-wrap">
+
+        {/* Mobile Sidebar Overlay Backdrop */}
+        {isSidebarMobileOpen && (
+          <div 
+            className="sidebar-overlay-backdrop d-lg-none" 
+            onClick={() => setIsSidebarMobileOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              zIndex: 9998,
+              backdropFilter: 'blur(2px)',
+              WebkitBackdropFilter: 'blur(2px)'
+            }}
+          />
+        )}
 
         {/* ── Sidebar ── */}
         <div
