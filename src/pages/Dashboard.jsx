@@ -2179,6 +2179,115 @@ function WhatsAppOrderManager() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [logoUrl, setLogoUrl] = useState('');
 
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+  const [trackingOrder, setTrackingOrder] = useState(null);
+  const [courierName, setCourierName] = useState('Pronto');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingStatus, setTrackingStatus] = useState('In Transit');
+  const [isScanning, setIsScanning] = useState(false);
+  const [updatingTracking, setUpdatingTracking] = useState(false);
+
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+
+  const COURIER_LOGOS = {
+    'Sri Lanka Post': '/sri-lanka-post-logo.png',
+    'Citypak (Hayleys)': '/citypak-logo.png',
+    'Aramex': '/aramex-logo.png',
+    'DHL Express': 'https://th.bing.com/th?q=DHL+Logo+Icon+PNG&w=120&h=120&c=1&rs=1&qlt=70&r=0&o=7&cb=1&pid=InlineBlock&rm=3&mkt=en-SG&cc=SG&setlang=en&adlt=strict&t=1&mw=247',
+    'FedEx': 'https://th.bing.com/th/id/OIP.vuc88Kmi3r_f8yGuQPHVGgHaHa?w=169&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
+    'Pronto': 'https://th.bing.com/th/id/OIP.U13AT8WXkPdZRaq4MD_ofwHaHa?w=176&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
+    'Domex': '/domex-logo.png',
+    'Koombiyo': '/koombiyo-logo.png',
+    'Fardar': '/fardar-logo.png'
+  };
+
+  const FALLBACK_TRUCK = 'https://cdn-icons-png.flaticon.com/512/726/726458.png';
+
+  const getCourierLogoUrl = (name) => {
+    const norm = (name || '').toLowerCase();
+    if (norm.includes('domex')) return '/domex-logo.png';
+    if (norm.includes('koombiyo')) return '/koombiyo-logo.png';
+    if (norm.includes('sri lanka post')) return '/sri-lanka-post-logo.png';
+    if (norm.includes('citypak')) return '/citypak-logo.png';
+    if (norm.includes('aramex')) return '/aramex-logo.png';
+    if (norm.includes('fardar')) return '/fardar-logo.png';
+    return COURIER_LOGOS[name] || FALLBACK_TRUCK;
+  };
+
+  const openTrackingModal = (order) => {
+    setTrackingOrder(order);
+    setCourierName(order.courier_name || 'Pronto');
+    setTrackingNumber(order.tracking_number || '');
+    setTrackingStatus(order.tracking_status || 'In Transit');
+    setIsTrackingModalOpen(true);
+  };
+
+  const startCamera = async () => {
+    setIsScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      streamRef.current = stream;
+    } catch (err) {
+      console.warn('Camera not available or blocked, starting simulation mode', err);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsScanning(false);
+  };
+
+  const handleSaveTrackingDetails = async (e) => {
+    e.preventDefault();
+    if (!trackingOrder) return;
+    setUpdatingTracking(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/orders/${trackingOrder.id}/tracking`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({
+          courier_name: courierName,
+          tracking_number: trackingNumber,
+          tracking_status: trackingStatus
+        })
+      });
+
+      if (res.ok) {
+        if (window.notify) window.notify('success', 'Tracking details linked successfully!');
+        setIsTrackingModalOpen(false);
+        stopCamera();
+        fetchOrders();
+      } else {
+        if (window.notify) window.notify('error', 'Failed to update tracking details.');
+      }
+    } catch (err) {
+      if (window.notify) window.notify('error', err.message);
+    } finally {
+      setUpdatingTracking(false);
+    }
+  };
+
+  const simulateScan = () => {
+    const prefixes = { Pronto: 'PRN', Domex: 'DMX', Koombiyo: 'KMB', Aramex: 'ARX' };
+    const prefix = prefixes[courierName] || 'TRK';
+    const randNum = Math.floor(100000000 + Math.random() * 900000000);
+    setTrackingNumber(`${prefix}-${randNum}`);
+    if (window.notify) window.notify('success', 'Barcode scanned successfully!');
+    stopCamera();
+  };
+
   const fetchLogo = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/business-profile`, {
@@ -2433,6 +2542,7 @@ function WhatsAppOrderManager() {
                   <th className="p-4">Items</th>
                   <th className="p-4">Total Amount</th>
                   <th className="p-4">Shipping Info</th>
+                  <th className="p-4">Logistics / Tracking</th>
                   <th className="p-4">Date</th>
                   <th className="p-4 text-center">Status</th>
                   <th className="p-4 text-center">Action</th>
@@ -2470,6 +2580,40 @@ function WhatsAppOrderManager() {
                         <div className="text-gray-700">{ship.address}</div>
                         <div className="font-medium text-neutral-800">{ship.province || ship.city} {ship.postalCode && `(${ship.postalCode})`}</div>
                         <div className="text-[10px] text-gray-400">{ship.payment_method || 'COD'}</div>
+                      </td>
+                      <td className="p-4 whitespace-nowrap">
+                        {o.tracking_number ? (
+                          <div className="flex items-center gap-2">
+                            <img 
+                              src={getCourierLogoUrl(o.courier_name)} 
+                              alt={o.courier_name} 
+                              style={{ width: '18px', height: '18px', objectFit: 'contain' }} 
+                              onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_TRUCK; }}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-bold text-neutral-800">{o.courier_name}</span>
+                              <span className="text-[10px] text-gray-400 font-mono">{o.tracking_number}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openTrackingModal(o)}
+                              className="text-[#00832e] hover:text-emerald-700 ml-1 p-0.5 border border-transparent rounded bg-transparent cursor-pointer"
+                              title="Edit Tracking"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
+                              <i className="las la-edit" style={{ fontSize: '14px' }}></i>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openTrackingModal(o)}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#00832e]/10 text-[#00832e] hover:bg-[#00832e] hover:text-white transition-all text-[10px] font-bold border-none cursor-pointer flex items-center gap-1"
+                            style={{ border: 'none', cursor: 'pointer' }}
+                          >
+                            <i className="las la-shipping-fast" style={{ fontSize: '13px' }}></i> + Add Tracking
+                          </button>
+                        )}
                       </td>
                       <td className="p-4 text-gray-500 font-mono whitespace-nowrap">
                         {new Date(o.created_at).toLocaleDateString()} {new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -2526,6 +2670,152 @@ function WhatsAppOrderManager() {
           )}
         </div>
       </div>
+
+      {/* Tracking Details Modal Dialog */}
+      {isTrackingModalOpen && trackingOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl relative overflow-hidden border border-gray-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200" style={{ zIndex: 10000 }}>
+            {/* Header */}
+            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <i className="las la-truck-loading text-[#00832e]" style={{ fontSize: '24px' }}></i>
+                <div>
+                  <h4 className="text-sm font-bold text-neutral-800" style={{ margin: 0 }}>Assign Logistics Details</h4>
+                  <span className="text-[10px] text-gray-400 font-medium">Order ID: #{trackingOrder.id}</span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => { setIsTrackingModalOpen(false); stopCamera(); }}
+                className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 flex items-center justify-center border-none text-gray-500 hover:text-gray-700 cursor-pointer transition-colors"
+                style={{ border: 'none', background: 'none', cursor: 'pointer' }}
+              >
+                <i className="las la-times" style={{ fontSize: '18px' }}></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTrackingDetails} className="space-y-4">
+              {/* Courier Service selector */}
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Logistics Courier Partner</label>
+                <select
+                  value={courierName}
+                  onChange={(e) => setCourierName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white text-neutral-800 focus:outline-none focus:border-[#00832e] cursor-pointer"
+                  style={{ display: 'block', width: '100%', padding: '8px 12px' }}
+                >
+                  {Object.keys(COURIER_LOGOS).map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Courier Tracking input */}
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Tracking Reference Number</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Enter reference number or scan QR"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white text-neutral-800 focus:outline-none focus:border-[#00832e]"
+                    style={{ padding: '8px 12px', width: '100%' }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={isScanning ? stopCamera : startCamera}
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center border-none transition-colors cursor-pointer ${
+                      isScanning ? 'bg-rose-50 text-rose-600' : 'bg-neutral-50 text-gray-500 hover:bg-[#00832e]/10 hover:text-[#00832e]'
+                    }`}
+                    style={{ border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    title={isScanning ? "Close Scanner" : "Scan Barcode / QR"}
+                  >
+                    <i className={isScanning ? "las la-times-circle" : "las la-camera"} style={{ fontSize: '18px' }}></i>
+                  </button>
+                </div>
+              </div>
+
+              {/* Barcode/QR Scanning Feed Overlay */}
+              {isScanning && (
+                <div className="bg-neutral-950 rounded-2xl overflow-hidden relative border border-neutral-800 flex flex-col items-center justify-center" style={{ height: '180px' }}>
+                  {/* Glowing Laser Scanline Animation */}
+                  <div className="absolute left-0 right-0 h-0.5 bg-[#00832e] shadow-[0_0_10px_#00832e] z-10 animate-scanline" style={{
+                    animation: 'scanline 2s linear infinite',
+                    top: '50%'
+                  }}></div>
+                  
+                  {/* Camera view */}
+                  <video 
+                    ref={videoRef}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    playsInline 
+                    muted
+                  />
+
+                  {/* Simulated scan trigger overlay */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-center z-10">
+                    <p className="text-[10px] text-gray-300 mb-2 font-medium">Position tracking barcode inside scanner window</p>
+                    <button
+                      type="button"
+                      onClick={simulateScan}
+                      className="px-3 py-1 bg-[#00832e] hover:bg-emerald-700 text-white rounded-full text-[10px] font-bold border-none cursor-pointer inline-flex items-center gap-1"
+                      style={{ border: 'none', cursor: 'pointer' }}
+                    >
+                      <i className="las la-barcode"></i> Simulate Scan
+                    </button>
+                  </div>
+
+                  {/* Guide bracket box */}
+                  <div className="absolute border-2 border-white/40 w-44 h-16 rounded-lg pointer-events-none z-10" style={{
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)'
+                  }}></div>
+                </div>
+              )}
+
+              {/* Tracking Status selector */}
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Current Courier Status</label>
+                <select
+                  value={trackingStatus}
+                  onChange={(e) => setTrackingStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white text-neutral-800 focus:outline-none focus:border-[#00832e] cursor-pointer"
+                  style={{ display: 'block', width: '100%', padding: '8px 12px' }}
+                >
+                  <option value="Sorting Hub">Sorting Hub</option>
+                  <option value="In Transit">In Transit</option>
+                  <option value="Out for Delivery">Out for Delivery</option>
+                  <option value="Delivered">Delivered</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsTrackingModalOpen(false); stopCamera(); }}
+                  className="flex-1 py-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 text-neutral-600 font-bold text-xs cursor-pointer transition-colors"
+                  style={{ border: '1px solid #e2e8f0', background: 'none', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingTracking}
+                  className="flex-1 py-2 rounded-xl bg-[#00832e] text-white hover:bg-emerald-700 font-bold text-xs cursor-pointer transition-colors"
+                  style={{ border: 'none', cursor: 'pointer' }}
+                >
+                  {updatingTracking ? 'Saving...' : 'Link Consignment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

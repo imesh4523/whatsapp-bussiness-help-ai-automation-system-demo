@@ -529,14 +529,71 @@ app.patch('/api/orders/:id/status', authenticateToken, async (req, res) => {
   if (!['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
   }
+
+  function getTrackingMilestone(s) {
+    const now = new Date().toISOString();
+    switch (s) {
+      case 'Pending':
+        return {
+          tracking_status: 'Order Confirmed',
+          log: { status: 'Order Confirmed', details: 'Package is being registered and sorted for courier collection.', location: 'Merchant Sorting Hub', time: now }
+        };
+      case 'Processing':
+        return {
+          tracking_status: 'Processing',
+          log: { status: 'Processing', details: 'Package is being processed and sorted for courier collection.', location: 'Merchant Sorting Hub', time: now }
+        };
+      case 'Shipped':
+        return {
+          tracking_status: 'Dispatched',
+          log: { status: 'Dispatched', details: 'Package has been picked up by courier and is in transit.', location: 'Colombo Gateway Terminal', time: now }
+        };
+      case 'Delivered':
+        return {
+          tracking_status: 'Delivered',
+          log: { status: 'Delivered', details: 'Parcel successfully delivered to recipient.', location: 'Recipient Destination', time: now }
+        };
+      case 'Cancelled':
+        return {
+          tracking_status: 'Cancelled',
+          log: { status: 'Cancelled', details: 'Order has been cancelled by merchant.', location: 'Origin Hub', time: now }
+        };
+      default:
+        return null;
+    }
+  }
+
   try {
-    const result = await db.query(
-      "UPDATE orders SET status = $1 WHERE id = $2 RETURNING *",
-      [status, id]
-    );
-    if (result.rows.length === 0) {
+    const getOrder = await db.query('SELECT tracking_history, user_id FROM orders WHERE id = $1', [id]);
+    if (getOrder.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
+    
+    // Authorization check
+    if (getOrder.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    let history = getOrder.rows[0].tracking_history;
+    if (!Array.isArray(history)) {
+      history = [];
+    }
+
+    const milestone = getTrackingMilestone(status);
+    let finalTrackingStatus = 'Pending';
+    if (milestone) {
+      finalTrackingStatus = milestone.tracking_status;
+      const exists = history.some(item => item.status === milestone.log.status);
+      if (!exists) {
+        history.push(milestone.log);
+      }
+    }
+
+    const result = await db.query(
+      "UPDATE orders SET status = $1, tracking_status = $2, tracking_history = $3 WHERE id = $4 RETURNING *",
+      [status, finalTrackingStatus, JSON.stringify(history), id]
+    );
+
     res.json({ message: 'Order status updated successfully', order: result.rows[0] });
   } catch (err) {
     console.error('Update order status error:', err.message);

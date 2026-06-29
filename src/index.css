@@ -1095,3 +1095,24 @@ body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
 .table-responsive td {
     white-space: nowrap !important;
 }
+
+/* Scanning laser line animation */
+@keyframes scanline {
+    0% {
+        top: 10%;
+        opacity: 0.3;
+    }
+    50% {
+        top: 90%;
+        opacity: 1;
+    }
+    100% {
+        top: 10%;
+        opacity: 0.3;
+    }
+}
+
+.animate-scanline {
+    animation: scanline 2.5s ease-in-out infinite;
+}
+
