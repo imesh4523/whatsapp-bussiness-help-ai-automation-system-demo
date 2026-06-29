@@ -3309,7 +3309,7 @@ app.post('/api/payments/webhook', async (req, res) => {
         }
 
         await db.query(
-          "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3 WHERE id = $4", 
+          "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3, ai_message_count = 0, quota_warning_80_sent = FALSE, quota_warning_100_sent = FALSE WHERE id = $4", 
           [plan, expiry, cycle, userId]
         );
         await db.query(`
@@ -3779,7 +3779,7 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
     const userRes = await db.query('SELECT email, full_name FROM users WHERE id = $1', [id]);
     const email = userRes.rows.length > 0 ? userRes.rows[0].email : `ID ${id}`;
     const fullName = userRes.rows.length > 0 ? userRes.rows[0].full_name : 'Customer';
-    await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, id]);
+    await db.query('UPDATE users SET plan = $1, ai_message_count = 0, quota_warning_80_sent = FALSE, quota_warning_100_sent = FALSE, status = \'Active\' WHERE id = $2', [plan, id]);
     await logAuditEvent('User Plan Overridden', `Admin manually updated User ${email} (ID ${id}) plan to ${plan}`);
     
     // Trigger plan upgraded email notification

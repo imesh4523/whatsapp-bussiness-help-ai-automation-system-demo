@@ -342,7 +342,9 @@ async function init() {
     }
 
     await db.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS inactivity_email_sent BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS inactivity_email_sent BOOLEAN DEFAULT FALSE,
+                        ADD COLUMN IF NOT EXISTS quota_warning_80_sent BOOLEAN DEFAULT FALSE,
+                        ADD COLUMN IF NOT EXISTS quota_warning_100_sent BOOLEAN DEFAULT FALSE;
     `);
     
     console.log('Database tables verified/created successfully.');
@@ -394,6 +396,16 @@ async function init() {
         key: 'price_update',
         subject: 'Important: Update regarding plan pricing',
         body: 'Hello {{fullName}},\n\nWe are writing to inform you about upcoming updates to our subscription packages. We are adding unlimited responses to all paid plans and introducing premium enterprise features.\n\nView details on your dashboard.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'quota_warning_80',
+        subject: 'Warning: You have used 80% of your Free Trial quota',
+        body: 'Hello {{fullName}},\n\nThis is a friendly reminder that your AgentBunny Free Trial message response quota is ending soon. You have used {{currentCount}} of your {{responseLimit}} allowed messages.\n\nTo prevent any disruptions to your automated WhatsApp sales, we recommend upgrading to a paid plan today.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'quota_warning_100',
+        subject: 'Alert: Free Trial quota limit fully reached',
+        body: 'Hello {{fullName}},\n\nYour AgentBunny Free Trial message response quota has been fully reached ({{currentCount}}/{{responseLimit}} messages). Your account has been temporarily frozen and AI auto-responses are paused.\n\nUpgrade your plan now to reactivate auto-replies immediately and keep your customer support active.\n\nBest Regards,\nAgentBunny Team'
       }
     ];
 

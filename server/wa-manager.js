@@ -614,26 +614,8 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
               }
             }
             
-            // Increment usage and freeze if limit met
-            try {
-              const userRes = await db.query('SELECT plan, ai_message_count FROM users WHERE id = $1', [userId]);
-              if (userRes.rows.length > 0) {
-                const user = userRes.rows[0];
-                const planRes = await db.query('SELECT response_limit FROM plans WHERE id = $1', [user.plan]);
-                const responseLimit = planRes.rows.length > 0 ? planRes.rows[0].response_limit : 500;
-                
-                const newCount = (user.ai_message_count || 0) + 1;
-                await db.query('UPDATE users SET ai_message_count = $1 WHERE id = $2', [newCount, userId]);
-                
-                if (newCount >= responseLimit) {
-                  await db.query("UPDATE users SET status = 'Frozen' WHERE id = $1", [userId]);
-                  await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} hit response limit (${newCount}/${responseLimit})`]);
-                  console.log(`User ${userId} has hit the message limit and is now Frozen.`);
-                }
-              }
-            } catch (dbErr) {
-              console.error('Error incrementing user message usage:', dbErr.message);
-            }
+            // Increment usage and freeze/notify if limit met
+            await incrementUserMessageUsage(userId);
 
             console.log(`AI Replied on session ${sessionId}: ${aiReply}`);
           } catch (sendErr) {
@@ -780,14 +762,8 @@ export async function triggerMockIncomingMessage(userId, sessionId, customerPhon
           await checkAndExtractOrder(wsRes.rows[0].user_id, 'agentbunny_agent', customerPhone);
         }
 
-        // Increment usage and freeze if limit met
-        const newCount = (user.ai_message_count || 0) + 1;
-        await db.query('UPDATE users SET ai_message_count = $1 WHERE id = $2', [newCount, userId]);
-        if (newCount >= responseLimit) {
-          await db.query("UPDATE users SET status = 'Frozen' WHERE id = $1", [userId]);
-          await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} hit response limit during simulation (${newCount}/${responseLimit})`]);
-          console.log(`[SIMULATOR] User ${userId} has hit the message limit and is now Frozen.`);
-        }
+        // Increment usage and freeze/notify if limit met
+        await incrementUserMessageUsage(userId);
 
         console.log(`[SIMULATOR] AI auto-replied to ${customerPhone}: ${aiReply}`);
       }
@@ -1160,6 +1136,57 @@ Customer message:
     }
   } catch (err) {
     console.error('[SHIPPING MEMORY] Failed to extract shipping details:', err.message);
+  }
+}
+
+/**
+ * Increment user message count, check warnings (80% usage and 100% frozen status),
+ * and send emails dynamically.
+ */
+async function incrementUserMessageUsage(userId) {
+  try {
+    const userRes = await db.query('SELECT email, full_name, plan, ai_message_count, quota_warning_80_sent, quota_warning_100_sent FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) return;
+    const user = userRes.rows[0];
+
+    const planRes = await db.query('SELECT response_limit FROM plans WHERE id = $1', [user.plan]);
+    const responseLimit = planRes.rows.length > 0 ? planRes.rows[0].response_limit : 500;
+    
+    const newCount = (user.ai_message_count || 0) + 1;
+    await db.query('UPDATE users SET ai_message_count = $1 WHERE id = $2', [newCount, userId]);
+
+    const warning80Threshold = Math.floor(responseLimit * 0.8);
+
+    // 80% Warning limit check (Free tier only)
+    if (newCount >= warning80Threshold && !user.quota_warning_80_sent && user.plan === 'Free') {
+      await db.query('UPDATE users SET quota_warning_80_sent = TRUE WHERE id = $1', [userId]);
+      import('./email-service.js').then(({ sendTemplatedEmail }) => {
+        sendTemplatedEmail(user.email, 'quota_warning_80', {
+          fullName: user.full_name || 'Customer',
+          currentCount: newCount,
+          responseLimit: responseLimit,
+          planName: user.plan
+        }).catch(e => console.error('[Quota Warning 80] Email send error:', e.message));
+      }).catch(e => console.error('[Quota Warning 80] Email import error:', e.message));
+    }
+
+    // 100% Frozen limit check
+    if (newCount >= responseLimit) {
+      await db.query("UPDATE users SET status = 'Frozen', quota_warning_100_sent = TRUE WHERE id = $1", [userId]);
+      await db.query("INSERT INTO audit_logs (action, details) VALUES ($1, $2)", ['Account Frozen', `User ID ${userId} hit response limit (${newCount}/${responseLimit})`]);
+      console.log(`User ${userId} has hit the message limit and is now Frozen.`);
+
+      import('./email-service.js').then(({ sendTemplatedEmail }) => {
+        sendTemplatedEmail(user.email, 'quota_warning_100', {
+          fullName: user.full_name || 'Customer',
+          currentCount: newCount,
+          responseLimit: responseLimit,
+          planName: user.plan
+        }).catch(e => console.error('[Quota Warning 100] Email send error:', e.message));
+      }).catch(e => console.error('[Quota Warning 100] Email import error:', e.message));
+    }
+  } catch (err) {
+    console.error('[incrementUserMessageUsage Error]:', err.message);
   }
 }
 

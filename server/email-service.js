@@ -317,6 +317,38 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
           desc: 'We are expanding background server resources for faster WhatsApp webhooks reply speeds.'
         }
       ];
+    } else if (key === 'quota_warning_80') {
+      title = 'Quota Limit Ending Soon';
+      ctaText = 'Upgrade Subscription';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/warning-shield.png',
+          title: '80% Usage Alert',
+          desc: `You have consumed ${variables.currentCount} out of ${variables.responseLimit} allowed response messages.`
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/rocket.png',
+          title: 'Avoid Interruptions',
+          desc: 'Upgrade your subscription plan to unlock unlimited response messages and premium Claude models.'
+        }
+      ];
+    } else if (key === 'quota_warning_100') {
+      title = 'Message Quota Fully Exceeded';
+      ctaText = 'Reactivate Account';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/warning-shield.png',
+          title: 'AI Responses Paused',
+          desc: `You have exhausted all ${variables.responseLimit} allowed response messages. AI chatbot replies are now paused.`
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/checked.png',
+          title: 'Instant Reactivation',
+          desc: 'Choose a billing plan in your user portal to restore your WhatsApp AI sales assistants instantly.'
+        }
+      ];
     } else if (key === 'invoice') {
       title = 'Payment Successful';
       ctaText = 'Manage Subscription';
