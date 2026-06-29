@@ -5601,7 +5601,7 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
       const card = elements.create('card', {
         style: {
           base: {
-            color: '#ffffff',
+            color: '#1e293b',
             fontFamily: '"Inter", sans-serif',
             fontSmoothing: 'antialiased',
             fontSize: '15px',
@@ -5732,20 +5732,18 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
     <div style={{
       position: 'fixed',
       inset: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.7)',
-      backdropFilter: 'blur(8px)',
+      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+      backdropFilter: 'blur(4px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 999999
     }}>
       <div style={{
-        background: 'rgba(15, 23, 42, 0.93)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
+        background: '#ffffff',
         borderRadius: '16px',
         width: 'min(100% - 32px, 480px)',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
@@ -5753,18 +5751,18 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         {/* Header */}
         <div style={{
           padding: '20px 24px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid #f1f5f9',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <h5 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#ffffff' }}>
+          <h5 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
             {isTrialMode ? 'Claim Free Trial Subscription' : 'Add Credit / Debit Card'}
           </h5>
           <button type="button" onClick={onClose} style={{
             border: 'none',
             background: 'transparent',
-            color: '#94a3b8',
+            color: '#64748b',
             cursor: 'pointer',
             fontSize: '20px',
             padding: 0,
@@ -5778,16 +5776,16 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ padding: '24px', margin: 0 }}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>Card Details</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Card Details</label>
             {isMockInputMode ? (
               <div className="stripe-mock-container" style={{
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                background: 'rgba(0, 0, 0, 0.25)',
-                color: '#ffffff'
+                border: '1px solid #cbd5e1',
+                background: '#f8fafc',
+                color: '#1e293b'
               }}>
                 {/* Dynamic brand icon */}
                 {cardBrand === 'visa' ? (
-                  <span style={{ marginRight: '10px', flexShrink: 0, fontWeight: 900, fontSize: '13px', color: '#3b82f6', letterSpacing: '-0.5px', fontStyle: 'italic', lineHeight: 1 }}>VISA</span>
+                  <span style={{ marginRight: '10px', flexShrink: 0, fontWeight: 900, fontSize: '13px', color: '#1a1f71', letterSpacing: '-0.5px', fontStyle: 'italic', lineHeight: 1 }}>VISA</span>
                 ) : cardBrand === 'mastercard' ? (
                   <span style={{ marginRight: '10px', flexShrink: 0, display: 'flex', gap: '0' }}>
                     <span style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#EB001B', display: 'inline-block' }}></span>
@@ -5824,11 +5822,11 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                     margin: 0,
                     height: 'auto',
                     fontSize: '14px',
-                    color: '#ffffff'
+                    color: '#1e293b'
                   }}
                 />
                 {/* Separator */}
-                <span className="stripe-mock-sep" style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)' }}></span>
+                <span className="stripe-mock-sep" style={{ backgroundColor: '#cbd5e1' }}></span>
                 {/* Expiry */}
                 <input
                   type="text"
@@ -5857,11 +5855,11 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                     margin: 0,
                     height: 'auto',
                     fontSize: '14px',
-                    color: '#ffffff'
+                    color: '#1e293b'
                   }}
                 />
                 {/* Separator */}
-                <span className="stripe-mock-sep" style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)' }}></span>
+                <span className="stripe-mock-sep" style={{ backgroundColor: '#cbd5e1' }}></span>
                 {/* CVC */}
                 <input
                   type="text"
@@ -5886,25 +5884,25 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                     margin: 0,
                     height: 'auto',
                     fontSize: '14px',
-                    color: '#ffffff'
+                    color: '#1e293b'
                   }}
                 />
               </div>
             ) : (
               <div style={{
-                border: '1px solid rgba(255, 255, 255, 0.15)',
+                border: '1px solid #cbd5e1',
                 borderRadius: '10px',
                 padding: '12px 16px',
-                background: 'rgba(0, 0, 0, 0.25)',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.15)'
+                background: '#f8fafc',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
               }}>
                 <div ref={cardElementRef} />
               </div>
             )}
             
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginTop: '12px' }}>
-              <img src="/verified-badge.png" style={{ width: '15px', height: '15px', flexShrink: 0, marginTop: '1px' }} alt="Verified Badge" />
-              <small style={{ display: 'block', color: '#94a3b8', fontSize: '11px', lineHeight: '1.4' }}>
+              <img src="/verified-badge.png" style={{ width: '15px', height: '15px', flexShrink: 0, marginTop: '1px', borderRadius: '50%', overflow: 'hidden' }} alt="Verified Badge" />
+              <small style={{ display: 'block', color: '#64748b', fontSize: '11px', lineHeight: '1.4' }}>
                 Your card information is processed securely by Stripe. We do not collect your data on our servers.
               </small>
             </div>
@@ -5912,8 +5910,8 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
 
           {error && (
             <div style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fee2e2',
               color: '#ef4444',
               padding: '12px 16px',
               borderRadius: '8px',
@@ -5933,9 +5931,9 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
             <button type="button" onClick={onClose} disabled={loading} style={{
               padding: '10px 20px',
               borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              background: 'transparent',
-              color: '#e2e8f0',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              color: '#475569',
               fontSize: '13px',
               fontWeight: '600',
               cursor: 'pointer'
