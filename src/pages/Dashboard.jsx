@@ -3882,16 +3882,16 @@ function Dashboard({ user, setUser, onLogout }) {
             <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;">
               <div>
                 <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(255,255,255,0.6);margin-bottom:4px;">${cardLabel}</div>
-                <div style="font-size:15px;font-weight:700;color:#ffffff;text-shadow:0 1px 6px rgba(0,0,0,0.3);">${cardType}</div>
+                <div class="card-type-label" style="font-size:15px;font-weight:700;color:#ffffff;text-shadow:0 1px 6px rgba(0,0,0,0.3);">${cardType}</div>
               </div>
-              <div style="display:flex;align-items:center;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25));">
+              <div class="card-brand-logo" style="display:flex;align-items:center;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25));">
                 ${brandSvg}
               </div>
             </div>
 
             <!-- Chip icon -->
-            <div style="position:relative;z-index:1;margin: 14px 0 10px 0;">
-              <div style="
+            <div class="chip-container" style="position:relative;z-index:1;margin: 14px 0 10px 0;">
+              <div class="chip-icon" style="
                 width: 42px; height: 32px;
                 border-radius: 6px;
                 background: linear-gradient(135deg, rgba(255,215,100,0.7) 0%, rgba(200,160,50,0.6) 100%);
@@ -3911,7 +3911,7 @@ function Dashboard({ user, setUser, onLogout }) {
             </div>
 
             <!-- Card number -->
-            <div style="position:relative;z-index:1;font-size:17px;font-family:monospace;letter-spacing:0.2em;color:#ffffff;text-shadow:0 1px 8px rgba(0,0,0,0.4);margin-bottom:14px;">
+            <div class="card-number" style="position:relative;z-index:1;font-size:17px;font-family:monospace;letter-spacing:0.2em;color:#ffffff;text-shadow:0 1px 8px rgba(0,0,0,0.4);margin-bottom:14px;">
               ••••  ••••  ••••  ${card.card_last4}
             </div>
 
@@ -3919,11 +3919,11 @@ function Dashboard({ user, setUser, onLogout }) {
             <div style="display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1;">
               <div>
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:3px;">Card Holder</div>
-                <div style="font-size:13px;font-weight:600;text-transform:uppercase;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,0.3);">${(user?.name || 'CARD HOLDER').toUpperCase()}</div>
+                <div class="card-holder-name" style="font-size:13px;font-weight:600;text-transform:uppercase;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,0.3);">${(user?.name || 'CARD HOLDER').toUpperCase()}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:3px;">Expires</div>
-                <div style="font-size:13px;font-weight:600;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,0.3);">12/29</div>
+                <div class="card-expiry-val" style="font-size:13px;font-weight:600;color:#ffffff;text-shadow:0 1px 4px rgba(0,0,0,0.3);">12/29</div>
               </div>
             </div>
           </div>
@@ -4060,6 +4060,17 @@ function Dashboard({ user, setUser, onLogout }) {
       /* Shimmer sweep animation on hover */
       '.glass-credit-card::before{content:"";position:absolute;top:0;left:-75%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent);transform:skewX(-20deg);transition:left 0.6s ease;pointer-events:none;z-index:2;}',
       '.glass-credit-card:hover::before{left:130%;}',
+      /* Mobile responsiveness for card ui */
+      '@media (max-width: 575px) {',
+      '  .glass-credit-card { padding: 18px 20px 14px 20px !important; min-height: 160px !important; border-radius: 14px !important; }',
+      '  .glass-credit-card .card-number { font-size: 13px !important; letter-spacing: 0.12em !important; margin-bottom: 10px !important; white-space: nowrap !important; }',
+      '  .glass-credit-card .chip-icon { width: 34px !important; height: 26px !important; padding: 4px !important; }',
+      '  .glass-credit-card .chip-container { margin: 8px 0 6px 0 !important; }',
+      '  .glass-credit-card .card-brand-logo svg { width: 56px !important; height: 35px !important; }',
+      '  .glass-credit-card .card-type-label { font-size: 13px !important; }',
+      '  .glass-credit-card .card-holder-name { font-size: 11px !important; }',
+      '  .glass-credit-card .card-expiry-val { font-size: 11px !important; }',
+      '}',
     ].join('\n');
 
     document.head.appendChild(styleEl);
@@ -5590,7 +5601,7 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
       const card = elements.create('card', {
         style: {
           base: {
-            color: '#1e293b',
+            color: '#ffffff',
             fontFamily: '"Inter", sans-serif',
             fontSmoothing: 'antialiased',
             fontSize: '15px',
@@ -5721,18 +5732,20 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
     <div style={{
       position: 'fixed',
       inset: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.6)',
-      backdropFilter: 'blur(4px)',
+      backgroundColor: 'rgba(15, 23, 42, 0.7)',
+      backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 999999
     }}>
       <div style={{
-        background: '#ffffff',
+        background: 'rgba(15, 23, 42, 0.93)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
         borderRadius: '16px',
         width: 'min(100% - 32px, 480px)',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
@@ -5740,18 +5753,18 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         {/* Header */}
         <div style={{
           padding: '20px 24px',
-          borderBottom: '1px solid #f1f5f9',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <h5 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
+          <h5 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#ffffff' }}>
             {isTrialMode ? 'Claim Free Trial Subscription' : 'Add Credit / Debit Card'}
           </h5>
           <button type="button" onClick={onClose} style={{
             border: 'none',
             background: 'transparent',
-            color: '#64748b',
+            color: '#94a3b8',
             cursor: 'pointer',
             fontSize: '20px',
             padding: 0,
@@ -5765,12 +5778,16 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ padding: '24px', margin: 0 }}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Card Details</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>Card Details</label>
             {isMockInputMode ? (
-              <div className="stripe-mock-container">
+              <div className="stripe-mock-container" style={{
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: 'rgba(0, 0, 0, 0.25)',
+                color: '#ffffff'
+              }}>
                 {/* Dynamic brand icon */}
                 {cardBrand === 'visa' ? (
-                  <span style={{ marginRight: '10px', flexShrink: 0, fontWeight: 900, fontSize: '13px', color: '#1a1f71', letterSpacing: '-0.5px', fontStyle: 'italic', lineHeight: 1 }}>VISA</span>
+                  <span style={{ marginRight: '10px', flexShrink: 0, fontWeight: 900, fontSize: '13px', color: '#3b82f6', letterSpacing: '-0.5px', fontStyle: 'italic', lineHeight: 1 }}>VISA</span>
                 ) : cardBrand === 'mastercard' ? (
                   <span style={{ marginRight: '10px', flexShrink: 0, display: 'flex', gap: '0' }}>
                     <span style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#EB001B', display: 'inline-block' }}></span>
@@ -5807,11 +5824,11 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                     margin: 0,
                     height: 'auto',
                     fontSize: '14px',
-                    color: '#1e293b'
+                    color: '#ffffff'
                   }}
                 />
                 {/* Separator */}
-                <span className="stripe-mock-sep"></span>
+                <span className="stripe-mock-sep" style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)' }}></span>
                 {/* Expiry */}
                 <input
                   type="text"
@@ -5840,11 +5857,11 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                     margin: 0,
                     height: 'auto',
                     fontSize: '14px',
-                    color: '#1e293b'
+                    color: '#ffffff'
                   }}
                 />
                 {/* Separator */}
-                <span className="stripe-mock-sep"></span>
+                <span className="stripe-mock-sep" style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)' }}></span>
                 {/* CVC */}
                 <input
                   type="text"
@@ -5869,31 +5886,34 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                     margin: 0,
                     height: 'auto',
                     fontSize: '14px',
-                    color: '#1e293b'
+                    color: '#ffffff'
                   }}
                 />
               </div>
             ) : (
               <div style={{
-                border: '1px solid #cbd5e1',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: '10px',
                 padding: '12px 16px',
-                background: '#f8fafc',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                background: 'rgba(0, 0, 0, 0.25)',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.15)'
               }}>
                 <div ref={cardElementRef} />
               </div>
             )}
             
-            <small style={{ display: 'block', marginTop: '8px', color: '#64748b', fontSize: '11px' }}>
-              Your card information is processed securely by Stripe. We do not store your full card number on our servers.
-            </small>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginTop: '12px' }}>
+              <img src="/verified-badge.png" style={{ width: '15px', height: '15px', flexShrink: 0, marginTop: '1px' }} alt="Verified Badge" />
+              <small style={{ display: 'block', color: '#94a3b8', fontSize: '11px', lineHeight: '1.4' }}>
+                Your card information is processed securely by Stripe. We do not collect your data on our servers.
+              </small>
+            </div>
           </div>
 
           {error && (
             <div style={{
-              backgroundColor: '#fef2f2',
-              border: '1px solid #fee2e2',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
               color: '#ef4444',
               padding: '12px 16px',
               borderRadius: '8px',
@@ -5913,9 +5933,9 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
             <button type="button" onClick={onClose} disabled={loading} style={{
               padding: '10px 20px',
               borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#475569',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              background: 'transparent',
+              color: '#e2e8f0',
               fontSize: '13px',
               fontWeight: '600',
               cursor: 'pointer'
