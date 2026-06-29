@@ -1,4 +1,7 @@
 import { callGeminiAPI } from './gemini-client.js';
+import dotenv from 'dotenv';
+dotenv.config();
+
 
 async function testGemini() {
   console.log('--- TESTING GEMINI API CONNECTIVITY (gemini-2.0-flash) ---');
@@ -19,7 +22,7 @@ async function testGemini() {
   };
 
   try {
-    const data = await callGeminiAPI('gemini-2.0-flash', payload);
+    const data = await callGeminiAPI('gemini-3.5-flash', payload);
     console.log('API Response data:', JSON.stringify(data, null, 2));
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     console.log('Extracted text:', text);

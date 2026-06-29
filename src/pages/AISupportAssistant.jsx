@@ -185,6 +185,19 @@ export default function AISupportAssistant({ setTab }) {
 
   return (
     <div className="dashboard-container animate-fade-in">
+      <style dangerouslySetInnerHTML={{ __html: `
+        #root .user-chat-bubble,
+        #root .user-chat-bubble p,
+        #root .user-chat-bubble span,
+        #root .user-chat-bubble *,
+        div#root .user-chat-bubble,
+        div#root .user-chat-bubble p,
+        div#root .user-chat-bubble span,
+        div#root .user-chat-bubble * {
+          color: #ffffff !important;
+          -webkit-text-fill-color: #ffffff !important;
+        }
+      `}} />
       <div className="container-top flex justify-between items-center flex-wrap gap-4 mb-6">
         <div className="container-top__left">
           <h5 className="container-top__title font-black text-neutral-800 tracking-tight uppercase">AgentBunny AI Support</h5>
@@ -245,13 +258,17 @@ export default function AISupportAssistant({ setTab }) {
                     <div 
                       className={`p-3.5 rounded-2xl text-xs font-bold leading-relaxed ${
                         isUser 
-                          ? 'bg-black text-white rounded-tr-none' 
+                          ? 'bg-black rounded-tr-none user-chat-bubble' 
                           : isAgent 
                             ? 'bg-blue-50 text-blue-900 border border-blue-100 rounded-tl-none'
                             : 'bg-neutral-50 text-neutral-700 border border-neutral-100 rounded-tl-none'
                       }`}
+                      style={isUser ? { backgroundColor: '#000000', color: '#ffffff' } : {}}
                     >
-                      <p className="m-0 whitespace-pre-wrap">{msg.text}</p>
+                      <p 
+                        className="m-0 whitespace-pre-wrap"
+                        style={isUser ? { color: '#ffffff', WebkitTextFillColor: '#ffffff' } : {}}
+                      >{msg.text}</p>
                     </div>
 
                     {msg.isTicketFallback && (
