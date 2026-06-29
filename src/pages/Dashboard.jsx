@@ -4724,29 +4724,54 @@ function Dashboard({ user, setUser, onLogout }) {
       }
     };
 
-    const handleGlobalTouch = (e) => {
-      const sidebarLink = e.target.closest('.sidebar-menu-list__link') || 
-                          e.target.closest('.sidebar-submenu-list__link') || 
-                          e.target.closest('.sidebar-logo__link') || 
-                          e.target.closest('.sidebar-menu__close') ||
-                          e.target.closest('.sidebar-menu-list__title') ||
-                          e.target.closest('.custom-sidebar-overlay-unique');
+    // Scroll-aware tap detection: only fire on touchend if finger did NOT move (i.e. not a scroll)
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let touchDidMove = false;
+    let touchTargetEl = null;
+
+    const handleGlobalTouchStart = (e) => {
+      touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+      touchDidMove = false;
+      touchTargetEl = e.target;
+    };
+
+    const handleGlobalTouchMove = (e) => {
+      const dy = Math.abs(e.touches[0].clientY - touchStartY);
+      const dx = Math.abs(e.touches[0].clientX - touchStartX);
+      if (dy > 8 || dx > 8) touchDidMove = true;
+    };
+
+    const handleGlobalTouchEnd = (e) => {
+      if (touchDidMove) return; // user was scrolling, ignore
+      const target = touchTargetEl || e.target;
+      const sidebarLink = target.closest('.sidebar-menu-list__link') || 
+                          target.closest('.sidebar-submenu-list__link') || 
+                          target.closest('.sidebar-logo__link') || 
+                          target.closest('.sidebar-menu__close') ||
+                          target.closest('.sidebar-menu-list__title') ||
+                          target.closest('.custom-sidebar-overlay-unique');
       if (sidebarLink) {
         e.preventDefault();
         sidebarLink.click();
       }
     };
 
-    // Attach click, change, submit and touchstart on document to catch Bootstrap modal elements moved to body
+    // Attach click, change, submit and touch handlers on document
     document.addEventListener('click', handleGlobalClick, true);
     document.addEventListener('change', handleGlobalChange, true);
     document.addEventListener('submit', handleFormSubmit, true);
-    document.addEventListener('touchstart', handleGlobalTouch, { capture: true, passive: false });
+    document.addEventListener('touchstart', handleGlobalTouchStart, { capture: true, passive: true });
+    document.addEventListener('touchmove', handleGlobalTouchMove, { capture: true, passive: true });
+    document.addEventListener('touchend', handleGlobalTouchEnd, { capture: true, passive: false });
     return () => {
       document.removeEventListener('click', handleGlobalClick, true);
       document.removeEventListener('change', handleGlobalChange, true);
       document.removeEventListener('submit', handleFormSubmit, true);
-      document.removeEventListener('touchstart', handleGlobalTouch, true);
+      document.removeEventListener('touchstart', handleGlobalTouchStart, true);
+      document.removeEventListener('touchmove', handleGlobalTouchMove, true);
+      document.removeEventListener('touchend', handleGlobalTouchEnd, true);
     };
   }, [tab, onLogout]);
 
