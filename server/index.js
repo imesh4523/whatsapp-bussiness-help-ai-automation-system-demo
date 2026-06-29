@@ -451,6 +451,13 @@ app.get('/api/auth/google/callback', async (req, res) => {
         'INSERT INTO ai_configs (user_id, default_model, temperature, typing_delay, global_ai_active) VALUES ($1, $2, $3, $4, $5)',
         [user.id, 'Gemini 1.5 Pro', 0.6, 150, true]
       );
+
+      // Trigger welcome email asynchronously (non-blocking)
+      import('./email-service.js').then(({ sendTemplatedEmail }) => {
+        sendTemplatedEmail(user.email, 'welcome', { fullName: user.full_name }).catch(err => {
+          console.error('[Welcome Email Error (Social Registration)]:', err.message);
+        });
+      }).catch(err => console.error('[Welcome Email Import Error (Social Registration)]:', err.message));
       
       await logAuditEvent('New User Social Registration', `User ${email} registered via Google OAuth`);
     }
@@ -4111,3 +4118,5 @@ app.listen(PORT, () => {
   // Trigger subscription check on server start
   processSubscriptionRenewals();
 });
+
+
