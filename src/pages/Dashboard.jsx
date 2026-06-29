@@ -4271,43 +4271,9 @@ function Dashboard({ user, setUser, onLogout }) {
                 select2ContainerSpan.setAttribute('title', isYearly ? 'Yearly' : 'Monthly');
               }
 
-              // Populate dynamic payment section
-              const paymentSection = modal.querySelector('#modal-payment-section');
-              if (paymentSection) {
-                let paymentHtml = '';
-                if (savedCards && savedCards.length > 0) {
-                  paymentHtml = `
-                    <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; display: block; margin-bottom: 6px;">Select Payment Card</label>
-                    <div class="saved-cards-radio-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
-                      ${savedCards.map((card, idx) => `
-                        <label style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid ${card.is_default ? '#00832e' : '#cbd5e1'}; background: ${card.is_default ? 'rgba(0, 131, 46, 0.02)' : '#ffffff'}; border-radius: 8px; cursor: pointer; font-size: 12px; color: #1e293b; margin: 0;">
-                          <span style="display: flex; align-items: center; gap: 6px;">
-                            <input type="radio" name="payment_card_id" value="${card.stripe_payment_method_id}" ${card.is_default ? 'checked' : ''} style="accent-color: #00832e; width: 14px; height: 14px; margin: 0;">
-                            <strong style="text-transform: uppercase;">${card.card_brand}</strong> ending in **** ${card.card_last4}
-                          </span>
-                          ${card.is_default ? '<span style="font-size: 9px; font-weight: 700; color: #00832e; background: rgba(0, 131, 46, 0.1); padding: 1px 4px; border-radius: 4px;">DEFAULT</span>' : ''}
-                        </label>
-                      `).join('')}
-                    </div>
-                    <div id="modal-add-new-card-btn" class="premium-add-card-btn-inline">
-                      <i class="las la-plus-circle"></i> Add New Payment Card
-                    </div>
-                  `;
-                } else {
-                  paymentHtml = `
-                    <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; display: block; margin-bottom: 6px;">Select Payment Card</label>
-                    <div id="modal-add-new-card-btn" class="premium-add-card-box">
-                      <div class="icon-wrap">
-                        <i class="las la-plus-circle"></i>
-                      </div>
-                      <div class="text-content">
-                        <h6>Add Credit Card</h6>
-                      </div>
-                    </div>
-                  `;
-                }
-                paymentSection.innerHTML = paymentHtml;
-              }
+              // Populate dynamic payment section & load cards
+              updateModalPaymentSection([], true);
+              fetchSavedCards();
               
               // Show bootstrap modal
               if (window.bootstrap && window.bootstrap.Modal) {
@@ -4323,6 +4289,24 @@ function Dashboard({ user, setUser, onLogout }) {
             console.error('Error parsing plan data:', err);
           }
         }
+        return;
+      }
+
+      // Check for Refresh Cards inside Purchase Modal
+      const modalRefreshCardsBtn = e.target.closest('#modal-refresh-cards-btn');
+      if (modalRefreshCardsBtn) {
+        e.preventDefault();
+        // Add a spinning effect to the icon for nice UX
+        const icon = modalRefreshCardsBtn.querySelector('i');
+        if (icon) {
+          icon.style.transform = 'rotate(360deg)';
+          icon.style.transition = 'transform 0.5s ease';
+          setTimeout(() => {
+            icon.style.transform = 'none';
+            icon.style.transition = 'none';
+          }, 500);
+        }
+        fetchSavedCards();
         return;
       }
 
