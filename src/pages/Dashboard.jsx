@@ -4690,16 +4690,16 @@ function Dashboard({ user, setUser, onLogout }) {
 
     const container = containerRef.current;
     if (container) {
-      container.addEventListener('click', handleGlobalClick);
       container.addEventListener('change', handleGlobalChange);
     }
-    // Attach submit on document to catch Bootstrap modal forms moved to body
+    // Attach click and submit on document to catch Bootstrap modal elements moved to body
+    document.addEventListener('click', handleGlobalClick, true);
     document.addEventListener('submit', handleFormSubmit, true);
     return () => {
       if (container) {
-        container.removeEventListener('click', handleGlobalClick);
         container.removeEventListener('change', handleGlobalChange);
       }
+      document.removeEventListener('click', handleGlobalClick, true);
       document.removeEventListener('submit', handleFormSubmit, true);
     };
   }, [tab, onLogout]);
@@ -5663,18 +5663,28 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
     setLoading(true);
     setError('');
 
+    let isFinished = false;
+    const timeoutId = setTimeout(() => {
+      if (!isFinished) {
+        setLoading(false);
+        setError('Save card request timed out. Please check your internet connection.');
+      }
+    }, 15000); // 15 seconds timeout
+
     try {
       // Direct call to Stripe to create a Payment Method
       const { paymentMethod, error: stripeErr } = await stripeInstance.createPaymentMethod({
         type: 'card',
         card: cardElement,
         billing_details: {
-          name: user?.name || 'Cheak Imesh',
+          name: user?.full_name || user?.name || 'Imesh Raybeam',
           email: user?.email || '',
         }
       });
 
       if (stripeErr) {
+        isFinished = true;
+        clearTimeout(timeoutId);
         setError(stripeErr.message);
         setLoading(false);
         return;
@@ -5691,6 +5701,9 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
       });
       const data = await res.json();
       
+      isFinished = true;
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         if (window.notify) window.notify('success', 'Credit card successfully saved to your account!');
         onSaveSuccess();
@@ -5698,10 +5711,14 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         setError(data.error || 'Failed to save card.');
       }
     } catch (err) {
+      isFinished = true;
+      clearTimeout(timeoutId);
       console.error(err);
       setError('Network error. Failed to save card.');
     } finally {
-      setLoading(false);
+      if (isFinished) {
+        setLoading(false);
+      }
     }
   };
 
