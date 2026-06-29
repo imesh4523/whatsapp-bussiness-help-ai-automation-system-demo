@@ -1,4 +1,5 @@
 import db from './db.js';
+import { resetExpiredLimits, rotateResendKey } from './resend-rotator.js';
 
 /**
  * Send a generic HTML email using the Resend email provider configured in settings
@@ -14,10 +15,27 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
       return true;
     }
 
-    const keyRes = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
-    const apiKey = keyRes.rows.length > 0 ? keyRes.rows[0].value?.trim() : null;
+    // Reset expired daily limits
+    await resetExpiredLimits();
+
+    let keyRes = await db.query("SELECT value FROM system_settings WHERE key = 'resend_api_key'");
+    let apiKey = keyRes.rows.length > 0 ? keyRes.rows[0].value?.trim() : null;
     if (!apiKey) {
       throw new Error("Resend API Key is not set in system settings.");
+    }
+
+    // Check if the current key has exceeded its daily limit
+    const keyInfoRes = await db.query("SELECT id, daily_sent_count, status FROM resend_api_keys WHERE api_key = $1", [apiKey]);
+    if (keyInfoRes.rows.length > 0) {
+      const keyInfo = keyInfoRes.rows[0];
+      if (keyInfo.daily_sent_count >= 100 || keyInfo.status === 'LimitReached') {
+        console.log(`[Email Service] API Key limit reached (${keyInfo.daily_sent_count}/100). Auto-rotating...`);
+        try {
+          apiKey = await rotateResendKey(apiKey, `Daily limit reached (${keyInfo.daily_sent_count}/100)`);
+        } catch (rotError) {
+          console.error(`[Email Service] Auto-rotation failed, falling back to current key:`, rotError.message);
+        }
+      }
     }
 
     const senderRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
@@ -59,21 +77,50 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
       requestBody.attachments = attachments;
     }
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: 'POST',
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestBody)
-    });
+    const doSend = async (currentKey) => {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: 'POST',
+        headers: {
+          "Authorization": `Bearer ${currentKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody)
+      });
+      const data = await res.json();
+      return { ok: res.ok, status: res.status, data };
+    };
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || JSON.stringify(data));
+    let sendRes = await doSend(apiKey);
+
+    // If Resend returns rate limit or daily quota error, auto-rotate and retry once
+    const isLimitError = (sendRes.status === 422 || sendRes.status === 429 || 
+                          (sendRes.data && (sendRes.data.message?.toLowerCase().includes('limit') || 
+                                            sendRes.data.message?.toLowerCase().includes('quota') ||
+                                            sendRes.data.message?.toLowerCase().includes('rate_limit'))));
+    
+    if (!sendRes.ok && isLimitError) {
+      const errMsg = sendRes.data?.message || JSON.stringify(sendRes.data);
+      console.warn(`[Email Service] Rate limit / Quota exceeded error: ${errMsg}. Rotating...`);
+      try {
+        apiKey = await rotateResendKey(apiKey, `Quota/Limit Error: ${errMsg}`);
+        sendRes = await doSend(apiKey);
+      } catch (rotError) {
+        console.error(`[Email Service] Rotation retry failed:`, rotError.message);
+      }
     }
 
-    console.log(`[Email Service] Resend sent successfully. Message ID: ${data.id}`);
+    if (!sendRes.ok) {
+      throw new Error(sendRes.data?.message || JSON.stringify(sendRes.data));
+    }
+
+    console.log(`[Email Service] Resend sent successfully. Message ID: ${sendRes.data.id}`);
+
+    // Increment count in database
+    await db.query(
+      "UPDATE resend_api_keys SET daily_sent_count = daily_sent_count + 1 WHERE api_key = $1",
+      [apiKey]
+    );
+
     return true;
   } catch (err) {
     console.error(`[Email Service] Error sending email to ${toEmail}:`, err.message);

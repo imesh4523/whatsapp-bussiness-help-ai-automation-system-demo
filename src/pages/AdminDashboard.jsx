@@ -323,6 +323,11 @@ function AdminDashboard({ admin, onLogout }) {
     emailSenderName: 'AgentBunny'
   });
   const [isSavingDomain, setIsSavingDomain] = useState(false);
+  const [resendKeys, setResendKeys] = useState([]);
+  const [newResendKey, setNewResendKey] = useState('');
+  const [newResendKeyLabel, setNewResendKeyLabel] = useState('');
+  const [isAddingKey, setIsAddingKey] = useState(false);
+  const [isActivatingKeyId, setIsActivatingKeyId] = useState(null);
   const [logs, setLogs] = useState([]);
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [configResult, setConfigResult] = useState(null); // 'success' | 'error' | null
@@ -468,6 +473,7 @@ function AdminDashboard({ admin, onLogout }) {
         })
         .catch(err => console.warn(err));
     } else if (activeTab === 'domain-config') {
+      fetchResendKeys();
       fetch(`${API_BASE_URL}/admin/domain/settings`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
       })
@@ -874,6 +880,95 @@ function AdminDashboard({ admin, onLogout }) {
       if (window.notifyAdmin) window.notifyAdmin('error', 'Network request failed.');
     } finally {
       setIsConfiguring(false);
+    }
+  };
+
+  const fetchResendKeys = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/resend-keys`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setResendKeys(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddResendKey = async (e) => {
+    e.preventDefault();
+    if (!newResendKey.trim()) return;
+    setIsAddingKey(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/resend-keys`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ apiKey: newResendKey, label: newResendKeyLabel })
+      });
+      if (res.ok) {
+        setNewResendKey('');
+        setNewResendKeyLabel('');
+        fetchResendKeys();
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Resend API Key registered successfully!');
+      } else {
+        const err = await res.json();
+        if (window.notifyAdmin) window.notifyAdmin('error', err.error || 'Failed to add key.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAddingKey(false);
+    }
+  };
+
+  const handleDeleteResendKey = async (keyId) => {
+    if (!confirm('Are you sure you want to delete this Resend API Key?')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/resend-keys/${keyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      if (res.ok) {
+        fetchResendKeys();
+        if (window.notifyAdmin) window.notifyAdmin('success', 'API Key deleted.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRotateToKey = async (keyId) => {
+    if (!confirm('Are you sure you want to activate this Resend API key? This will delete the domain from the current Resend account, reconfigure it on the new Resend account, and update Cloudflare DNS records.')) return;
+    setIsActivatingKeyId(keyId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/resend-keys/rotate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({ keyId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchResendKeys();
+        fetchDomainStatus();
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Domain transition and DNS reconfiguration completed successfully!');
+      } else {
+        if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to activate key.');
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Network error during manual key rotation.');
+    } finally {
+      setIsActivatingKeyId(null);
     }
   };
 
@@ -3164,6 +3259,131 @@ function AdminDashboard({ admin, onLogout }) {
                       </button>
                     </div>
                   </form>
+                </div>
+
+                {/* Resend API Keys Rotation Pool */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-neutral-800 flex items-center gap-2">
+                      <Cpu className="w-5 h-5 text-[#00832e]" /> Resend API Keys Rotation Pool
+                    </h3>
+                    <p className="text-[11px] text-gray-500 font-light mt-1.5 leading-relaxed">
+                      Register multiple Resend accounts/keys to automatically bypass the 100 free emails limit. The active domain will auto-transition and update Cloudflare DNS on rotation.
+                    </p>
+                  </div>
+
+                  {/* Register New Key Form */}
+                  <form onSubmit={handleAddResendKey} className="flex gap-4 items-end bg-neutral-50 p-4 rounded-2xl border border-neutral-100">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Account Label</label>
+                      <input 
+                        type="text"
+                        required
+                        value={newResendKeyLabel}
+                        onChange={(e) => setNewResendKeyLabel(e.target.value)}
+                        placeholder="e.g. Account 2 (John)"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black"
+                      />
+                    </div>
+                    <div className="flex-[2] space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Resend API Key</label>
+                      <input 
+                        type="password"
+                        required
+                        value={newResendKey}
+                        onChange={(e) => setNewResendKey(e.target.value)}
+                        placeholder="re_••••••••••••••••"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black font-mono"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isAddingKey}
+                      className="px-4 py-2 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer h-[34px] disabled:opacity-50"
+                    >
+                      {isAddingKey ? 'Adding...' : 'Register Key'}
+                    </button>
+                  </form>
+
+                  {/* Registered Keys List */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                          <th className="py-3">Label</th>
+                          <th className="py-3">Sent Today</th>
+                          <th className="py-3">Status</th>
+                          <th className="py-3">Last Reset</th>
+                          <th className="py-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resendKeys.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="py-8 text-center text-gray-400 font-light text-xs">
+                              No keys registered in rotation pool. Defaulting to main Resend API key.
+                            </td>
+                          </tr>
+                        ) : (
+                          resendKeys.map((k) => {
+                            const isCurrentlyActive = k.api_key === domainConfig.resendApiKey;
+                            const isActivating = isActivatingKeyId === k.id;
+                            
+                            return (
+                              <tr key={k.id} className="border-b border-gray-50 text-xs text-neutral-600 hover:bg-neutral-50/50">
+                                <td className="py-3 font-bold text-neutral-800">
+                                  {k.label || `Key ID: ${k.id}`}
+                                </td>
+                                <td className="py-3 font-mono font-bold">
+                                  <span className={k.daily_sent_count >= 100 ? 'text-red-500' : 'text-[#00832e]'}>
+                                    {k.daily_sent_count}
+                                  </span> / 100
+                                </td>
+                                <td className="py-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                    isCurrentlyActive ? 'bg-emerald-100 text-[#00832e]' :
+                                    k.status === 'Active' ? 'bg-blue-50 text-blue-700' :
+                                    k.status === 'LimitReached' ? 'bg-amber-100 text-amber-800' :
+                                    'bg-red-50 text-red-600'
+                                  }`}>
+                                    {isCurrentlyActive ? 'Active' : k.status}
+                                  </span>
+                                  {k.error_message && (
+                                    <div className="text-[9px] text-red-500 font-light mt-0.5 max-w-[150px] truncate" title={k.error_message}>
+                                      {k.error_message}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 text-neutral-400 font-light">
+                                  {new Date(k.last_reset_time).toLocaleTimeString()}
+                                </td>
+                                <td className="py-3 text-right space-x-2">
+                                  {!isCurrentlyActive && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => handleRotateToKey(k.id)}
+                                      disabled={isActivating || k.daily_sent_count >= 100}
+                                      className="px-2.5 py-1 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer disabled:opacity-30 inline-block h-[26px]"
+                                    >
+                                      {isActivating ? 'Activating...' : 'Activate'}
+                                    </button>
+                                  )}
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteResendKey(k.id)}
+                                    className="p-1.5 text-neutral-400 hover:text-red-600 transition-colors bg-neutral-50 hover:bg-red-50 rounded-lg inline-flex border-none cursor-pointer align-middle"
+                                    title="Delete Key"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* Domain Verification Status block */}

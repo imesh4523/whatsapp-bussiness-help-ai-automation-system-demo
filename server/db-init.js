@@ -167,6 +167,18 @@ async function init() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS resend_api_keys (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE NOT NULL,
+        label VARCHAR(255) DEFAULT '',
+        daily_sent_count INTEGER DEFAULT 0,
+        last_reset_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'Active',
+        error_message TEXT,
+        resend_domain_id VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS max_history_limit INTEGER DEFAULT 10;
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS include_kb_images BOOLEAN DEFAULT TRUE;
       ALTER TABLE chats ADD COLUMN IF NOT EXISTS shipping_memory JSONB DEFAULT '{}'::JSONB;

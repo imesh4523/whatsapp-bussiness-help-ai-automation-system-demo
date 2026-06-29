@@ -22,6 +22,7 @@ import {
 import { queryCourierAPI } from './couriers.js';
 import { callGeminiAPI } from './gemini-client.js';
 import { callOpenRouterAPI, getAIProvider, getOpenRouterModel } from './openrouter-client.js';
+import { manuallyActivateKey } from './resend-rotator.js';
 
 
 
@@ -2249,6 +2250,70 @@ app.get('/api/admin/domain/status', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
+// ── Resend Multiple API Keys Management ──
+app.get('/api/admin/resend-keys', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    const result = await db.query("SELECT id, label, daily_sent_count, last_reset_time, status, error_message, resend_domain_id, created_at FROM resend_api_keys ORDER BY id ASC");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/resend-keys', authenticateToken, async (req, res) => {
+  const { apiKey, label } = req.body;
+  if (!apiKey?.trim()) {
+    return res.status(400).json({ error: 'API key is required.' });
+  }
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    const result = await db.query(
+      "INSERT INTO resend_api_keys (api_key, label) VALUES ($1, $2) ON CONFLICT (api_key) DO UPDATE SET label = $2 RETURNING id, label, daily_sent_count, last_reset_time, status, error_message, resend_domain_id, created_at",
+      [apiKey.trim(), label?.trim() || '']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/resend-keys/:id', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    await db.query("DELETE FROM resend_api_keys WHERE id = $1", [req.params.id]);
+    res.json({ success: true, message: 'Key deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/resend-keys/rotate', authenticateToken, async (req, res) => {
+  const { keyId } = req.body;
+  if (!keyId) {
+    return res.status(400).json({ error: 'Key ID is required.' });
+  }
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    const activatedKey = await manuallyActivateKey(keyId);
+    res.json({ success: true, message: 'Key activated and domain/DNS updated successfully.', key: activatedKey });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
