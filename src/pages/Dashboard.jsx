@@ -6795,9 +6795,9 @@ function TrackCustomerOrders() {
             </div>
           ) : (
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold' }}>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                     <th style={{ padding: '12px' }}>Order ID</th>
                     <th style={{ padding: '12px' }}>Recipient Name</th>
                     <th style={{ padding: '12px' }}>Logistics Service</th>
@@ -6815,7 +6815,8 @@ function TrackCustomerOrders() {
                         fontSize: '13px', 
                         cursor: 'pointer',
                         backgroundColor: selectedOrder?.id === o.id ? '#f8fafc' : 'transparent',
-                        fontWeight: selectedOrder?.id === o.id ? '600' : 'normal'
+                        fontWeight: selectedOrder?.id === o.id ? '600' : 'normal',
+                        whiteSpace: 'nowrap'
                       }}
                     >
                       <td style={{ padding: '14px 12px', color: '#0f172a' }}>{o.id}</td>
