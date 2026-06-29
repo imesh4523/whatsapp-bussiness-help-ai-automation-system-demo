@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dashboardPages from '../data/dashboardPages.json';
 import { API_BASE_URL } from '../config';
 import ManageInventory from './ManageInventory';
+import AISupportAssistant from './AISupportAssistant';
+
 
 
 // ── Premium Toast Notification System ───────────────────────────────────────
@@ -5557,6 +5559,9 @@ function Dashboard({ user, setUser, onLogout }) {
                 <TrackCustomerOrders user={user} />
               ) : tab === 'transactions' ? (
                 <UserTransactions userTransactions={userTransactions} />
+              ) : tab === 'agentbunny_assistant' ? (
+                <AISupportAssistant setTab={setTab} />
+
               ) : (tab === 'subscription_index' || tab === 'subscription_monthly' || tab === 'subscription_yearly') ? (
                 <div dangerouslySetInnerHTML={{
                   __html: renderSubscriptionBody()
@@ -6780,7 +6785,7 @@ function TrackCustomerOrders() {
       <div className="responsive-tracking-grid" style={{ gap: '24px', alignItems: 'start' }}>
         
         {/* Left side: Orders Selector list */}
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflowX: 'auto' }}>
           <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Shipments Register</h4>
           
           {filteredOrders.length === 0 ? (
@@ -6789,7 +6794,7 @@ function TrackCustomerOrders() {
               No matching orders found.
             </div>
           ) : (
-            <div className="table-responsive">
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold' }}>
@@ -6850,7 +6855,7 @@ function TrackCustomerOrders() {
         </div>
 
         {/* Right side: Tracing Timeline and Link form */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'stretch' }}>
           
           {/* Section 1: Live Timeline Tracing (PROMINENT - TOP OF RIGHT SIDEBAR) */}
           {selectedOrder && selectedOrder.tracking_number ? (
