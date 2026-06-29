@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TAWKTO_PROPERTY_ID, TAWKTO_WIDGET_ID } from '../config';
+import { TAWKTO_PROPERTY_ID, TAWKTO_WIDGET_ID, API_BASE_URL } from '../config';
 import { Send, User, Bot, HelpCircle, AlertCircle, ArrowRight } from 'lucide-react';
 
 export default function AISupportAssistant({ setTab }) {
@@ -11,6 +11,7 @@ export default function AISupportAssistant({ setTab }) {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTransferred, setIsTransferred] = useState(false);
+  const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -115,12 +116,13 @@ export default function AISupportAssistant({ setTab }) {
     }
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || loading) return;
 
     const userText = inputValue;
-    setMessages(prev => [...prev, { sender: 'user', text: userText }]);
+    const currentHistory = [...messages, { sender: 'user', text: userText }];
+    setMessages(currentHistory);
     setInputValue('');
 
     // Check if the user is requesting human agent in their text message
@@ -134,16 +136,33 @@ export default function AISupportAssistant({ setTab }) {
       return;
     }
 
-    // Default AI mock response
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: `I received your query: "${userText}". Since this is a demo environment, I cannot connect to live servers, but the UI integrations are fully working! If you want to test live chat support, click "Request Human Agent" or type "human" in your message.`
-        }
-      ]);
-    }, 1000);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/ai-support/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({
+          message: userText,
+          history: currentHistory
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(prev => [...prev, { sender: 'bot', text: data.text }]);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setMessages(prev => [...prev, { sender: 'bot', text: errorData.error || 'Failed to get a response from the support agent. Please try again.' }]);
+      }
+    } catch (err) {
+      console.error('Failed to send message to support AI:', err);
+      setMessages(prev => [...prev, { sender: 'bot', text: 'Connection error. Please check if backend is running.' }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenTicket = () => {
@@ -259,6 +278,23 @@ export default function AISupportAssistant({ setTab }) {
                 </div>
               );
             })}
+            {loading && (
+              <div className="flex items-start gap-3.5 justify-start animate-fade-in">
+                <div 
+                  className="rounded-full p-2 bg-[#00832e] text-white flex items-center justify-center animate-pulse" 
+                  style={{ width: '36px', height: '36px' }}
+                >
+                  <Bot className="w-4 h-4" />
+                </div>
+                <div className="max-w-[70%] bg-neutral-50 text-neutral-400 border border-neutral-100 p-3.5 rounded-2xl rounded-tl-none text-xs font-bold">
+                  <div className="flex gap-1.5 items-center py-1">
+                    <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
