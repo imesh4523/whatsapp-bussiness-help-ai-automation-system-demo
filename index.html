@@ -143,6 +143,18 @@
       
       if (!isDashboardRoute || !savedUser) {
         document.getElementById('preloader-static').style.display = 'none';
+      } else {
+        // Safety fallback: always fade out preloader after 1.2 seconds to prevent getting stuck
+        setTimeout(() => {
+          const loader = document.getElementById('preloader-static');
+          if (loader) {
+            loader.style.transition = 'opacity 0.3s ease';
+            loader.style.opacity = '0';
+            setTimeout(() => {
+              try { loader.remove(); } catch(e) {}
+            }, 300);
+          }
+        }, 1200);
       }
     </script>
 

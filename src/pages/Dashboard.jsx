@@ -4154,6 +4154,17 @@ function Dashboard({ user, setUser, onLogout }) {
     if (tab !== prevTab) {
       setIsPageLoading(true);
       setPrevTab(tab);
+      
+      // Scroll to top immediately to simulate a full page reload layout
+      window.scrollTo(0, 0);
+      if (containerRef.current) {
+        containerRef.current.scrollTop = 0;
+      }
+      const pageWrapper = document.querySelector('.body-wrapper') || document.querySelector('.dashboard__inner');
+      if (pageWrapper) {
+        pageWrapper.scrollTop = 0;
+      }
+      
       const timer = setTimeout(() => {
         setIsPageLoading(false);
       }, 400);
@@ -4699,14 +4710,28 @@ function Dashboard({ user, setUser, onLogout }) {
       }
     };
 
-    // Attach click, change and submit on document to catch Bootstrap modal elements moved to body
+    const handleGlobalTouch = (e) => {
+      const sidebarLink = e.target.closest('.sidebar-menu-list__link') || 
+                          e.target.closest('.sidebar-submenu-list__link') || 
+                          e.target.closest('.sidebar-logo__link') || 
+                          e.target.closest('.sidebar-menu__close') ||
+                          e.target.closest('.custom-sidebar-overlay-unique');
+      if (sidebarLink) {
+        e.preventDefault();
+        sidebarLink.click();
+      }
+    };
+
+    // Attach click, change, submit and touchstart on document to catch Bootstrap modal elements moved to body
     document.addEventListener('click', handleGlobalClick, true);
     document.addEventListener('change', handleGlobalChange, true);
     document.addEventListener('submit', handleFormSubmit, true);
+    document.addEventListener('touchstart', handleGlobalTouch, { capture: true, passive: false });
     return () => {
       document.removeEventListener('click', handleGlobalClick, true);
       document.removeEventListener('change', handleGlobalChange, true);
       document.removeEventListener('submit', handleFormSubmit, true);
+      document.removeEventListener('touchstart', handleGlobalTouch, true);
     };
   }, [tab, onLogout]);
 
