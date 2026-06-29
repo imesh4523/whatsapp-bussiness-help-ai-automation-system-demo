@@ -96,7 +96,22 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
 
     // 3. Construct premium Link-style HTML body
     let title = subject;
-    let mainDescription = body.replace(/\n/g, '<br />');
+    let mainDescription = body;
+    let closingContent = '';
+
+    if (body.includes('Best Regards,')) {
+      const splitIndex = body.indexOf('Best Regards,');
+      let splitAt = splitIndex;
+      if (body.includes('If you did not request this,')) {
+        splitAt = body.indexOf('If you did not request this,');
+      } else if (body.includes('If you did not request this')) {
+        splitAt = body.indexOf('If you did not request this');
+      }
+      
+      mainDescription = body.substring(0, splitAt).trim();
+      closingContent = body.substring(splitAt).trim();
+    }
+
     let ctaText = '';
     let ctaLink = '';
     let subFeatures = [];
@@ -187,11 +202,11 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
           <tr>
             <td>
               <h2 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 16px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; letter-spacing: -0.5px;">${title}</h2>
-              <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 28px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${mainDescription}</p>
+              <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 28px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${mainDescription.replace(/\n/g, '<br />')}</p>
 
               ${ctaText && ctaLink ? `
               <!-- Button -->
-              <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 36px auto; width: 100%;">
+              <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 28px auto; width: 100%;">
                 <tr>
                   <td align="center">
                     <a href="${ctaLink}" target="_blank" style="display: inline-block; background-color: #00d166; color: #ffffff; text-decoration: none; border-radius: 30px; padding: 14px 40px; font-size: 15px; font-weight: 600; border: 1px solid #00d166; text-align: center; box-shadow: 0 4px 12px rgba(0, 209, 102, 0.15);">
@@ -200,6 +215,10 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
                   </td>
                 </tr>
               </table>
+              ` : ''}
+
+              ${closingContent ? `
+              <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 28px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${closingContent.replace(/\n/g, '<br />')}</p>
               ` : ''}
 
               ${subFeatures.length > 0 ? `
