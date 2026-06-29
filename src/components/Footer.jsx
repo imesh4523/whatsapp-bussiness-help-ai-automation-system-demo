@@ -47,10 +47,10 @@ function Footer({ onNavigate }) {
             <li onClick={() => onNavigate('privacy')} className="hover:text-black transition-colors cursor-pointer">Privacy Policy</li>
             <li>
               <a 
-                href="mailto:hello@agentbunny.com" 
+                href="mailto:hello@agent-bunny.com" 
                 className="hover:text-black transition-colors flex items-center gap-1"
               >
-                hello@agentbunny.com
+                hello@agent-bunny.com
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </a>
             </li>

@@ -3,4 +3,4 @@ Allow: /
 Disallow: /api/
 Disallow: /admin/
 
-Sitemap: https://agentbunny.com/sitemap.xml
+Sitemap: https://www.agent-bunny.com/sitemap.xml
