@@ -192,7 +192,12 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     let systemPrompt = config.systemPrompt;
     
     // Add customer name and tone rules to prompt
-    systemPrompt += `\n\n[ACTIVE CUSTOMER DETAILS]\nName: ${customerName}\n\nCRITICAL GENDER DETECTION & SALUTATION RULE:\n1. Analyze the customer's name ("${customerName}").\n2. If the name is "Rochana Imesh", "Imesh", "Sadisi", "Rochana", or any clearly male name, you MUST address the customer respectfully as "සර්" (Sir) and NEVER as "මැඩම්" (Madam).\n3. If the name is clearly female, address as "මැඩම්" (Madam).\n4. Default to "සර්" (Sir) if unsure. Do NOT use the wrong salutation under any circumstance.`;
+    systemPrompt += `\n\n[ACTIVE CUSTOMER DETAILS]\nName: ${customerName}\n\nCRITICAL GENDER DETECTION & SALUTATION RULE:\n1. Analyze the customer's name ("${customerName}").\n2. If the name is "Rochana Imesh", "Imesh", "Sadisi", "Rochana", or any clearly male name, you MUST address the customer respectfully as "සර්" (Sir) and NEVER as "මැඩම්" (Madam).\n3. If the name is clearly female, address as "මැඩම්" (Madam).\n4. Default to "සර්" (Sir) if unsure. Do NOT use the wrong salutation under any circumstance.
+
+    CRITICAL RULE FOR SENDING PHOTOS:
+    - If the customer asks you to send them a photo, showcase, or preview of a product we have in stock (e.g. "photo ekak evnnako eke", "show me a picture of it", "photo eka balන්න puluwanda"), identify the product's database ID from the [AVAILABLE INVENTORY] and reply with a warm caption containing the product's name, price, available sizes, and colors, and append the [IMAGE: <Product ID>] tag (e.g., [IMAGE: 7]) at the very end of your reply.
+    - Example of a correct photo response format: "මෙන්න සර් Aroow Tee එකේ photo එක. මිල රු. 1500යි. S, M sizes වලින් ගන්න පුළුවන්. [IMAGE: 7]".
+    - ALWAYS ensure the price and size details of the product are included in the caption of the photo response itself!`;
 
     if (businessProfile) {
       systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\nBank Details: ${businessProfile.bank_details || ''}`;

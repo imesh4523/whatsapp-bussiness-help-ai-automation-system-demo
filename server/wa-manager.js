@@ -13,6 +13,7 @@ import db from './db.js';
 import { encrypt, decrypt } from './crypto.js';
 import { generateAIReply, callActiveAI } from './ai.js';
 import { callGeminiAPI } from './gemini-client.js';
+import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -440,6 +441,9 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             
             // Clean all tags from the text message
             cleanReply = aiReply.replace(/\[IMAGE:\s*\d+\]/gi, '').trim();
+            if (!cleanReply && imagesToSend.length === 0) {
+              cleanReply = "සර්, මේ product එකේ photo එකක් දැනට අපේ system එකට upload කරලා නෑ. අපේ storefront catalog එකෙන් මේ ගැන වැඩි විස්තර බලාගන්න පුළුවන්!";
+            }
 
             let orderId = null;
             if (cleanReply.toUpperCase().includes('#PENDING')) {
@@ -472,6 +476,14 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
                   const arrayBuffer = await response.arrayBuffer();
                   fileBuffer = Buffer.from(arrayBuffer);
                 }
+                
+                // Convert WebP/others to JPEG buffer so WhatsApp app does not throw "Couldn't download image"
+                try {
+                  fileBuffer = await sharp(fileBuffer).jpeg().toBuffer();
+                } catch (sharpErr) {
+                  console.error('Failed to convert image to jpeg using sharp:', sharpErr.message);
+                }
+
                 result = await sock.sendMessage(msg.key.remoteJid, { image: fileBuffer, caption: cleanReply }, sendOpts);
                 
                 // Send remaining images if any
@@ -486,6 +498,13 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
                       const arrayBuffer = await response.arrayBuffer();
                       nextBuffer = Buffer.from(arrayBuffer);
                     }
+
+                    try {
+                      nextBuffer = await sharp(nextBuffer).jpeg().toBuffer();
+                    } catch (sharpErr) {
+                      console.error('Failed to convert subsequent image to jpeg:', sharpErr.message);
+                    }
+
                     // Send subsequent images with a slight delay
                     await new Promise(resolve => setTimeout(resolve, 800));
                     await sock.sendMessage(msg.key.remoteJid, { image: nextBuffer }, sendOpts);
