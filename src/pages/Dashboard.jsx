@@ -4688,18 +4688,13 @@ function Dashboard({ user, setUser, onLogout }) {
       }
     };
 
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('change', handleGlobalChange);
-    }
-    // Attach click and submit on document to catch Bootstrap modal elements moved to body
+    // Attach click, change and submit on document to catch Bootstrap modal elements moved to body
     document.addEventListener('click', handleGlobalClick, true);
+    document.addEventListener('change', handleGlobalChange, true);
     document.addEventListener('submit', handleFormSubmit, true);
     return () => {
-      if (container) {
-        container.removeEventListener('change', handleGlobalChange);
-      }
       document.removeEventListener('click', handleGlobalClick, true);
+      document.removeEventListener('change', handleGlobalChange, true);
       document.removeEventListener('submit', handleFormSubmit, true);
     };
   }, [tab, onLogout]);
