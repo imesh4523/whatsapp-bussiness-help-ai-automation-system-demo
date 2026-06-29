@@ -290,7 +290,7 @@ const getMockPage = (tabKey) => {
     ticket: 'Support Tickets'
   };
 
-  const title = titleMap[tabKey] || 'Demo Page';
+  const title = titleMap[tabKey] || 'Tracking Packages';
 
   if (tabKey === 'agentbunny_assistant') {
     return {
@@ -2191,8 +2191,8 @@ function WhatsAppOrderManager() {
   const streamRef = React.useRef(null);
 
   const COURIER_LOGOS = {
-    'Sri Lanka Post': '/sri-lanka-post-logo.png',
-    'Citypak (Hayleys)': '/citypak-logo.png',
+    'SL Post': '/sri-lanka-post-logo.png',
+    'Citypak': '/citypak-logo.png',
     'Aramex': '/aramex-logo.png',
     'DHL Express': 'https://th.bing.com/th?q=DHL+Logo+Icon+PNG&w=120&h=120&c=1&rs=1&qlt=70&r=0&o=7&cb=1&pid=InlineBlock&rm=3&mkt=en-SG&cc=SG&setlang=en&adlt=strict&t=1&mw=247',
     'FedEx': 'https://th.bing.com/th/id/OIP.vuc88Kmi3r_f8yGuQPHVGgHaHa?w=169&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
@@ -6427,7 +6427,7 @@ function ManageCustomers() {
 function TrackCustomerOrders() {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [courierName, setCourierName] = useState('Sri Lanka Post');
+  const [courierName, setCourierName] = useState('SL Post');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [trackingStatus, setTrackingStatus] = useState('Out for Delivery');
   const [searchQuery, setSearchQuery] = useState('');
@@ -6436,8 +6436,8 @@ function TrackCustomerOrders() {
   const [updating, setUpdating] = useState(false);
 
   const COURIER_LOGOS = {
-    'Sri Lanka Post': '/sri-lanka-post-logo.png',
-    'Citypak (Hayleys)': '/citypak-logo.png',
+    'SL Post': '/sri-lanka-post-logo.png',
+    'Citypak': '/citypak-logo.png',
     'Aramex': '/aramex-logo.png',
     'DHL Express': 'https://th.bing.com/th?q=DHL+Logo+Icon+PNG&w=120&h=120&c=1&rs=1&qlt=70&r=0&o=7&cb=1&pid=InlineBlock&rm=3&mkt=en-SG&cc=SG&setlang=en&adlt=strict&t=1&mw=247',
     'FedEx': 'https://th.bing.com/th/id/OIP.vuc88Kmi3r_f8yGuQPHVGgHaHa?w=169&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
@@ -6463,7 +6463,7 @@ function TrackCustomerOrders() {
         setOrders(data);
         if (data.length > 0) {
           setSelectedOrder(data[0]);
-          setCourierName(data[0].courier_name || 'Sri Lanka Post');
+          setCourierName(data[0].courier_name || 'SL Post');
           setTrackingNumber(data[0].tracking_number || '');
           setTrackingStatus(data[0].tracking_status || 'Out for Delivery');
         }
@@ -6519,7 +6519,7 @@ function TrackCustomerOrders() {
 
   const selectOrder = (order) => {
     setSelectedOrder(order);
-    setCourierName(order.courier_name || 'Sri Lanka Post');
+    setCourierName(order.courier_name || 'SL Post');
     setTrackingNumber(order.tracking_number || '');
     setTrackingStatus(order.tracking_status || 'Out for Delivery');
   };
@@ -6699,7 +6699,7 @@ function TrackCustomerOrders() {
                 src={logo} 
                 alt={name} 
                 style={{ 
-                  width: name === 'Aramex' ? '70px' : name === 'Sri Lanka Post' ? '75px' : name === 'FedEx' ? '65px' : '40px', 
+                  width: name === 'Aramex' ? '70px' : name === 'SL Post' ? '75px' : name === 'FedEx' ? '65px' : '40px', 
                   height: '40px', 
                   objectFit: 'contain', 
                   borderRadius: '6px'
