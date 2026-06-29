@@ -2269,7 +2269,7 @@ app.get('/api/admin/resend-keys', authenticateToken, async (req, res) => {
     if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
       return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
     }
-    const result = await db.query("SELECT id, label, daily_sent_count, last_reset_time, status, error_message, resend_domain_id, created_at FROM resend_api_keys ORDER BY id ASC");
+    const result = await db.query("SELECT id, label, daily_sent_count, last_reset_time, status, error_message, resend_domain_id, subdomain, sender_email, email_type, created_at FROM resend_api_keys ORDER BY id ASC");
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2277,7 +2277,7 @@ app.get('/api/admin/resend-keys', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/admin/resend-keys', authenticateToken, async (req, res) => {
-  const { apiKey, label } = req.body;
+  const { apiKey, label, subdomain, senderName, emailType } = req.body;
   if (!apiKey?.trim()) {
     return res.status(400).json({ error: 'API key is required.' });
   }
@@ -2286,11 +2286,30 @@ app.post('/api/admin/resend-keys', authenticateToken, async (req, res) => {
     if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
       return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
     }
+    
     const result = await db.query(
-      "INSERT INTO resend_api_keys (api_key, label) VALUES ($1, $2) ON CONFLICT (api_key) DO UPDATE SET label = $2 RETURNING id, label, daily_sent_count, last_reset_time, status, error_message, resend_domain_id, created_at",
-      [apiKey.trim(), label?.trim() || '']
+      `INSERT INTO resend_api_keys (api_key, label, subdomain, email_type) 
+       VALUES ($1, $2, $3, $4) 
+       ON CONFLICT (api_key) 
+       DO UPDATE SET label = $2, subdomain = $3, email_type = $4 
+       RETURNING id`,
+      [apiKey.trim(), label?.trim() || '', subdomain?.trim() || null, emailType || 'All']
     );
-    res.json(result.rows[0]);
+    const createdKey = result.rows[0];
+
+    // Trigger Cloudflare + Resend subdomain automation
+    const { provisionSubdomainAndDns } = await import('./resend-rotator.js');
+    await provisionSubdomainAndDns(createdKey.id, subdomain, senderName);
+
+    // Fetch updated row with domain_id, sender_email, status, etc.
+    const finalRes = await db.query(
+      `SELECT id, label, daily_sent_count, last_reset_time, status, error_message, resend_domain_id, subdomain, sender_email, email_type, created_at 
+       FROM resend_api_keys 
+       WHERE id = $1`,
+      [createdKey.id]
+    );
+
+    res.json(finalRes.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

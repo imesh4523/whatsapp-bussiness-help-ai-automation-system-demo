@@ -25,21 +25,27 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
     }
 
     // Check if the current key has exceeded its daily limit
-    const keyInfoRes = await db.query("SELECT id, daily_sent_count, status FROM resend_api_keys WHERE api_key = $1", [apiKey]);
+    let activeKeyObj = null;
+    const keyInfoRes = await db.query("SELECT id, daily_sent_count, status, sender_email FROM resend_api_keys WHERE api_key = $1", [apiKey]);
     if (keyInfoRes.rows.length > 0) {
-      const keyInfo = keyInfoRes.rows[0];
-      if (keyInfo.daily_sent_count >= 100 || keyInfo.status === 'LimitReached') {
-        console.log(`[Email Service] API Key limit reached (${keyInfo.daily_sent_count}/100). Auto-rotating...`);
+      activeKeyObj = keyInfoRes.rows[0];
+      if (activeKeyObj.daily_sent_count >= 100 || activeKeyObj.status === 'LimitReached') {
+        console.log(`[Email Service] API Key limit reached (${activeKeyObj.daily_sent_count}/100). Auto-rotating...`);
         try {
-          apiKey = await rotateResendKey(apiKey, `Daily limit reached (${keyInfo.daily_sent_count}/100)`);
+          apiKey = await rotateResendKey(apiKey, `Daily limit reached (${activeKeyObj.daily_sent_count}/100)`);
+          const newKeyRes = await db.query("SELECT id, daily_sent_count, status, sender_email FROM resend_api_keys WHERE api_key = $1", [apiKey]);
+          if (newKeyRes.rows.length > 0) activeKeyObj = newKeyRes.rows[0];
         } catch (rotError) {
           console.error(`[Email Service] Auto-rotation failed, falling back to current key:`, rotError.message);
         }
       }
     }
 
-    const senderRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
-    const rawFromEmail = senderRes.rows.length > 0 ? senderRes.rows[0].value?.trim() : 'noreply@agentbunny.com';
+    let rawFromEmail = activeKeyObj?.sender_email;
+    if (!rawFromEmail) {
+      const senderRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender'");
+      rawFromEmail = senderRes.rows.length > 0 ? senderRes.rows[0].value?.trim() : 'noreply@agentbunny.com';
+    }
 
     const senderNameRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender_name'");
     const senderDisplayName = senderNameRes.rows.length > 0 ? senderNameRes.rows[0].value?.trim() : 'AgentBunny';

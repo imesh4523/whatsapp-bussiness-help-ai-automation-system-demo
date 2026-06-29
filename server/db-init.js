@@ -167,7 +167,7 @@ async function init() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS resend_api_keys (
+       CREATE TABLE IF NOT EXISTS resend_api_keys (
         id SERIAL PRIMARY KEY,
         api_key TEXT UNIQUE NOT NULL,
         label VARCHAR(255) DEFAULT '',
@@ -176,12 +176,19 @@ async function init() {
         status VARCHAR(50) DEFAULT 'Active',
         error_message TEXT,
         resend_domain_id VARCHAR(255),
+        subdomain VARCHAR(255),
+        sender_email VARCHAR(255),
+        email_type VARCHAR(100) DEFAULT 'All',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS max_history_limit INTEGER DEFAULT 10;
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS include_kb_images BOOLEAN DEFAULT TRUE;
       ALTER TABLE chats ADD COLUMN IF NOT EXISTS shipping_memory JSONB DEFAULT '{}'::JSONB;
+      
+      ALTER TABLE resend_api_keys ADD COLUMN IF NOT EXISTS subdomain VARCHAR(255);
+      ALTER TABLE resend_api_keys ADD COLUMN IF NOT EXISTS sender_email VARCHAR(255);
+      ALTER TABLE resend_api_keys ADD COLUMN IF NOT EXISTS email_type VARCHAR(100) DEFAULT 'All';
     `);
     
     console.log('Database tables verified/created successfully.');

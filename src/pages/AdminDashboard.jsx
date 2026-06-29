@@ -326,6 +326,9 @@ function AdminDashboard({ admin, onLogout }) {
   const [resendKeys, setResendKeys] = useState([]);
   const [newResendKey, setNewResendKey] = useState('');
   const [newResendKeyLabel, setNewResendKeyLabel] = useState('');
+  const [newResendKeySubdomain, setNewResendKeySubdomain] = useState('');
+  const [newResendKeySenderName, setNewResendKeySenderName] = useState('noreply');
+  const [newResendKeyEmailType, setNewResendKeyEmailType] = useState('All');
   const [isAddingKey, setIsAddingKey] = useState(false);
   const [isActivatingKeyId, setIsActivatingKeyId] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -914,13 +917,22 @@ function AdminDashboard({ admin, onLogout }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
         },
-        body: JSON.stringify({ apiKey: newResendKey, label: newResendKeyLabel })
+        body: JSON.stringify({ 
+          apiKey: newResendKey, 
+          label: newResendKeyLabel,
+          subdomain: newResendKeySubdomain,
+          senderName: newResendKeySenderName,
+          emailType: newResendKeyEmailType
+        })
       });
       if (res.ok) {
         setNewResendKey('');
         setNewResendKeyLabel('');
+        setNewResendKeySubdomain('');
+        setNewResendKeySenderName('noreply');
+        setNewResendKeyEmailType('All');
         fetchResendKeys();
-        if (window.notifyAdmin) window.notifyAdmin('success', 'Resend API Key registered successfully!');
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Resend API Key and Subdomain registered & configured successfully!');
       } else {
         const err = await res.json();
         if (window.notifyAdmin) window.notifyAdmin('error', err.error || 'Failed to add key.');
@@ -951,7 +963,7 @@ function AdminDashboard({ admin, onLogout }) {
   };
 
   const handleRotateToKey = async (keyId) => {
-    if (!confirm('Are you sure you want to activate this Resend API key? This will delete the domain from the current Resend account, reconfigure it on the new Resend account, and update Cloudflare DNS records.')) return;
+    if (!confirm('Are you sure you want to activate this Resend API key? This will instantly switch the active key and verified sender email pointers.')) return;
     setIsActivatingKeyId(keyId);
     try {
       const res = await fetch(`${API_BASE_URL}/admin/resend-keys/rotate`, {
@@ -966,7 +978,7 @@ function AdminDashboard({ admin, onLogout }) {
       if (res.ok && data.success) {
         fetchResendKeys();
         fetchDomainStatus();
-        if (window.notifyAdmin) window.notifyAdmin('success', 'Domain transition and DNS reconfiguration completed successfully!');
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Active key and sender email pointer switched successfully!');
       } else {
         if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to activate key.');
       }
@@ -3324,36 +3336,75 @@ function AdminDashboard({ admin, onLogout }) {
                   </div>
 
                   {/* Register New Key Form */}
-                  <form onSubmit={handleAddResendKey} className="flex gap-4 items-end bg-neutral-50 p-4 rounded-2xl border border-neutral-100">
-                    <div className="flex-1 space-y-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Account Label</label>
-                      <input 
-                        type="text"
-                        required
-                        value={newResendKeyLabel}
-                        onChange={(e) => setNewResendKeyLabel(e.target.value)}
-                        placeholder="e.g. Account 2 (John)"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black"
-                      />
+                  <form onSubmit={handleAddResendKey} className="bg-neutral-50 p-5 rounded-2xl border border-neutral-100 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Account Label</label>
+                        <input 
+                          type="text"
+                          required
+                          value={newResendKeyLabel}
+                          onChange={(e) => setNewResendKeyLabel(e.target.value)}
+                          placeholder="e.g. Account 2 (John)"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Subdomain Prefix</label>
+                        <input 
+                          type="text"
+                          required
+                          value={newResendKeySubdomain}
+                          onChange={(e) => setNewResendKeySubdomain(e.target.value)}
+                          placeholder="e.g. mail1 (mail1.domain.com)"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Sender Prefix</label>
+                        <input 
+                          type="text"
+                          required
+                          value={newResendKeySenderName}
+                          onChange={(e) => setNewResendKeySenderName(e.target.value)}
+                          placeholder="e.g. noreply"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Email Type (Purpose)</label>
+                        <select
+                          value={newResendKeyEmailType}
+                          onChange={(e) => setNewResendKeyEmailType(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black bg-white"
+                        >
+                          <option value="All">All Types (Default Pool)</option>
+                          <option value="Transactional">Transactional (Resets, Receipts)</option>
+                          <option value="Marketing">Marketing (Campaigns, Newsletters)</option>
+                          <option value="Billing">Billing (Invoices, Retries)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1 md:col-span-2 lg:col-span-4">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Resend API Key</label>
+                        <input 
+                          type="password"
+                          required
+                          value={newResendKey}
+                          onChange={(e) => setNewResendKey(e.target.value)}
+                          placeholder="re_••••••••••••••••"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black font-mono"
+                        />
+                      </div>
                     </div>
-                    <div className="flex-[2] space-y-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Resend API Key</label>
-                      <input 
-                        type="password"
-                        required
-                        value={newResendKey}
-                        onChange={(e) => setNewResendKey(e.target.value)}
-                        placeholder="re_••••••••••••••••"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-black font-mono"
-                      />
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={isAddingKey}
+                        className="px-6 py-2.5 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isAddingKey ? 'Configuring Subdomain & Cloudflare...' : '🚀 Register & Configure Subdomain Key'}
+                      </button>
                     </div>
-                    <button
-                      type="submit"
-                      disabled={isAddingKey}
-                      className="px-4 py-2 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer h-[34px] disabled:opacity-50"
-                    >
-                      {isAddingKey ? 'Adding...' : 'Register Key'}
-                    </button>
                   </form>
 
                   {/* Registered Keys List */}
@@ -3361,7 +3412,9 @@ function AdminDashboard({ admin, onLogout }) {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-gray-100 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                          <th className="py-3">Label</th>
+                          <th className="py-3">Label / Subdomain</th>
+                          <th className="py-3">Sender Email</th>
+                          <th className="py-3">Purpose</th>
                           <th className="py-3">Sent Today</th>
                           <th className="py-3">Status</th>
                           <th className="py-3">Last Reset</th>
@@ -3371,7 +3424,7 @@ function AdminDashboard({ admin, onLogout }) {
                       <tbody>
                         {resendKeys.length === 0 ? (
                           <tr>
-                            <td colSpan="5" className="py-8 text-center text-gray-400 font-light text-xs">
+                            <td colSpan="7" className="py-8 text-center text-gray-400 font-light text-xs">
                               No keys registered in rotation pool. Defaulting to main Resend API key.
                             </td>
                           </tr>
@@ -3382,8 +3435,17 @@ function AdminDashboard({ admin, onLogout }) {
                             
                             return (
                               <tr key={k.id} className="border-b border-gray-50 text-xs text-neutral-600 hover:bg-neutral-50/50">
-                                <td className="py-3 font-bold text-neutral-800">
-                                  {k.label || `Key ID: ${k.id}`}
+                                <td className="py-3">
+                                  <div className="font-bold text-neutral-800">{k.label || `Key ID: ${k.id}`}</div>
+                                  <div className="text-[9px] text-neutral-400 font-mono break-all">{k.subdomain || 'Root Domain'}</div>
+                                </td>
+                                <td className="py-3 font-mono text-[10px] text-neutral-500 break-all">
+                                  {k.sender_email || 'Default (System)'}
+                                </td>
+                                <td className="py-3">
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] bg-neutral-100 text-neutral-600 font-bold uppercase">
+                                    {k.email_type || 'All'}
+                                  </span>
                                 </td>
                                 <td className="py-3 font-mono font-bold">
                                   <span className={k.daily_sent_count >= 100 ? 'text-red-500' : 'text-[#00832e]'}>
