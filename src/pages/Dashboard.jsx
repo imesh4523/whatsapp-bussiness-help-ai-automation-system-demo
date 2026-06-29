@@ -4962,7 +4962,7 @@ function Dashboard({ user, setUser, onLogout }) {
         {/* Mobile Sidebar Overlay Backdrop */}
         {isSidebarMobileOpen && (
           <div 
-            className="sidebar-overlay-backdrop d-lg-none" 
+            className="custom-sidebar-overlay-unique d-lg-none" 
             onClick={() => setIsSidebarMobileOpen(false)}
             style={{
               position: 'fixed',
@@ -4983,7 +4983,17 @@ function Dashboard({ user, setUser, onLogout }) {
           className={`sidebar-menu flex-between ${isSidebarHovered ? '' : 'sidebar-collapsed'} ${isSidebarMobileOpen ? 'show-sidebar' : ''}`}
           onMouseEnter={() => setIsSidebarHovered(true)}
           onMouseLeave={() => setIsSidebarHovered(false)}
-          style={{ zIndex: isSidebarMobileOpen ? 10005 : undefined }}
+          style={isSidebarMobileOpen ? {
+            position: 'fixed',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: '280px',
+            height: '100vh',
+            zIndex: 10005,
+            overflowY: 'auto',
+            boxShadow: '0 0 24px rgba(0,0,0,0.2)'
+          } : {}}
         >
           <div className="sidebar-menu__inner">
             <span className="sidebar-menu__close d-lg-none d-block" onClick={() => setIsSidebarMobileOpen(false)}>
