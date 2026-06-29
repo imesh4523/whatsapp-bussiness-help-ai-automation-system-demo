@@ -33,6 +33,12 @@ db.query(`
   ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 `).then(() => {
   console.log('PostgreSQL database users table migration succeeded (reset columns checked).');
+  // Update old password reset template in DB to remove raw link text
+  db.query(`
+    UPDATE email_templates 
+    SET body = 'Hello {{fullName}},\n\nYou requested a password reset. To confirm it''s you, please use the button below to reset your password.\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
+    WHERE key = 'reset_password' AND body LIKE '%following link%';
+  `).catch(err => console.warn('Reset template DB migration check failed:', err.message));
 }).catch(err => {
   console.warn('Optional users table migration check warning:', err.message);
 });

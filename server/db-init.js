@@ -347,7 +347,7 @@ async function init() {
         {
           key: 'reset_password',
           subject: 'Reset Your Password',
-          body: 'Hello {{fullName}},\n\nYou requested a password reset. Please use the following link to reset your password:\n\n{{resetLink}}\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
+          body: 'Hello {{fullName}},\n\nYou requested a password reset. To confirm it\'s you, please use the button below to reset your password.\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
         }
       ];
       for (const t of defaultTemplates) {

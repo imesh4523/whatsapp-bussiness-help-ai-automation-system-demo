@@ -111,17 +111,17 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
       ctaLink = `${baseUrl}/user/dashboard`;
       subFeatures = [
         {
-          emoji: '🚀',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/rocket.png',
           title: 'Getting Started',
           desc: 'Add your first WhatsApp session in the dashboard and start sending automated replies instantly.'
         },
         {
-          emoji: '🤖',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/chat.png',
           title: 'AI Chatbots',
           desc: 'Train your custom AI assistants with your store data using top models like Gemini 1.5.'
         },
         {
-          emoji: '💬',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/help.png',
           title: 'Need support?',
           desc: 'Our customer success agents are available around the clock. Contact us anytime.'
         }
@@ -132,12 +132,12 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
       ctaLink = variables.resetLink || `${baseUrl}/user/dashboard`;
       subFeatures = [
         {
-          emoji: '🔒',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/lock.png',
           title: 'Secure Link',
           desc: 'This password reset link is valid for 1 hour. Never share it with anyone.'
         },
         {
-          emoji: '⚠️',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/warning-shield.png',
           title: 'Didn\'t request this?',
           desc: 'If you did not request a password reset, you can safely ignore this email. Your account remains secure.'
         }
@@ -148,12 +148,12 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
       ctaLink = `${baseUrl}/user/dashboard`;
       subFeatures = [
         {
-          emoji: '💳',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/wallet.png',
           title: 'Transaction Details',
           desc: `Plan: ${variables.planName || 'Premium'} • Amount: ${variables.amount || 'LKR 0.00'} • Billing: ${variables.billingCycle || 'Monthly'}`
         },
         {
-          emoji: '📄',
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/document.png',
           title: 'Invoice History',
           desc: 'You can download the full PDF invoice history directly from your Billing dashboard.'
         }
@@ -175,9 +175,9 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         <!-- Logo -->
         <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
           <tr>
-            <td align="center" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <span style="display: inline-block; background-color: #00d166; border-radius: 50%; width: 36px; height: 36px; line-height: 36px; text-align: center; font-size: 20px;">🐰</span>
-              <span style="font-size: 22px; font-weight: 800; color: #111827; letter-spacing: -0.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">agent<span style="color: #00d166;">bunny</span></span>
+            <td align="center" style="vertical-align: middle;">
+              <img src="https://${domain}/agentbunny-logo.png" width="36" height="36" style="width: 36px; height: 36px; vertical-align: middle; border-radius: 50%; display: inline-block; margin-right: 8px; border: 0;" />
+              <span style="font-size: 22px; font-weight: 800; color: #111827; letter-spacing: -0.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; vertical-align: middle; display: inline-block; line-height: 36px;">agent<span style="color: #00d166;">bunny</span></span>
             </td>
           </tr>
         </table>
@@ -208,11 +208,15 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
                 ${subFeatures.map(feat => `
                 <tr>
                   <td style="vertical-align: top; width: 44px; padding-bottom: 20px;">
-                    <div style="background-color: #f0fdf4; border-radius: 12px; width: 34px; height: 34px; line-height: 34px; text-align: center; font-size: 16px;">
-                      ${feat.emoji}
-                    </div>
+                    <table border="0" cellpadding="0" cellspacing="0" style="background-color: #f0fdf4; border-radius: 12px; width: 36px; height: 36px;">
+                      <tr>
+                        <td align="center" style="vertical-align: middle; height: 36px; width: 36px; padding: 0;">
+                          <img src="${feat.iconUrl}" width="20" height="20" style="width: 20px; height: 20px; display: block; margin: 0 auto; border: 0;" />
+                        </td>
+                      </tr>
+                    </table>
                   </td>
-                  <td style="vertical-align: top; padding-bottom: 20px; padding-left: 2px;">
+                  <td style="vertical-align: top; padding-bottom: 20px; padding-left: 8px;">
                     <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin: 0 0 4px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${feat.title}</h4>
                     <p style="font-size: 13px; line-height: 1.5; color: #64748b; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${feat.desc}</p>
                   </td>
