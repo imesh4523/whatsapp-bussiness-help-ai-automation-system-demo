@@ -3,7 +3,7 @@ import db from './db.js';
 /**
  * Send a generic HTML email using the Resend email provider configured in settings
  */
-export async function sendGenericEmail(toEmail, subject, htmlContent, textContent = '', isCampaign = false) {
+export async function sendGenericEmail(toEmail, subject, htmlContent, textContent = '', isCampaign = false, attachments = []) {
   try {
     // Fetch settings from database
     const serviceRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_service'");
@@ -46,20 +46,26 @@ export async function sendGenericEmail(toEmail, subject, htmlContent, textConten
 
     console.log(`[Email Service] Sending email to ${toEmail} via Resend...`);
 
+    const requestBody = {
+      from: fromEmail,
+      to: [toEmail],
+      subject: subject,
+      html: htmlContent,
+      text: textFallback,
+      headers: customHeaders
+    };
+
+    if (attachments && attachments.length > 0) {
+      requestBody.attachments = attachments;
+    }
+
     const res = await fetch("https://api.resend.com/emails", {
       method: 'POST',
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [toEmail],
-        subject: subject,
-        html: htmlContent,
-        text: textFallback,
-        headers: customHeaders
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const data = await res.json();
@@ -115,6 +121,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
     let ctaText = '';
     let ctaLink = '';
     let subFeatures = [];
+    let attachments = [];
 
     const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
     const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agent-bunny.com';
@@ -158,9 +165,33 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         }
       ];
     } else if (key === 'invoice') {
-      title = 'Payment Successful ✅';
+      title = 'Payment Successful';
       ctaText = 'Manage Subscription';
       ctaLink = `${baseUrl}/user/dashboard`;
+
+      const brand = (variables.cardBrand || 'visa').toLowerCase();
+      const last4 = variables.cardLast4 || '4242';
+
+      let cardIcon = 'https://img.icons8.com/color/96/visa.png';
+      let brandName = 'Visa';
+
+      if (brand === 'mastercard') {
+        cardIcon = 'https://img.icons8.com/color/96/mastercard.png';
+        brandName = 'Mastercard';
+      } else if (brand === 'amex' || brand === 'american express') {
+        cardIcon = 'https://img.icons8.com/color/96/amex.png';
+        brandName = 'Amex';
+      } else if (brand === 'discover') {
+        cardIcon = 'https://img.icons8.com/color/96/discover.png';
+        brandName = 'Discover';
+      } else if (brand === 'diners' || brand === 'diners club') {
+        cardIcon = 'https://img.icons8.com/color/96/diners-club.png';
+        brandName = 'Diners Club';
+      } else if (brand === 'jcb') {
+        cardIcon = 'https://img.icons8.com/color/96/jcb.png';
+        brandName = 'JCB';
+      }
+
       subFeatures = [
         {
           iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/wallet.png',
@@ -168,11 +199,35 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
           desc: `Plan: ${variables.planName || 'Premium'} • Amount: ${variables.amount || 'LKR 0.00'} • Billing: ${variables.billingCycle || 'Monthly'}`
         },
         {
+          iconUrl: cardIcon,
+          title: 'Payment Method',
+          desc: `${brandName} ending in •••• ${last4}`,
+          isBrandIcon: true
+        },
+        {
           iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/document.png',
-          title: 'Invoice History',
-          desc: 'You can download the full PDF invoice history directly from your Billing dashboard.'
+          title: 'Invoice Attachment',
+          desc: 'A copy of your official PDF invoice has been attached to this email for your records.'
         }
       ];
+
+      try {
+        const { generateInvoicePdf } = await import('./invoice-generator.js');
+        const pdfBuffer = await generateInvoicePdf({
+          fullName: variables.fullName || 'Valued Customer',
+          email: toEmail,
+          planName: variables.planName || 'Premium Plan',
+          amount: variables.amount || 'LKR 0.00',
+          billingCycle: variables.billingCycle || 'Monthly'
+        });
+
+        attachments.push({
+          content: pdfBuffer.toString('base64'),
+          filename: `invoice_${Date.now()}.pdf`
+        });
+      } catch (pdfErr) {
+        console.error('[Email Service] Failed to generate invoice PDF attachment:', pdfErr.message);
+      }
     }
 
     const htmlContent = `
@@ -201,7 +256,10 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 24px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); border: 1px solid #f1f5f9; padding: 40px 32px;">
           <tr>
             <td>
-              <h2 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 16px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; letter-spacing: -0.5px;">${title}</h2>
+              <h2 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 16px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; letter-spacing: -0.5px; display: flex; align-items: center; justify-content: center;">
+                ${title}
+                ${key === 'invoice' ? `<img src="https://img.icons8.com/color/96/verified-badge.png" width="22" height="22" style="width: 22px; height: 22px; vertical-align: middle; display: inline-block; margin-left: 6px; border: 0;" />` : ''}
+              </h2>
               <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 28px 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${mainDescription.replace(/\n/g, '<br />')}</p>
 
               ${ctaText && ctaLink ? `
@@ -227,10 +285,10 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
                 ${subFeatures.map(feat => `
                 <tr>
                   <td style="vertical-align: top; width: 44px; padding-bottom: 20px;">
-                    <table border="0" cellpadding="0" cellspacing="0" style="background-color: #f0fdf4; border-radius: 12px; width: 36px; height: 36px;">
+                    <table border="0" cellpadding="0" cellspacing="0" style="background-color: ${feat.isBrandIcon ? '#f8fafc' : '#f0fdf4'}; border-radius: 12px; width: 36px; height: 36px;">
                       <tr>
                         <td align="center" style="vertical-align: middle; height: 36px; width: 36px; padding: 0;">
-                          <img src="${feat.iconUrl}" width="20" height="20" style="width: 20px; height: 20px; display: block; margin: 0 auto; border: 0;" />
+                          <img src="${feat.iconUrl}" width="${feat.isBrandIcon ? '24' : '20'}" height="${feat.isBrandIcon ? '24' : '20'}" style="width: ${feat.isBrandIcon ? '24px' : '20px'}; height: ${feat.isBrandIcon ? '24px' : '20px'}; display: block; margin: 0 auto; border: 0;" />
                         </td>
                       </tr>
                     </table>
@@ -263,7 +321,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
 </html>
     `;
 
-    const success = await sendGenericEmail(toEmail, subject, htmlContent);
+    const success = await sendGenericEmail(toEmail, subject, htmlContent, '', false, attachments);
     return success;
   } catch (err) {
     console.error(`[Email Service] sendTemplatedEmail failed for key: ${key}`, err.message);

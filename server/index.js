@@ -2271,6 +2271,8 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
         testVariables.planName = 'Enterprise AI Plan';
         testVariables.amount = 'LKR 14,990.00';
         testVariables.billingCycle = 'Monthly';
+        testVariables.cardBrand = 'mastercard';
+        testVariables.cardLast4 = '9876';
       }
       
       const success = await sendTemplatedEmail(toEmail, templateKey, testVariables);
@@ -2921,10 +2923,15 @@ app.post('/api/payments/confirm-session', authenticateToken, async (req, res) =>
     if (transaction.status === 'Pending') {
       let cycle = billingCycle || 'Monthly';
       
+      let cardBrand = 'visa';
+      let cardLast4 = '4242';
+
       if (sessionId && !sessionId.startsWith('cs_test_')) {
         try {
           const stripe = await getDynamicStripe();
-          const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+          const stripeSession = await stripe.checkout.sessions.retrieve(sessionId, {
+            expand: ['payment_intent', 'payment_intent.payment_method']
+          });
           
           if (!stripeSession || stripeSession.payment_status !== 'paid') {
             return res.status(400).json({ error: 'Payment has not been completed or verified by Stripe.' });
@@ -2932,6 +2939,11 @@ app.post('/api/payments/confirm-session', authenticateToken, async (req, res) =>
           
           if (stripeSession.metadata && stripeSession.metadata.billingCycle) {
             cycle = stripeSession.metadata.billingCycle;
+          }
+
+          if (stripeSession.payment_intent && typeof stripeSession.payment_intent === 'object' && stripeSession.payment_intent.payment_method && stripeSession.payment_intent.payment_method.card) {
+            cardBrand = stripeSession.payment_intent.payment_method.card.brand || 'visa';
+            cardLast4 = stripeSession.payment_intent.payment_method.card.last4 || '4242';
           }
         } catch (stripeErr) {
           console.error('Stripe session verification failed:', stripeErr.message);
@@ -2963,7 +2975,9 @@ app.post('/api/payments/confirm-session', authenticateToken, async (req, res) =>
           fullName: userData.full_name,
           planName: transaction.plan,
           amount: `${transaction.currency} ${parseFloat(transaction.amount).toFixed(2)}`,
-          billingCycle: cycle
+          billingCycle: cycle,
+          cardBrand: cardBrand,
+          cardLast4: cardLast4
         }).catch(err => {
           console.error('[Invoice Email Error]:', err.message);
         });
@@ -3229,12 +3243,33 @@ app.post('/api/payments/webhook', async (req, res) => {
         const userQuery = await db.query('SELECT email, full_name FROM users WHERE id = $1', [userId]);
         if (userQuery.rows.length > 0) {
           const user = userQuery.rows[0];
+
+          // Fetch card details dynamically from Stripe session payment intent
+          let cardBrand = 'visa';
+          let cardLast4 = '4242';
+          
+          if (session.payment_intent && typeof session.payment_intent === 'string' && stripeInstance) {
+            try {
+              const paymentIntent = await stripeInstance.paymentIntents.retrieve(session.payment_intent, {
+                expand: ['payment_method']
+              });
+              if (paymentIntent.payment_method && typeof paymentIntent.payment_method === 'object' && paymentIntent.payment_method.card) {
+                cardBrand = paymentIntent.payment_method.card.brand || 'visa';
+                cardLast4 = paymentIntent.payment_method.card.last4 || '4242';
+              }
+            } catch (err) {
+              console.error('[Stripe Webhook] Failed to retrieve card details:', err.message);
+            }
+          }
+
           import('./email-service.js').then(({ sendTemplatedEmail }) => {
             sendTemplatedEmail(user.email, 'invoice', {
               fullName: user.full_name,
               planName: plan,
               amount: `${currency} ${amount.toFixed(2)}`,
-              billingCycle: cycle
+              billingCycle: cycle,
+              cardBrand: cardBrand,
+              cardLast4: cardLast4
             }).catch(err => {
               console.error('[Webhook Invoice Email Error]:', err.message);
             });
