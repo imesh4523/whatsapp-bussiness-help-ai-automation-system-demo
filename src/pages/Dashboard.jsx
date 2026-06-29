@@ -4003,7 +4003,7 @@ function Dashboard({ user, setUser, onLogout }) {
       '.dashboard .sidebar-menu:hover .sidebar-logo__link::after{display:none!important;}',
       '.dashboard .sidebar-menu:hover .sidebar-menu-list__item.has-dropdown>.sidebar-menu-list__link::after{display:block!important;}',
       // High-performance mobile viewport locks to prevent horizontal side-swipes and sidebar wiggling
-      '@media(max-width:991px){html,body{overflow-x:hidden!important;position:relative!important;width:100%!important;}.sidebar-menu{position:fixed!important;top:0!important;bottom:0!important;left:-280px!important;width:280px!important;height:100%!important;z-index:9999!important;transition:left 0.3s cubic-bezier(0.4,0,0.2,1)!important;overflow-y:auto!important;box-shadow:0 0 20px rgba(0,0,0,0.15)!important;}.sidebar-menu.show-sidebar{left:0!important;}}',
+      '@media(max-width:991px){html,body{overflow-x:hidden!important;position:relative!important;width:100%!important;}.sidebar-menu{position:fixed!important;top:0!important;bottom:0!important;left:-280px!important;width:280px!important;height:100%!important;z-index:10005!important;transition:left 0.3s cubic-bezier(0.4,0,0.2,1)!important;overflow-y:auto!important;box-shadow:0 0 20px rgba(0,0,0,0.15)!important;}.sidebar-menu.show-sidebar{left:0!important;}}',
       // Inbox whatsapp-empty-screen
       '.whatsapp-empty-screen{position:relative;min-height:calc(100vh - 140px);display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(circle at top left,rgba(0,122,109,.08),transparent 32%),radial-gradient(circle at bottom right,rgba(37,211,102,.10),transparent 28%),linear-gradient(180deg,#f7faf9 0%,#f3f6f5 100%);padding:32px 18px;}',
       '.whatsapp-empty-screen__backdrop,.whatsapp-empty-screen__glow{position:absolute;border-radius:999px;pointer-events:none;}',
@@ -4970,10 +4970,8 @@ function Dashboard({ user, setUser, onLogout }) {
               left: 0,
               width: '100vw',
               height: '100vh',
-              backgroundColor: 'rgba(0,0,0,0.4)',
-              zIndex: 9998,
-              backdropFilter: 'blur(2px)',
-              WebkitBackdropFilter: 'blur(2px)'
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 998 // Ensure it sits below zIndex 10005 of sidebar
             }}
           />
         )}
