@@ -3968,6 +3968,20 @@ function Dashboard({ user, setUser, onLogout }) {
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [prevTab, setPrevTab] = useState(() => getTabFromPath(window.location.pathname));
+  const [isMarketingToolsOpen, setIsMarketingToolsOpen] = useState(() => {
+    const activeTab = getTabFromPath(window.location.pathname);
+    return [
+      'contact_list', 'contact_tag_list', 'contactlist_list',
+      'saved_reply_index', 'saved_reply_create',
+      'template_create', 'template_create_carousel', 'template_index',
+      'campaign_create', 'campaign_index',
+      'automation_welcome_message', 'flow_builder', 'automation_ai_bot',
+      'shortlink_create', 'shortlink_index',
+      'floater_create', 'floater_index',
+      'cta_url_create', 'cta_url_index',
+      'interactive_list_create', 'interactive_list_index'
+    ].includes(activeTab);
+  });
   const containerRef = useRef(null);
 
   // ── 1. Load AgentBunny CSS & JS assets once on mount ──────────────────────
@@ -4715,6 +4729,7 @@ function Dashboard({ user, setUser, onLogout }) {
                           e.target.closest('.sidebar-submenu-list__link') || 
                           e.target.closest('.sidebar-logo__link') || 
                           e.target.closest('.sidebar-menu__close') ||
+                          e.target.closest('.sidebar-menu-list__title') ||
                           e.target.closest('.custom-sidebar-overlay-unique');
       if (sidebarLink) {
         e.preventDefault();
@@ -5033,165 +5048,186 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
               </li>
 
-              <li className="sidebar-menu-list__title"><span className="text">MARKETING TOOLS</span></li>
-
-              {/* Contacts dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['contacts'] || ['contact_list', 'contact_tag_list', 'contactlist_list'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('contacts'); }}>
-                  <span className="icon"><i className="las la-id-card" /></span>
-                  <span className="text">Manage Contacts</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['contacts'] || ['contact_list', 'contact_tag_list', 'contactlist_list'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'contact_list' ? 'active' : ''}`}><a href="/user/contact/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contacts</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'contact_tag_list' ? 'active' : ''}`}><a href="/user/contact-tag/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_tag_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contact Tag</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'contactlist_list' ? 'active' : ''}`}><a href="/user/contactlist/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contactlist_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contact List</span></a></li>
-                  </ul>
-                </div>
+              <li 
+                className="sidebar-menu-list__title" 
+                style={{
+                  borderTop: '1.5px solid rgba(255, 255, 255, 0.08)',
+                  paddingTop: '16px',
+                  marginTop: '12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingRight: '20px',
+                  userSelect: 'none'
+                }} 
+                onClick={() => setIsMarketingToolsOpen(!isMarketingToolsOpen)}
+              >
+                <span className="text">MARKETING TOOLS</span>
+                <i className={`las ${isMarketingToolsOpen ? 'la-angle-up' : 'la-angle-down'}`} style={{ color: '#94a3b8', fontSize: '13px', marginLeft: 'auto' }}></i>
               </li>
 
-              {/* Saved Replies */}
-              <li className={`sidebar-menu-list__item ${tab === 'saved_reply_index' || tab === 'saved_reply_create' ? 'active' : ''}`}>
-                <a href="/user/saved-reply/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('saved_reply_index'); setIsSidebarMobileOpen(false); }}>
-                  <span className="icon"><i className="las la-bolt" /></span>
-                  <span className="text">Saved Replies</span>
-                </a>
-              </li>
+              {isMarketingToolsOpen && (
+                <>
+                  {/* Contacts dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['contacts'] || ['contact_list', 'contact_tag_list', 'contactlist_list'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('contacts'); }}>
+                      <span className="icon"><i className="las la-id-card" /></span>
+                      <span className="text">Manage Contacts</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['contacts'] || ['contact_list', 'contact_tag_list', 'contactlist_list'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'contact_list' ? 'active' : ''}`}><a href="/user/contact/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contacts</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'contact_tag_list' ? 'active' : ''}`}><a href="/user/contact-tag/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contact_tag_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contact Tag</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'contactlist_list' ? 'active' : ''}`}><a href="/user/contactlist/list" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('contactlist_list'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Contact List</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* Templates dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['templates'] || ['template_create', 'template_create_carousel', 'template_index'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('templates'); }}>
-                  <span className="icon"><i className="las la-envelope" /></span>
-                  <span className="text">Manage Templates</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['templates'] || ['template_create', 'template_create_carousel', 'template_index'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'template_create' ? 'active' : ''}`}><a href="/user/template/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create'); setIsSidebarMobileOpen(false); }}><span className="text">New Template</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'template_create_carousel' ? 'active' : ''}`}><a href="/user/template/create/carousel" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create_carousel'); setIsSidebarMobileOpen(false); }}><span className="text">Carousel Template</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'template_index' ? 'active' : ''}`}><a href="/user/template/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_index'); setIsSidebarMobileOpen(false); }}><span className="text">All Template</span></a></li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Saved Replies */}
+                  <li className={`sidebar-menu-list__item ${tab === 'saved_reply_index' || tab === 'saved_reply_create' ? 'active' : ''}`}>
+                    <a href="/user/saved-reply/index" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('saved_reply_index'); setIsSidebarMobileOpen(false); }}>
+                      <span className="icon"><i className="las la-bolt" /></span>
+                      <span className="text">Saved Replies</span>
+                    </a>
+                  </li>
 
-              {/* Campaigns dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['campaigns'] || tab.startsWith('campaign_') ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('campaigns'); }}>
-                  <span className="icon"><i className="las la-bullhorn" /></span>
-                  <span className="text">Manage Campaigns</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['campaigns'] || tab.startsWith('campaign_')) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'campaign_create' ? 'active' : ''}`}>
-                      <a href="/user/campaign/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_create'); setIsSidebarMobileOpen(false); }}><span className="text">New Campaign</span></a>
-                    </li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'campaign_index' ? 'active' : ''}`}>
-                      <a href="/user/campaign/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_index'); setIsSidebarMobileOpen(false); }}><span className="text">All Campaign</span></a>
-                    </li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Templates dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['templates'] || ['template_create', 'template_create_carousel', 'template_index'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('templates'); }}>
+                      <span className="icon"><i className="las la-envelope" /></span>
+                      <span className="text">Manage Templates</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['templates'] || ['template_create', 'template_create_carousel', 'template_index'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'template_create' ? 'active' : ''}`}><a href="/user/template/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create'); setIsSidebarMobileOpen(false); }}><span className="text">New Template</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'template_create_carousel' ? 'active' : ''}`}><a href="/user/template/create/carousel" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create_carousel'); setIsSidebarMobileOpen(false); }}><span className="text">Carousel Template</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'template_index' ? 'active' : ''}`}><a href="/user/template/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_index'); setIsSidebarMobileOpen(false); }}><span className="text">All Template</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* Manage Automation dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['automation'] || ['automation_welcome_message', 'flow_builder', 'automation_ai_bot'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('automation'); }}>
-                  <span className="icon"><i className="las la-envelope" /></span>
-                  <span className="text">Manage Automation</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['automation'] || ['automation_welcome_message', 'flow_builder', 'automation_ai_bot'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'automation_welcome_message' ? 'active' : ''}`}><a href="/user/automation/welcome-message" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_welcome_message'); setIsSidebarMobileOpen(false); }}><span className="text">Welcome Message</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'flow_builder' ? 'active' : ''}`}><a href="/user/flow-builder" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('flow_builder'); setIsSidebarMobileOpen(false); }}><span className="text">Flow Builder</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'automation_ai_bot' ? 'active' : ''}`}><a href="/user/automation/ai-bot" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_ai_bot'); setIsSidebarMobileOpen(false); }}><span className="text">AI Bots</span></a></li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Campaigns dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['campaigns'] || tab.startsWith('campaign_') ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('campaigns'); }}>
+                      <span className="icon"><i className="las la-bullhorn" /></span>
+                      <span className="text">Manage Campaigns</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['campaigns'] || tab.startsWith('campaign_')) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'campaign_create' ? 'active' : ''}`}>
+                          <a href="/user/campaign/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_create'); setIsSidebarMobileOpen(false); }}><span className="text">New Campaign</span></a>
+                        </li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'campaign_index' ? 'active' : ''}`}>
+                          <a href="/user/campaign/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('campaign_index'); setIsSidebarMobileOpen(false); }}><span className="text">All Campaign</span></a>
+                        </li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* Manage ShortLink dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['shortlink'] || ['shortlink_create', 'shortlink_index'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('shortlink'); }}>
-                  <span className="icon"><i className="las la-link" /></span>
-                  <span className="text">Manage ShortLink</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['shortlink'] || ['shortlink_create', 'shortlink_index'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'shortlink_create' ? 'active' : ''}`}><a href="/user/shortlink/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create ShortLink</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'shortlink_index' ? 'active' : ''}`}><a href="/user/shortlink/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_index'); setIsSidebarMobileOpen(false); }}><span className="text">Manage ShortLink</span></a></li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Manage Automation dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['automation'] || ['automation_welcome_message', 'flow_builder', 'automation_ai_bot'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('automation'); }}>
+                      <span className="icon"><i className="las la-envelope" /></span>
+                      <span className="text">Manage Automation</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['automation'] || ['automation_welcome_message', 'flow_builder', 'automation_ai_bot'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'automation_welcome_message' ? 'active' : ''}`}><a href="/user/automation/welcome-message" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_welcome_message'); setIsSidebarMobileOpen(false); }}><span className="text">Welcome Message</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'flow_builder' ? 'active' : ''}`}><a href="/user/flow-builder" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('flow_builder'); setIsSidebarMobileOpen(false); }}><span className="text">Flow Builder</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'automation_ai_bot' ? 'active' : ''}`}><a href="/user/automation/ai-bot" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('automation_ai_bot'); setIsSidebarMobileOpen(false); }}><span className="text">AI Bots</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* Manage Floaters dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['floaters'] || ['floater_create', 'floater_index'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('floaters'); }}>
-                  <span className="icon"><i className="lab la-whatsapp" /></span>
-                  <span className="text">Manage Floaters</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['floaters'] || ['floater_create', 'floater_index'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'floater_create' ? 'active' : ''}`}><a href="/user/floater/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create Floater</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'floater_index' ? 'active' : ''}`}><a href="/user/floater/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_index'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Floater</span></a></li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Manage ShortLink dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['shortlink'] || ['shortlink_create', 'shortlink_index'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('shortlink'); }}>
+                      <span className="icon"><i className="las la-link" /></span>
+                      <span className="text">Manage ShortLink</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['shortlink'] || ['shortlink_create', 'shortlink_index'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'shortlink_create' ? 'active' : ''}`}><a href="/user/shortlink/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create ShortLink</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'shortlink_index' ? 'active' : ''}`}><a href="/user/shortlink/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('shortlink_index'); setIsSidebarMobileOpen(false); }}><span className="text">Manage ShortLink</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* Manage CTA URL dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['cta'] || ['cta_url_create', 'cta_url_index'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('cta'); }}>
-                  <span className="icon"><i className="las la-paperclip" /></span>
-                  <span className="text">Manage CTA URL</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['cta'] || ['cta_url_create', 'cta_url_index'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'cta_url_create' ? 'active' : ''}`}><a href="/user/cta-url/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create URL</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'cta_url_index' ? 'active' : ''}`}><a href="/user/cta-url/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_index'); setIsSidebarMobileOpen(false); }}><span className="text">CTA URl List</span></a></li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Manage Floaters dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['floaters'] || ['floater_create', 'floater_index'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('floaters'); }}>
+                      <span className="icon"><i className="lab la-whatsapp" /></span>
+                      <span className="text">Manage Floaters</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['floaters'] || ['floater_create', 'floater_index'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'floater_create' ? 'active' : ''}`}><a href="/user/floater/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create Floater</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'floater_index' ? 'active' : ''}`}><a href="/user/floater/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('floater_index'); setIsSidebarMobileOpen(false); }}><span className="text">Manage Floater</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* Manage Interactive List dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['interactive'] || ['interactive_list_create', 'interactive_list_index'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('interactive'); }}>
-                  <span className="icon"><i className="las la-list" /></span>
-                  <span className="text">Manage Interactive List</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['interactive'] || ['interactive_list_create', 'interactive_list_index'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_create' ? 'active' : ''}`}><a href="/user/interactive-list/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create List</span></a></li>
-                    <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_index' ? 'active' : ''}`}><a href="/user/interactive-list/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_index'); setIsSidebarMobileOpen(false); }}><span className="text">Interactive List</span></a></li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Manage CTA URL dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['cta'] || ['cta_url_create', 'cta_url_index'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('cta'); }}>
+                      <span className="icon"><i className="las la-paperclip" /></span>
+                      <span className="text">Manage CTA URL</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['cta'] || ['cta_url_create', 'cta_url_index'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'cta_url_create' ? 'active' : ''}`}><a href="/user/cta-url/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create URL</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'cta_url_index' ? 'active' : ''}`}><a href="/user/cta-url/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('cta_url_index'); setIsSidebarMobileOpen(false); }}><span className="text">CTA URl List</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
 
-              {/* E-Commerce dropdown */}
-              <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['ecommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab) ? 'open' : ''}`}>
-                <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('ecommerce'); }}>
-                  <span className="icon"><i className="las la-shopping-cart" /></span>
-                  <span className="text">E-Commerce</span>
-                </a>
-                <div className="sidebar-submenu" style={{ display: (openDropdowns['ecommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab)) ? 'block' : 'none' }}>
-                  <ul className="sidebar-submenu-list">
-                    <li className={`sidebar-submenu-list__item has-dropdown ${openDropdowns['woocommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab) ? 'open' : ''}`}>
-                      <a href="#" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('woocommerce'); }}>
-                        <span className="text">Woo-Commerce</span>
-                      </a>
-                      <div className="sidebar-submenu" style={{ display: (openDropdowns['woocommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab)) ? 'block' : 'none', paddingLeft: '12px' }}>
-                        <ul className="sidebar-submenu-list">
-                          <li className={`sidebar-submenu-list__item ${tab === 'ecommerce_woocommerce_products' ? 'active' : ''}`}>
-                            <a href="/user/ecommerce/woo-commerce/products" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_products'); setIsSidebarMobileOpen(false); }}>
-                              <span className="text">Products</span>
-                            </a>
-                          </li>
-                          <li className={`sidebar-submenu-list__item ${tab === 'ecommerce_woocommerce_config' ? 'active' : ''}`}>
-                            <a href="/user/ecommerce/woo-commerce/config" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_config'); setIsSidebarMobileOpen(false); }}>
-                              <span className="text">Config</span>
-                            </a>
-                          </li>
-                        </ul>
-                      </div>
-                    </li>
-                  </ul>
-                </div>
-              </li>
+                  {/* Manage Interactive List dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['interactive'] || ['interactive_list_create', 'interactive_list_index'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('interactive'); }}>
+                      <span className="icon"><i className="las la-list" /></span>
+                      <span className="text">Manage Interactive List</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['interactive'] || ['interactive_list_create', 'interactive_list_index'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_create' ? 'active' : ''}`}><a href="/user/interactive-list/create" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_create'); setIsSidebarMobileOpen(false); }}><span className="text">Create List</span></a></li>
+                        <li className={`sidebar-submenu-list__item ${tab === 'interactive_list_index' ? 'active' : ''}`}><a href="/user/interactive-list/index" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('interactive_list_index'); setIsSidebarMobileOpen(false); }}><span className="text">Interactive List</span></a></li>
+                      </ul>
+                    </div>
+                  </li>
+
+                  {/* E-Commerce dropdown */}
+                  <li className={`sidebar-menu-list__item has-dropdown ${openDropdowns['ecommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab) ? 'open' : ''}`}>
+                    <a href="#" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('ecommerce'); }}>
+                      <span className="icon"><i className="las la-shopping-cart" /></span>
+                      <span className="text">E-Commerce</span>
+                    </a>
+                    <div className="sidebar-submenu" style={{ display: (openDropdowns['ecommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab)) ? 'block' : 'none' }}>
+                      <ul className="sidebar-submenu-list">
+                        <li className={`sidebar-submenu-list__item has-dropdown ${openDropdowns['woocommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab) ? 'open' : ''}`}>
+                          <a href="#" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); toggleDropdown('woocommerce'); }}>
+                            <span className="text">Woo-Commerce</span>
+                          </a>
+                          <div className="sidebar-submenu" style={{ display: (openDropdowns['woocommerce'] || ['ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'].includes(tab)) ? 'block' : 'none', paddingLeft: '12px' }}>
+                            <ul className="sidebar-submenu-list">
+                              <li className={`sidebar-submenu-list__item ${tab === 'ecommerce_woocommerce_products' ? 'active' : ''}`}>
+                                <a href="/user/ecommerce/woo-commerce/products" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_products'); setIsSidebarMobileOpen(false); }}>
+                                  <span className="text">Products</span>
+                                </a>
+                              </li>
+                              <li className={`sidebar-submenu-list__item ${tab === 'ecommerce_woocommerce_config' ? 'active' : ''}`}>
+                                <a href="/user/ecommerce/woo-commerce/config" className="sidebar-submenu-list__link" onClick={(e) => { e.preventDefault(); setTab('ecommerce_woocommerce_config'); setIsSidebarMobileOpen(false); }}>
+                                  <span className="text">Config</span>
+                                </a>
+                              </li>
+                            </ul>
+                          </div>
+                        </li>
+                      </ul>
+                    </div>
+                  </li>
+                </>
+              )}
 
               <li className="sidebar-menu-list__title"><span className="text">FINANCE</span></li>
 
