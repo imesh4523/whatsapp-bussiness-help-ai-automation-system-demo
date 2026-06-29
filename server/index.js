@@ -282,7 +282,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     // Fetch system domain name
     const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
-    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agent-bunny.com';
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'www.agent-bunny.com';
     const baseUrl = `https://${domain}`;
 
     // Construct reset link
@@ -2266,7 +2266,7 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
     }
 
     const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
-    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agent-bunny.com';
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'www.agent-bunny.com';
 
     // If a template key is specified, send the templated brand email
     if (templateKey && ['welcome', 'reset_password', 'invoice'].includes(templateKey)) {

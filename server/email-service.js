@@ -124,7 +124,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
     let attachments = [];
 
     const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
-    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agent-bunny.com';
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'www.agent-bunny.com';
     const baseUrl = `https://${domain}`;
 
     if (key === 'welcome') {
