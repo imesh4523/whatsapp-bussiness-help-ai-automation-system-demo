@@ -172,8 +172,11 @@ function App() {
       } else {
         if (path === '/collections') setView('collections');
         else if (path === '/about') setView('about');
+        else if (path === '/terms') setView('terms');
+        else if (path === '/privacy') setView('privacy');
         else if (path === '/account') setView('account');
         else if (path === '/pricing') setView('pricing');
+        else if (path.startsWith('/track-order')) setView('track-order');
         else setView('home');
       }
       // Fetch fresh profile in the background on app load
@@ -211,8 +214,11 @@ function App() {
       } else {
         if (path === '/collections') setView('collections');
         else if (path === '/about') setView('about');
+        else if (path === '/terms') setView('terms');
+        else if (path === '/privacy') setView('privacy');
         else if (path === '/account') setView('account');
         else if (path === '/pricing') setView('pricing');
+        else if (path.startsWith('/track-order')) setView('track-order');
         else setView('home');
       }
     }
@@ -246,8 +252,11 @@ function App() {
         } else {
           if (path === '/collections') setView('collections');
           else if (path === '/about') setView('about');
+          else if (path === '/terms') setView('terms');
+          else if (path === '/privacy') setView('privacy');
           else if (path === '/account') setView('account');
           else if (path === '/pricing') setView('pricing');
+          else if (path.startsWith('/track-order')) setView('track-order');
           else setView('home');
         }
       }
