@@ -106,7 +106,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
     const baseUrl = `https://${domain}`;
 
     if (key === 'welcome') {
-      title = 'Welcome to AgentBunny! 🐰';
+      title = 'Welcome to AgentBunny!';
       ctaText = 'Go to Dashboard';
       ctaLink = `${baseUrl}/user/dashboard`;
       subFeatures = [
@@ -118,7 +118,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         {
           iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/chat.png',
           title: 'AI Chatbots',
-          desc: 'Train your custom AI assistants with your store data using top models like Gemini 1.5.'
+          desc: 'Train your custom AI assistants with your store data using top models like Gemini 3.5 and Claude 3.5.'
         },
         {
           iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/help.png',
@@ -176,7 +176,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
           <tr>
             <td align="center" style="vertical-align: middle;">
-              <img src="https://${domain}/agentbunny-logo.png" width="36" height="36" style="width: 36px; height: 36px; vertical-align: middle; border-radius: 50%; display: inline-block; margin-right: 8px; border: 0;" />
+              <img src="https://img.icons8.com/material-outlined/96/00d166/bunny.png" width="36" height="36" style="width: 36px; height: 36px; vertical-align: middle; display: inline-block; margin-right: 8px; border: 0;" />
               <span style="font-size: 22px; font-weight: 800; color: #111827; letter-spacing: -0.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; vertical-align: middle; display: inline-block; line-height: 36px;">agent<span style="color: #00d166;">bunny</span></span>
             </td>
           </tr>
