@@ -5582,47 +5582,113 @@ function Dashboard({ user, setUser, onLogout }) {
                 }} />
               ) : (
                 <div dangerouslySetInnerHTML={{
-                  __html: (currentPage.body || '<h3>Page not found</h3>')
-                    .replace('__USER_PLAN__', user?.plan || 'Free')
-                    .replace('__TRIAL_BUTTON__', (user?.plan === 'Free' || !user?.plan) ? `
-                      <button id="claim-free-trial-btn" class="btn btn-sm" style="
-                        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-                        color: #ffffff;
-                        border: none;
-                        font-size: 9.5px;
-                        font-weight: 700;
-                        padding: 5px 11px;
-                        border-radius: 20px;
-                        box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.6px;
-                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                        animation: pulseGlow 2s infinite ease-in-out;
-                        outline: none;
-                        border-style: none;
-                        margin: 0;
-                      ">
-                        <i class="las la-gift" style="margin: 0; padding: 0; line-height: 1; font-size: 13px;"></i> Free Trial
-                      </button>
-                    ` : '')
-                    .replace('__TOTAL_EARNED__', (stats?.total_earned ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-                    .replace('__TOTAL_DEPOSITS__', (stats?.total_deposits ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-                    .replace('__TOTAL_WITHDRAWALS__', (stats?.total_withdrawals ?? 0).toString())
-                    .replace('__TOTAL_CONTACTS__', (stats?.total_contacts ?? 0).toString())
-                    .replace('__TOTAL_TAGS__', (stats?.total_tags ?? 0).toString())
-                    .replace('__TOTAL_LISTS__', (stats?.total_lists ?? 0).toString())
-                    .replace('__TOTAL_AI_MESSAGES__', (user?.ai_message_count ?? 0).toString())
-                    .replace('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
-                    .replace('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
-                    .replace('__CAMPAIGN_SENT__', (stats?.campaign_sent ?? 0).toString())
-                    .replace('__CAMPAIGN_FAILED__', (stats?.campaign_failed ?? 0).toString())
-                    .replace('__CAMPAIGN_SUCCESS_RATE__', (stats?.campaign_success_rate ?? 0).toString())
-                    .replace('__CAMPAIGN_TOTAL__', (stats?.campaign_total ?? 0).toString())
-                    .replace('__SAVED_CARDS_LIST__', renderSavedCardsHtml())
+                  __html: (() => {
+                    let bodyHtml = currentPage.body || '<h3>Page not found</h3>';
+                    
+                    if (resolvedTab === 'dashboard') {
+                      // Hide the original card on mobile views
+                      bodyHtml = bodyHtml.replace(
+                        'class=\\"dash-v2-card wallet-v2-card bg-animated-green h-100\\"',
+                        'class=\\"dash-v2-card wallet-v2-card bg-animated-green h-100 d-none d-lg-block\\"'
+                      );
+                      
+                      // Prepend the mobile-only card right before the main rows grid container
+                      const mobileWalletCard = `
+                        <!-- Mobile-only Wallet Card (visible only on mobile view) -->
+                        <div class="d-block d-lg-none mb-4">
+                            <div class="dash-v2-card wallet-v2-card bg-animated-green" style="padding: 1.25rem !important; border-radius: 24px;">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <p class="dash-v2-label">Total Earned</p>
+                                        <h2 class="dash-v2-value">රු__TOTAL_EARNED__</h2>
+                                    </div>
+                                    <div class="dash-v2-icon-vibrant shadow-sm">
+                                        <i class="las la-wallet"></i>
+                                    </div>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="efficiency-item">
+                                            <p class="dash-v2-label">Total Deposits</p>
+                                            <p class="fw-bold fs-5">රු__TOTAL_DEPOSITS__</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="efficiency-item">
+                                            <p class="dash-v2-label">Total Successful Orders</p>
+                                            <p class="fw-bold fs-5">__TOTAL_WITHDRAWALS__</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-2.5 pt-2 border-top">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <p class="dash-v2-label mb-1">Current Plan</p>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <h4 class="fw-bold mb-0" style="line-height: 1.2;">__USER_PLAN__</h4>
+                                                <i class="las la-check-circle fs-5 text-success"></i>
+                                            </div>
+                                        </div>
+                                        __TRIAL_BUTTON__
+                                    </div>
+                                    <div class="border-top border-neutral-200/30 mt-3 pt-2">
+                                        <p class="small text-neutral-500 mb-0 d-flex align-items-center gap-1.5" style="font-size: 11px;">
+                                            <i class="las la-clock text-neutral-400"></i> Next Renewal - 4 weeks from now
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                      `;
+                      
+                      bodyHtml = bodyHtml.replace(
+                        '<div class=\\"row gy-4 mb-5\\">',
+                        mobileWalletCard + '<div class=\\"row gy-4 mb-5\\">'
+                      );
+                    }
+                    
+                    return bodyHtml
+                      .replaceAll('__USER_PLAN__', user?.plan || 'Free')
+                      .replaceAll('__TRIAL_BUTTON__', (user?.plan === 'Free' || !user?.plan) ? `
+                        <button id="claim-free-trial-btn" class="btn btn-sm" style="
+                          background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+                          color: #ffffff;
+                          border: none;
+                          font-size: 9.5px;
+                          font-weight: 700;
+                          padding: 5px 11px;
+                          border-radius: 20px;
+                          box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
+                          cursor: pointer;
+                          display: flex;
+                          align-items: center;
+                          gap: 4px;
+                          text-transform: uppercase;
+                          letter-spacing: 0.6px;
+                          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                          animation: pulseGlow 2s infinite ease-in-out;
+                          outline: none;
+                          border-style: none;
+                          margin: 0;
+                        ">
+                          <i class="las la-gift" style="margin: 0; padding: 0; line-height: 1; font-size: 13px;"></i> Free Trial
+                        </button>
+                      ` : '')
+                      .replaceAll('__TOTAL_EARNED__', (stats?.total_earned ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                      .replaceAll('__TOTAL_DEPOSITS__', (stats?.total_deposits ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                      .replaceAll('__TOTAL_WITHDRAWALS__', (stats?.total_withdrawals ?? 0).toString())
+                      .replaceAll('__TOTAL_CONTACTS__', (stats?.total_contacts ?? 0).toString())
+                      .replaceAll('__TOTAL_TAGS__', (stats?.total_tags ?? 0).toString())
+                      .replaceAll('__TOTAL_LISTS__', (stats?.total_lists ?? 0).toString())
+                      .replaceAll('__TOTAL_AI_MESSAGES__', (user?.ai_message_count ?? 0).toString())
+                      .replaceAll('__ACTIVE_FLOWS__', (stats?.active_flows ?? 0).toString())
+                      .replaceAll('__AI_BOTS__', (stats?.ai_bots ?? 0).toString())
+                      .replaceAll('__CAMPAIGN_SENT__', (stats?.campaign_sent ?? 0).toString())
+                      .replaceAll('__CAMPAIGN_FAILED__', (stats?.campaign_failed ?? 0).toString())
+                      .replaceAll('__CAMPAIGN_SUCCESS_RATE__', (stats?.campaign_success_rate ?? 0).toString())
+                      .replaceAll('__CAMPAIGN_TOTAL__', (stats?.campaign_total ?? 0).toString())
+                      .replaceAll('__SAVED_CARDS_LIST__', renderSavedCardsHtml());
+                  })()
                 }} />
               )}
             </div>
