@@ -446,11 +446,24 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
             }
 
             let orderId = null;
-            if (cleanReply.toUpperCase().includes('#PENDING')) {
+            const replyLower = cleanReply.toLowerCase();
+            const isConfirmationMsg = replyLower.includes('#pending') || 
+                                     replyLower.includes('confirm') || 
+                                     replyLower.includes('තහවුරු') || 
+                                     replyLower.includes('deliver') ||
+                                     replyLower.includes('ඇණවුම');
+
+            if (isConfirmationMsg) {
               try {
                 orderId = await checkAndExtractOrderOnTheFly(userId, sessionId, senderPhone, cleanReply);
                 if (orderId) {
-                  cleanReply = cleanReply.replace(/#PENDING/gi, `#${orderId}`);
+                  if (cleanReply.toUpperCase().includes('#PENDING')) {
+                    cleanReply = cleanReply.replace(/#PENDING/gi, `#${orderId}`);
+                  }
+                  const domain = process.env.APP_URL || "https://whatsapp-xcc35.ondigitalocean.app";
+                  const trackingLink = `${domain}/track-order/${orderId}`;
+                  const salutation = cleanReply.includes('මැඩම්') ? 'මැඩම්' : 'සර්';
+                  cleanReply += `\n\n${salutation}, ඔබගේ ඇණවුම track කිරීමට මෙම link එක භාවිතා කරන්න: ${trackingLink}`;
                 }
               } catch (onFlyErr) {
                 console.error('[AUTO-CRM] Failed to extract order on the fly:', onFlyErr.message);

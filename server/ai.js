@@ -241,7 +241,11 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
           if (order.tracking_number) {
             systemPrompt += `\n\n[CUSTOMER ORDER TRACKING INFORMATION]\nOrder ID: ${order.id}\nCourier: ${order.courier_name}\nTracking Number: ${order.tracking_number}\nTracking Status: ${order.tracking_status}\nLast Log Update: ${order.tracking_history && order.tracking_history.length > 0 ? order.tracking_history[order.tracking_history.length - 1].details : 'In Transit'}\nLocation: ${order.tracking_history && order.tracking_history.length > 0 ? order.tracking_history[order.tracking_history.length - 1].location : 'Sorting Depot'}\n\nINSTRUCTIONS: If the customer asks about their delivery status, tracking info, where the parcel is, or status, retrieve these details and reply warmly in a human-like tone in Sinhala or English.`;
           } else {
-            systemPrompt += `\n\n[CUSTOMER ORDER TRACKING INFORMATION]\nOrder ID: ${order.id}\nOrder Status: ${order.status}\nCourier Tracking: Not assigned or dispatched yet.`;
+            systemPrompt += `\n\n[CUSTOMER ORDER TRACKING INFORMATION]\nOrder ID: ${order.id}\nOrder Status: ${order.status}\nCourier Tracking: Not assigned or dispatched yet.
+            
+            CUSTOMER STOREFRONT TRACKING RULE:
+            - If the customer asks for their tracking link, order tracking page, or how to view their order status, and we have a confirmed order, provide them with the storefront tracking page link: https://whatsapp-xcc35.ondigitalocean.app/track-order/${order.id}.
+            - Always give this link if they ask for their tracking page/link!`;
           }
         }
       } catch (trackErr) {
