@@ -153,6 +153,9 @@ function App() {
 
     if (isTrackOrderRoute(path)) {
       setView('track-order');
+    } else if (path.startsWith('/auth/reset-password')) {
+      setView('home');
+      setAuthModal({ isOpen: true, type: 'reset' });
     } else if (savedAdmin && !localStorage.getItem('admin_token')) {
       setAdmin(JSON.parse(savedAdmin));
       setView('admin');
@@ -224,6 +227,9 @@ function App() {
 
       if (isTrackOrderRoute(path)) {
         setView('track-order');
+      } else if (path.startsWith('/auth/reset-password')) {
+        setView('home');
+        setAuthModal({ isOpen: true, type: 'reset' });
       } else if ((savedAdmin || isAdminRoute(path)) && !localStorage.getItem('admin_token')) {
         setView('admin');
         if (savedAdmin) setAdmin(JSON.parse(savedAdmin));

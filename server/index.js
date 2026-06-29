@@ -21,9 +21,21 @@ import {
 } from './wa-manager.js';
 import { queryCourierAPI } from './couriers.js';
 import { callGeminiAPI } from './gemini-client.js';
+import { callOpenRouterAPI, getAIProvider, getOpenRouterModel } from './openrouter-client.js';
+
 
 
 dotenv.config();
+
+// Run dynamic schema migrations for password reset columns
+db.query(`
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255) DEFAULT NULL;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+`).then(() => {
+  console.log('PostgreSQL database users table migration succeeded (reset columns checked).');
+}).catch(err => {
+  console.warn('Optional users table migration check warning:', err.message);
+});
 
 let stripeInstance = null;
 async function getDynamicStripe() {
@@ -157,6 +169,13 @@ app.post('/api/auth/register', async (req, res) => {
     );
     const newUser = userRes.rows[0];
 
+    // Trigger welcome email asynchronously (non-blocking)
+    import('./email-service.js').then(({ sendTemplatedEmail }) => {
+      sendTemplatedEmail(newUser.email, 'welcome', { fullName: newUser.full_name }).catch(err => {
+        console.error('[Welcome Email Error]:', err.message);
+      });
+    }).catch(err => console.error('[Welcome Email Import Error]:', err.message));
+
     // Seed default AI config
     await db.query(
       'INSERT INTO ai_configs (user_id, default_model, temperature, typing_delay, global_ai_active) VALUES ($1, $2, $3, $4, $5)',
@@ -226,6 +245,94 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ── Forgot Password Route ──────────────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  try {
+    const userRes = await db.query('SELECT id, email, full_name FROM users WHERE email = $1', [email]);
+    if (userRes.rows.length === 0) {
+      // For security, don't reveal if email doesn't exist, just send a success message
+      return res.json({ success: true, message: 'If the email exists, a reset link has been sent.' });
+    }
+
+    const user = userRes.rows[0];
+    const { default: crypto } = await import('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour token validity
+
+    // Update user record with token and expiry
+    await db.query(
+      'UPDATE users SET reset_token = $1, reset_token_expires_at = $2 WHERE id = $3',
+      [token, expiresAt, user.id]
+    );
+
+    // Fetch system domain name
+    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agent-bunny.com';
+    const baseUrl = `https://${domain}`;
+
+    // Construct reset link
+    const resetLink = `${baseUrl}/auth/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+
+    // Send reset password email via resend service (templated)
+    const { sendTemplatedEmail } = await import('./email-service.js');
+    await sendTemplatedEmail(user.email, 'reset_password', {
+      fullName: user.full_name,
+      resetLink: resetLink
+    });
+
+    res.json({ success: true, message: 'Reset link has been sent to your email.' });
+  } catch (err) {
+    console.error('[Forgot Password Route Error]:', err.message);
+    res.status(500).json({ error: 'Failed to process forgot password request.' });
+  }
+});
+
+// ── Reset Password Route ────────────────────────────────────────────────────
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, token, password } = req.body;
+  if (!email || !token || !password) {
+    return res.status(400).json({ error: 'Missing email, token or password.' });
+  }
+
+  try {
+    const userRes = await db.query(
+      'SELECT id, reset_token, reset_token_expires_at FROM users WHERE email = $1',
+      [email]
+    );
+    if (userRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid request or expired token.' });
+    }
+
+    const user = userRes.rows[0];
+    if (!user.reset_token || user.reset_token !== token) {
+      return res.status(400).json({ error: 'Invalid or incorrect reset token.' });
+    }
+
+    const now = new Date();
+    if (new Date(user.reset_token_expires_at) < now) {
+      return res.status(400).json({ error: 'Reset link has expired.' });
+    }
+
+    // Hash the new password and save it
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.query(
+      'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = $2',
+      [passwordHash, user.id]
+    );
+
+    res.json({ success: true, message: 'Password has been reset successfully.' });
+  } catch (err) {
+    console.error('[Reset Password Route Error]:', err.message);
+    res.status(500).json({ error: 'Failed to reset password.' });
   }
 });
 
@@ -2399,11 +2506,11 @@ Diagnostics identified:
 ${diagnostics.length > 0 ? diagnostics.map((d, i) => `${i+1}. ${d}`).join('\n') : 'No major anomalies or errors detected. The account is healthy!'}
 
 INSTRUCTIONS:
-1. ONLY answer support queries regarding this user's account. Do NOT troubleshoot or analyze details of any other accounts.
-2. If there are active diagnostic items, proactively explain them to the user and outline step-by-step instructions to solve them.
-3. Be friendly, polite, human-like, and professional. Format your response clearly using markdown, bold headers, and numbered lists where appropriate.
-4. Keep the response concise but thorough enough so that the user knows exactly what actions to take.
-5. If the user asks general questions, tie the answers back to how it affects or applies to their specific account state.`;
+1. GREETING BEHAVIOR: If the user message is just a greeting (e.g., "hey", "hello", "hi", "yo", "good morning"), do NOT list the diagnostics or account issues immediately. Instead, politely greet them and ask how you can help them today (e.g., "Hello [User Name]! How can I help you today?").
+2. DETAILED DIAGNOSTICS: Only describe the diagnostic findings and step-by-step solutions if they ask about their account status, errors, why things aren't working, or specify a question/issue about their setup.
+3. AVOID ASTERISKS: Do NOT use the asterisk symbol (*) under any circumstances. Do NOT use it for bullet points (use numbers or dashes instead) and do NOT use it for bold formatting (use plain uppercase text or HTML tag like <b> if needed, but NEVER use ** or *).
+4. ONLY answer support queries regarding this user's account. Do NOT troubleshoot or analyze details of any other accounts.
+5. Be friendly, polite, human-like, and professional.`;
 
     // Map conversation history
     const geminiHistory = [];
@@ -2435,9 +2542,69 @@ INSTRUCTIONS:
       }
     };
 
-    // Call Gemini
-    const data = await callGeminiAPI('gemini-2.0-flash', payload);
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "I am currently unable to analyze your request. Please try again.";
+    const provider = await getAIProvider();
+    let text = "";
+
+    if (provider === 'openrouter') {
+      try {
+        console.log("Support chat using OpenRouter...");
+        const orMessages = [{ role: 'system', content: systemInstruction }];
+        if (Array.isArray(history)) {
+          history.forEach(m => {
+            if (m.sender === 'user' || m.sender === 'bot') {
+              orMessages.push({
+                role: m.sender === 'user' ? 'user' : 'assistant',
+                content: m.text
+              });
+            }
+          });
+        }
+        const lastMsg = orMessages[orMessages.length - 1];
+        if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== message) {
+          orMessages.push({ role: 'user', content: message });
+        }
+        const orModel = await getOpenRouterModel() || 'google/gemini-2.5-flash';
+        const orResult = await callOpenRouterAPI(orModel, orMessages, { temperature: 0.4 });
+        text = orResult.text;
+      } catch (orErr) {
+        console.warn("OpenRouter failed in support chat, falling back to Gemini...", orErr.message);
+        const data = await callGeminiAPI('gemini-3.5-flash', payload);
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      }
+    } else {
+      try {
+        console.log("Support chat using Gemini (gemini-3.5-flash)...");
+        const data = await callGeminiAPI('gemini-3.5-flash', payload);
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      } catch (gemErr) {
+        console.warn("Gemini failed in support chat, falling back to OpenRouter...", gemErr.message);
+        const orMessages = [{ role: 'system', content: systemInstruction }];
+        if (Array.isArray(history)) {
+          history.forEach(m => {
+            if (m.sender === 'user' || m.sender === 'bot') {
+              orMessages.push({
+                role: m.sender === 'user' ? 'user' : 'assistant',
+                content: m.text
+              });
+            }
+          });
+        }
+        const lastMsg = orMessages[orMessages.length - 1];
+        if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== message) {
+          orMessages.push({ role: 'user', content: message });
+        }
+        const orModel = await getOpenRouterModel() || 'google/gemini-2.5-flash';
+        const orResult = await callOpenRouterAPI(orModel, orMessages, { temperature: 0.4 });
+        text = orResult.text;
+      }
+    }
+
+    if (!text) {
+      text = "I am currently unable to analyze your request. Please try again.";
+    }
+
+    // Strip all asterisks from the response as requested by the user
+    text = text.replace(/\*/g, '');
 
     res.json({ success: true, text });
   } catch (err) {
@@ -2762,7 +2929,21 @@ app.post('/api/payments/confirm-session', authenticateToken, async (req, res) =>
       );
       
       const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1', [req.user.id]);
-      return res.json({ success: true, plan: transaction.plan, user: userRes.rows[0] });
+      const userData = userRes.rows[0];
+      
+      // Trigger invoice email asynchronously (non-blocking)
+      import('./email-service.js').then(({ sendTemplatedEmail }) => {
+        sendTemplatedEmail(userData.email, 'invoice', {
+          fullName: userData.full_name,
+          planName: transaction.plan,
+          amount: `${transaction.currency} ${parseFloat(transaction.amount).toFixed(2)}`,
+          billingCycle: cycle
+        }).catch(err => {
+          console.error('[Invoice Email Error]:', err.message);
+        });
+      }).catch(err => console.error('[Invoice Email Import Error]:', err.message));
+
+      return res.json({ success: true, plan: transaction.plan, user: userData });
     }
     
     res.json({ success: true, plan: transaction.plan });
@@ -3017,6 +3198,22 @@ app.post('/api/payments/webhook', async (req, res) => {
         `, [userId, stripeId, amount, currency, plan]);
         await logAuditEvent('Stripe Plan Purchase', `User ID ${userId} upgraded to ${plan} via Stripe session ${stripeId} (Amount: ${currency} ${amount})`);
         console.log(`Plan upgraded for user ${userId} to ${plan} via Stripe webhook.`);
+        
+        // Trigger invoice email asynchronously (non-blocking)
+        const userQuery = await db.query('SELECT email, full_name FROM users WHERE id = $1', [userId]);
+        if (userQuery.rows.length > 0) {
+          const user = userQuery.rows[0];
+          import('./email-service.js').then(({ sendTemplatedEmail }) => {
+            sendTemplatedEmail(user.email, 'invoice', {
+              fullName: user.full_name,
+              planName: plan,
+              amount: `${currency} ${amount.toFixed(2)}`,
+              billingCycle: cycle
+            }).catch(err => {
+              console.error('[Webhook Invoice Email Error]:', err.message);
+            });
+          }).catch(err => console.error('[Webhook Invoice Email Import Error]:', err.message));
+        }
       } catch (dbErr) {
         console.error('Database update failed in stripe webhook:', dbErr.message);
       }

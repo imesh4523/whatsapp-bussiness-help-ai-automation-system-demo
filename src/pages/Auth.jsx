@@ -41,11 +41,67 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
       : { email: formData.email, password: formData.password, fullName: formData.fullName };
 
     if (currentType === 'forgot') {
-      setTimeout(() => {
+      fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: formData.email })
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || 'Failed to send reset link');
+          }
+          alert(data.message || 'Reset link has been sent to your email.');
+          setCurrentType('login');
+        })
+        .catch((err) => {
+          setError(err.message || 'An error occurred. Please try again.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+      return;
+    }
+
+    if (currentType === 'reset') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const email = params.get('email');
+      
+      if (!token || !email) {
+        setError('Missing validation token or email. Please request a new reset link.');
         setLoading(false);
-        alert('Reset link has been sent to your email.');
-        setCurrentType('login');
-      }, 8000);
+        return;
+      }
+      
+      fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: email,
+          token: token,
+          password: formData.password
+        })
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || 'Failed to reset password');
+          }
+          alert(data.message || 'Password reset successful! Please log in.');
+          setCurrentType('login');
+          window.history.pushState(null, '', '/');
+        })
+        .catch((err) => {
+          setError(err.message || 'An error occurred. Please try again.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
       return;
     }
 
@@ -319,6 +375,39 @@ function Auth({ type, onClose, onSwitchType, onSuccess }) {
                 Sign In
               </button>
             </p>
+          </form>
+        );
+      case 'reset':
+        return (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <h2 className="text-2xl font-black text-neutral-900 tracking-tight text-center mb-2">Set New Password</h2>
+            <p className="text-gray-400 font-light text-center text-xs pb-4">Enter your new password below to reset it.</p>
+            {error && <p className="text-red-500 text-xs text-center font-semibold">{error}</p>}
+            
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">New Password</label>
+              <div className="relative">
+                <input
+                  required
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                  placeholder="••••••••"
+                />
+                <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              </div>
+            </div>
+
+            <button
+              disabled={loading}
+              type="submit"
+              className="w-full bg-[#00d166] text-white hover:bg-emerald-700 transition-colors py-3.5 rounded-xl text-xs font-bold tracking-widest uppercase active:scale-[0.99] mt-2"
+              style={{ border: 'none', cursor: 'pointer' }}
+            >
+              {loading ? 'Resetting Password...' : 'Reset Password'}
+            </button>
           </form>
         );
       default:
