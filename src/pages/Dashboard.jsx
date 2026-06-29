@@ -4965,11 +4965,38 @@ function Dashboard({ user, setUser, onLogout }) {
       )}
 
       {/* ── Preloader Element visible on state triggers ── */}
-      <div className="preloader" style={{ display: isPageLoading ? 'flex' : 'none' }}>
-        <span className="loader"></span>
+      <div 
+        className="preloader" 
+        style={{ 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: '#ffffff',
+          zIndex: 999999,
+          display: isPageLoading ? 'flex' : 'none',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <span 
+          className="loader-static" 
+          style={{ 
+            width: '48px', 
+            height: '48px', 
+            border: '3px dotted #00832e', 
+            borderStyle: 'solid solid dotted dotted', 
+            borderRadius: '50%', 
+            animation: 'rotation-static 1s linear infinite' 
+          }}
+        />
       </div>
 
-      <div className="dashboard__inner flex-wrap">
+      <div 
+        className="dashboard__inner flex-wrap"
+        style={{ display: isPageLoading ? 'none' : 'flex' }}
+      >
 
         {/* Mobile Sidebar Overlay Backdrop */}
         {isSidebarMobileOpen && (
