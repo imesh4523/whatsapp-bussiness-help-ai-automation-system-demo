@@ -3579,6 +3579,8 @@ function AdminDashboard({ admin, onLogout }) {
                         <option value="promotional">News & Update Announcement (promotional)</option>
                         <option value="offer_discount">20% Coupon Offer (offer_discount)</option>
                         <option value="price_update">Pricing Package Update (price_update)</option>
+                        <option value="quota_warning_80">⚠️ Quota Warning 80% (quota_warning_80)</option>
+                        <option value="quota_warning_100">🔴 Quota Limit Reached / Account Frozen (quota_warning_100)</option>
                       </select>
                     </div>
 

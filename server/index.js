@@ -2362,9 +2362,17 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
     const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'www.agent-bunny.com';
 
     // If a template key is specified, send the templated brand email
-    if (templateKey && ['welcome', 'reset_password', 'invoice'].includes(templateKey)) {
+    const supportedTemplates = [
+      'welcome', 'reset_password', 'password_reset_success',
+      'plan_upgraded', 'invoice',
+      'inactivity_followup', 'promotional', 'offer_discount', 'price_update',
+      'quota_warning_80', 'quota_warning_100'
+    ];
+
+    if (templateKey && supportedTemplates.includes(templateKey)) {
       const { sendTemplatedEmail } = await import('./email-service.js');
       let testVariables = { fullName: 'Test User' };
+
       if (templateKey === 'reset_password') {
         testVariables.resetLink = `https://${domain}/auth/reset-password?token=test_token_123_verification&email=${encodeURIComponent(toEmail)}`;
       } else if (templateKey === 'invoice') {
@@ -2373,6 +2381,28 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
         testVariables.billingCycle = 'Monthly';
         testVariables.cardBrand = 'mastercard';
         testVariables.cardLast4 = '9876';
+      } else if (templateKey === 'plan_upgraded') {
+        testVariables.planName = 'Growth AI Plan';
+        testVariables.expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      } else if (templateKey === 'quota_warning_80') {
+        testVariables.currentCount = '80';
+        testVariables.responseLimit = '100';
+        testVariables.upgradeLink = `https://${domain}/plans`;
+      } else if (templateKey === 'quota_warning_100') {
+        testVariables.currentCount = '100';
+        testVariables.responseLimit = '100';
+        testVariables.upgradeLink = `https://${domain}/plans`;
+      } else if (templateKey === 'price_update') {
+        testVariables.planName = 'Starter Plan';
+        testVariables.newPrice = 'LKR 4,990.00 / month';
+        testVariables.effectiveDate = 'August 1, 2025';
+      } else if (templateKey === 'offer_discount') {
+        testVariables.couponCode = 'SAVE20NOW';
+        testVariables.discountAmount = '20%';
+        testVariables.expiryDate = 'July 15, 2025';
+      } else if (templateKey === 'promotional') {
+        testVariables.updateTitle = 'New Features Released!';
+        testVariables.updateSummary = 'We\'ve launched advanced AI training, better analytics and a brand new campaign manager.';
       }
       
       const success = await sendTemplatedEmail(toEmail, templateKey, testVariables);
