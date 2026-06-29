@@ -3531,6 +3531,10 @@ function Dashboard({ user, setUser, onLogout }) {
       body = body.replaceAll('class="yearly_price d-none"', 'class="yearly_price"');
     }
 
+    // Pre-populate the modal's payment section with the saved cards
+    const cardsHtml = renderModalPaymentSectionHtml(savedCards, isCardsLoading);
+    body = body.replace('<div id="modal-payment-section"></div>', `<div id="modal-payment-section">${cardsHtml}</div>`);
+
     return body;
   };
 
@@ -3638,25 +3642,18 @@ function Dashboard({ user, setUser, onLogout }) {
     }
   }, [tab]);
 
-  const updateModalPaymentSection = (cardsList, isLoading) => {
-    const modal = document.getElementById('purchaseModal');
-    if (!modal) return;
-    const paymentSection = modal.querySelector('#modal-payment-section');
-    if (!paymentSection) return;
-
-    let paymentHtml = '';
+  const renderModalPaymentSectionHtml = (cardsList, isLoading) => {
     if (isLoading) {
-      paymentHtml = `
+      return `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; margin: 0;">Select Payment Card</label>
         </div>
-        <div style="display: flex; align-items: center; justify-content: center; padding: 24px; gap: 10px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; color: #00832e;">
-          <i class="las la-spinner la-spin" style="font-size: 18px;"></i>
-          <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Checking saved cards...</span>
+        <div style="display: flex; align-items: center; justify-content: center; padding: 24px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; color: #00832e;">
+          <i class="las la-spinner la-spin" style="font-size: 22px;"></i>
         </div>
       `;
     } else if (cardsList && cardsList.length > 0) {
-      paymentHtml = `
+      return `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; margin: 0;">Select Payment Card</label>
           <button type="button" id="modal-refresh-cards-btn" style="background: none; border: none; padding: 2px 6px; cursor: pointer; color: #00832e; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;">
@@ -3679,7 +3676,7 @@ function Dashboard({ user, setUser, onLogout }) {
         </div>
       `;
     } else {
-      paymentHtml = `
+      return `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <label class="form-label" style="font-weight: 600; font-size: 11px; color: #475569; margin: 0;">Select Payment Card</label>
           <button type="button" id="modal-refresh-cards-btn" style="background: none; border: none; padding: 2px 6px; cursor: pointer; color: #00832e; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;">
@@ -3696,7 +3693,17 @@ function Dashboard({ user, setUser, onLogout }) {
         </div>
       `;
     }
-    paymentSection.innerHTML = paymentHtml;
+  };
+
+  const updateModalPaymentSection = (cardsList, isLoading) => {
+    // Select ALL elements with ID purchaseModal (both inside React container and moved to body by Bootstrap)
+    const modals = document.querySelectorAll('#purchaseModal');
+    modals.forEach(modal => {
+      const paymentSection = modal.querySelector('#modal-payment-section');
+      if (paymentSection) {
+        paymentSection.innerHTML = renderModalPaymentSectionHtml(cardsList, isLoading);
+      }
+    });
   };
 
   useEffect(() => {
