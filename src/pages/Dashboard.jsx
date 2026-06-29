@@ -4983,6 +4983,7 @@ function Dashboard({ user, setUser, onLogout }) {
           className={`sidebar-menu flex-between ${isSidebarHovered ? '' : 'sidebar-collapsed'} ${isSidebarMobileOpen ? 'show-sidebar' : ''}`}
           onMouseEnter={() => setIsSidebarHovered(true)}
           onMouseLeave={() => setIsSidebarHovered(false)}
+          style={{ zIndex: isSidebarMobileOpen ? 10005 : undefined }}
         >
           <div className="sidebar-menu__inner">
             <span className="sidebar-menu__close d-lg-none d-block" onClick={() => setIsSidebarMobileOpen(false)}>
