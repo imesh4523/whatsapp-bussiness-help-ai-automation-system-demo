@@ -5360,7 +5360,11 @@ function Dashboard({ user, setUser, onLogout }) {
         </div>
 
         {/* ── Main Content ── */}
-        <div className="dashboard__right">
+        <div className="dashboard__right" style={{
+          opacity: isPageLoading ? 0 : 1,
+          transition: 'opacity 0.18s ease',
+          pointerEvents: isPageLoading ? 'none' : 'auto'
+        }}>
           <div className="container-fluid p-0">
 
             {/* Header */}
