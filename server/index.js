@@ -2704,19 +2704,54 @@ app.post('/api/payments/charge-saved-card', authenticateToken, async (req, res) 
       return res.json({ success: true, plan, user: updatedUserRes.rows[0] });
     }
 
-    // Live Stripe charge using Payment Intent
+    // Live Stripe charge using Payment Intent — confirm immediately
     try {
       const intent = await stripe.paymentIntents.create({
         amount: Math.round(priceLkr * 100), // convert to LKR cents
         currency: 'lkr',
         customer: customerId,
         payment_method: paymentMethodId,
-        confirm: false
+        confirm: true,
+        off_session: true,  // charge without customer present (saved card)
+        return_url: `${process.env.FRONTEND_URL || 'https://agentbunny.com'}/dashboard/subscription`
       });
 
-      return res.json({ success: false, requiresAction: true, clientSecret: intent.client_secret, paymentIntentId: intent.id });
+      if (intent.status === 'succeeded') {
+        // Direct charge succeeded — update plan
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + (cycle === 'Yearly' ? 365 : 30));
+
+        await db.query(
+          `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+           VALUES ($1, $2, $3, 'LKR', $4, 'Completed')`,
+          [req.user.id, intent.id, priceLkr, plan]
+        );
+        await db.query(
+          "UPDATE users SET plan = $1, status = 'Active', plan_expires_at = $2, auto_renewal = TRUE, billing_cycle = $3 WHERE id = $4",
+          [plan, expiry, cycle, req.user.id]
+        );
+        const updatedUserRes = await db.query(
+          'SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle FROM users WHERE id = $1',
+          [req.user.id]
+        );
+        return res.json({ success: true, plan, user: updatedUserRes.rows[0] });
+
+      } else if (intent.status === 'requires_action' || intent.status === 'requires_confirmation') {
+        // 3D Secure authentication needed
+        return res.json({ success: false, requiresAction: true, clientSecret: intent.client_secret, paymentIntentId: intent.id });
+
+      } else {
+        // Payment failed / declined
+        await db.query(
+          `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
+           VALUES ($1, $2, $3, 'LKR', $4, 'Failed')`,
+          [req.user.id, intent.id, priceLkr, plan]
+        );
+        return res.status(400).json({ error: `Payment failed: ${intent.status}` });
+      }
+
     } catch (stripeErr) {
-      console.error('Stripe PaymentIntent creation error:', stripeErr.message);
+      console.error('Stripe PaymentIntent error:', stripeErr.message);
       const mockTxId = 'ch_err_' + Math.random().toString(36).substring(2, 12);
       await db.query(
         `INSERT INTO transactions (user_id, stripe_session_id, amount, currency, plan, status)
