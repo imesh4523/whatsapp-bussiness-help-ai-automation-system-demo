@@ -5900,7 +5900,7 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
               </div>
             )}
             
-            <small style={{ display: 'block', color: '#64748b', fontSize: '11.5px', lineHeight: '1.5', marginTop: '12px', textAlign: 'center' }}>
+            <small style={{ display: 'block', color: '#64748b', fontSize: '11.5px', lineHeight: '1.5', marginTop: '12px', textAlign: 'left' }}>
               Your card information is processed securely by Stripe.
               <img src="/verified-badge.svg" style={{ width: '14px', height: '14px', display: 'inline-block', verticalAlign: 'middle', margin: '0 6px', position: 'relative', top: '-1px' }} alt="Verified Badge" />
               We do not collect your data on our servers.
