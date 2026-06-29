@@ -477,22 +477,25 @@ body .sidebar-menu .brand-text {
   display: none !important;
 }
 
-body .sidebar-menu:hover .brand-text {
-  display: block !important;
-}
+/* Hover and desktop collapsed settings */
+@media (min-width: 992px) {
+  body .sidebar-menu:hover .brand-text {
+    display: block !important;
+  }
 
-body .dashboard .sidebar-menu:not(:hover) .sidebar-logo img {
-  display: block !important;
-}
+  body .dashboard .sidebar-menu:not(:hover) .sidebar-logo img {
+    display: block !important;
+  }
 
-body .dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after {
-  display: none !important;
-}
+  body .dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after {
+    display: none !important;
+  }
 
-body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
-  margin: 20px 0 !important;
-  padding: 0 !important;
-  justify-content: center !important;
+  body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
+    margin: 20px 0 !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
 }
 
 /* WhatsRay Orbits Background & Illustration Animations */
@@ -1118,13 +1121,16 @@ body .dashboard .sidebar-menu:not(:hover) .sidebar-logo {
 
 /* Force mobile sidebar over dark backdrop overlay */
 @media (max-width: 991px) {
-  body div#root .sidebar-menu,
-  body div#root .sidebar-menu.show-sidebar {
+  body div#root .sidebar-menu {
     z-index: 10005 !important;
     position: fixed !important;
-    left: 0 !important;
+    left: -280px !important;
     width: 280px !important;
     height: 100vh !important;
     overflow-y: auto !important;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  body div#root .sidebar-menu.show-sidebar {
+    left: 0 !important;
   }
 }

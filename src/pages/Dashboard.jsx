@@ -6316,31 +6316,33 @@ function ManageCustomers() {
               <span className="d-block fs-13 text-muted text-xs mt-1">There are no available data to display on this table at the moment.</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs" style={{ minWidth: '900px' }}>
+            <table className="w-full text-left border-collapse text-xs" style={{ minWidth: '950px' }}>
               <thead>
                 <tr className="bg-neutral-50 border-b border-gray-100 font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  <th className="p-4">Customer Name</th>
-                  <th className="p-4">Phone Number</th>
-                  <th className="p-4 text-center">Status Label</th>
-                  <th className="p-4">Last Message</th>
-                  <th className="p-4">Last Updated</th>
+                  <th className="p-4 min-w-[200px]">Customer Name</th>
+                  <th className="p-4 min-w-[150px]">Phone Number</th>
+                  <th className="p-4 min-w-[130px] text-center">Status Label</th>
+                  <th className="p-4 min-w-[300px]">Last Message</th>
+                  <th className="p-4 min-w-[170px]">Last Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-neutral-50/50 transition-colors">
-                    <td className="p-4 flex items-center gap-3">
-                      <img
-                        src={c.profile_pic_url || 'https://wpp.raybeamdigital.com/assets/images/avatar.png'}
-                        className="w-9 h-9 rounded-full object-cover border border-gray-100"
-                        onError={(e) => { e.target.src = 'https://wpp.raybeamdigital.com/assets/images/avatar.png'; }}
-                      />
-                      <span className="font-bold text-neutral-800">{c.sender_name || 'Customer'}</span>
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={c.profile_pic_url || 'https://wpp.raybeamdigital.com/assets/images/avatar.png'}
+                          className="w-9 h-9 rounded-full object-cover border border-gray-100"
+                          onError={(e) => { e.target.src = 'https://wpp.raybeamdigital.com/assets/images/avatar.png'; }}
+                        />
+                        <span className="font-bold text-neutral-800">{c.sender_name || 'Customer'}</span>
+                      </div>
                     </td>
-                    <td className="p-4 font-medium text-neutral-800 font-mono">
+                    <td className="p-4 font-medium text-neutral-800 font-mono whitespace-nowrap">
                       {c.sender_phone}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-4 text-center whitespace-nowrap">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
                         c.label === 'Confirmed' 
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
@@ -6349,10 +6351,10 @@ function ManageCustomers() {
                         {c.label || 'Interested'}
                       </span>
                     </td>
-                    <td className="p-4 max-w-[240px] text-gray-600 truncate" title={c.last_message}>
+                    <td className="p-4 text-gray-600 truncate max-w-[300px]" title={c.last_message}>
                       {c.last_message || '—'}
                     </td>
-                    <td className="p-4 text-gray-500 font-mono">
+                    <td className="p-4 text-gray-500 font-mono whitespace-nowrap">
                       {new Date(c.updated_at).toLocaleDateString()} {new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
                   </tr>
