@@ -1,0 +1,10 @@
+import pkg from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
+const { Pool } = pkg;
+const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false, sslmode: 'require' } });
+const r = await db.query("SELECT key, value FROM system_settings WHERE key IN ('stripe_secret_key', 'stripe_public_key')");
+console.log('Stripe settings in DB:', JSON.stringify(r.rows, null, 2));
+const envKey = process.env.STRIPE_SECRET_KEY;
+console.log('STRIPE_SECRET_KEY in .env:', envKey ? envKey.substring(0, 10) + '...' : 'NOT SET');
+await db.end();
