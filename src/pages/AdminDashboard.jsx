@@ -345,7 +345,12 @@ function AdminDashboard({ admin, onLogout }) {
   const [campaignBody, setCampaignBody] = useState('');
   const [campaignVarPlan, setCampaignVarPlan] = useState('Premium');
   const [campaignVarDiscount, setCampaignVarDiscount] = useState('PROMO20');
+  const [campaignVarDiscountAmount, setCampaignVarDiscountAmount] = useState('20%');
+  const [campaignVarCouponExpiry, setCampaignVarCouponExpiry] = useState('');
+  const [campaignTargetMode, setCampaignTargetMode] = useState('all'); // 'all' | 'specific'
+  const [campaignSpecificEmails, setCampaignSpecificEmails] = useState('');
   const [isSendingCampaign, setIsSendingCampaign] = useState(false);
+  const [campaignResult, setCampaignResult] = useState(null);
 
   // Edit User Profile Modal States
   const [editingUser, setEditingUser] = useState(null);
@@ -1048,17 +1053,29 @@ function AdminDashboard({ admin, onLogout }) {
       if (window.notifyAdmin) window.notifyAdmin('error', 'Please select a template or enter a custom subject.');
       return;
     }
-    if (!confirm('Are you sure you want to blast this email campaign to ALL active registered users? This action cannot be undone.')) return;
+    const targetCount = campaignTargetMode === 'specific'
+      ? campaignSpecificEmails.split(/[,\n]/).map(e => e.trim()).filter(Boolean).length
+      : 'ALL';
+    if (!confirm(`Are you sure you want to send this campaign to ${targetCount} user(s)? This action cannot be undone.`)) return;
     
+    setCampaignResult(null);
     setIsSendingCampaign(true);
     try {
+      const specificList = campaignTargetMode === 'specific'
+        ? campaignSpecificEmails.split(/[,\n]/).map(e => e.trim()).filter(Boolean)
+        : null;
+
       const payload = {
         templateKey: campaignTemplate || null,
         subject: campaignSubject || null,
         body: campaignBody || null,
+        targetEmails: specificList,
         variables: {
           planName: campaignVarPlan,
-          discountCode: campaignVarDiscount
+          couponCode: campaignVarDiscount,
+          discountCode: campaignVarDiscount,
+          discountAmount: campaignVarDiscountAmount,
+          expiryDate: campaignVarCouponExpiry
         }
       };
 
@@ -1072,10 +1089,13 @@ function AdminDashboard({ admin, onLogout }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        if (window.notifyAdmin) window.notifyAdmin('success', `Campaign sent successfully to ${data.sentCount} users!`);
-        setCampaignTemplate('');
-        setCampaignSubject('');
-        setCampaignBody('');
+        setCampaignResult(data);
+        if (window.notifyAdmin) window.notifyAdmin('success', `Campaign sent to ${data.sentCount}/${data.totalUsers} users!`);
+        if (!data.perKeyStats?.length) {
+          setCampaignTemplate('');
+          setCampaignSubject('');
+          setCampaignBody('');
+        }
       } else {
         if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to send campaign.');
       }
@@ -3624,103 +3644,173 @@ function AdminDashboard({ admin, onLogout }) {
                 </div>
 
                 {/* Email Campaigns Dispatcher Card */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-                  <div>
-                    <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Email Campaigns & Announcements</h4>
-                    <p className="text-[10px] text-gray-500">Send custom messages or pre-designed newsletters to ALL registered users.</p>
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-black uppercase tracking-wider text-neutral-800 flex items-center gap-2">
+                        📣 Email Campaigns & Announcements
+                      </h4>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        Send custom messages or professional templates to all users or specific targets. Smart pool batching distributes sends across your Resend key pool automatically.
+                      </p>
+                    </div>
                   </div>
 
-                  <form onSubmit={handleSendCampaign} className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Recipient Group</label>
-                      <input 
-                        type="text"
-                        disabled
-                        value="All Active Registered Users (System Blast)"
-                        className="w-full px-4 py-2.5 bg-neutral-100 border border-gray-200 rounded-xl text-xs text-neutral-500 focus:outline-none"
-                      />
+                  <form onSubmit={handleSendCampaign} className="space-y-4">
+                    {/* Target Selector */}
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Recipients</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCampaignTargetMode('all')}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${campaignTargetMode === 'all' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-gray-200'}`}
+                        >
+                          🌐 All Active Users
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCampaignTargetMode('specific')}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${campaignTargetMode === 'specific' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-gray-200'}`}
+                        >
+                          🎯 Specific Emails
+                        </button>
+                      </div>
+                      {campaignTargetMode === 'specific' && (
+                        <textarea
+                          rows="3"
+                          required
+                          value={campaignSpecificEmails}
+                          onChange={(e) => setCampaignSpecificEmails(e.target.value)}
+                          placeholder={"Enter emails separated by commas or new lines:\nuser1@gmail.com\nuser2@gmail.com, user3@gmail.com"}
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all resize-none font-mono"
+                        />
+                      )}
                     </div>
 
+                    {/* Template Selector */}
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Select Campaign Template (Optional)</label>
-                      <select 
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Select Template (Optional)</label>
+                      <select
                         value={campaignTemplate}
                         onChange={(e) => setCampaignTemplate(e.target.value)}
                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all bg-white"
                       >
-                        <option value="">Custom Raw Newsletter (No Template)</option>
-                        <option value="welcome">Welcome Onboarding (welcome)</option>
-                        <option value="reset_password">Reset Password Form (reset_password)</option>
-                        <option value="password_reset_success">Password Reset Success (password_reset_success)</option>
-                        <option value="plan_upgraded">Plan Upgraded Notification (plan_upgraded)</option>
-                        <option value="invoice">Subscription Payment Invoice (invoice)</option>
-                        <option value="inactivity_followup">3-Hour Onboarding Wakeup (inactivity_followup)</option>
-                        <option value="promotional">News & Product Updates (promotional)</option>
-                        <option value="offer_discount">20% Promo Coupon Discount (offer_discount)</option>
-                        <option value="price_update">Subscription Price Adjustment (price_update)</option>
+                        <option value="">✏️ Custom Message (No Template)</option>
+                        <option value="welcome">🎉 Welcome Onboarding (welcome)</option>
+                        <option value="plan_upgraded">⭐ Plan Upgraded Notification (plan_upgraded)</option>
+                        <option value="invoice">🧾 Subscription Payment Invoice (invoice)</option>
+                        <option value="inactivity_followup">⏰ 3-Hour Onboarding Wakeup (inactivity_followup)</option>
+                        <option value="promotional">📰 News & Product Updates (promotional)</option>
+                        <option value="offer_discount">🏷️ Promo Coupon Discount (offer_discount)</option>
+                        <option value="price_update">💰 Subscription Price Adjustment (price_update)</option>
+                        <option value="quota_warning_80">⚠️ Quota Warning 80% (quota_warning_80)</option>
+                        <option value="quota_warning_100">🔴 Quota Limit Reached (quota_warning_100)</option>
+                        <option value="reset_password">🔒 Password Reset (reset_password)</option>
+                        <option value="password_reset_success">✅ Password Reset Success (password_reset_success)</option>
                       </select>
                     </div>
 
+                    {/* Template Variables */}
                     {campaignTemplate && (
-                      <div className="bg-neutral-50 border border-neutral-100 rounded-2xl p-3 space-y-2.5">
-                        <span className="text-[9px] font-black uppercase text-gray-400 block">Template Merge Variables</span>
-                        <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-neutral-50 border border-neutral-100 rounded-2xl p-4 space-y-3">
+                        <span className="text-[9px] font-black uppercase text-gray-400 block">Template Variables (auto-merged)</span>
+                        <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Plan Name</label>
-                            <input 
-                              type="text"
-                              value={campaignVarPlan}
-                              onChange={(e) => setCampaignVarPlan(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs"
-                            />
+                            <input type="text" value={campaignVarPlan} onChange={(e) => setCampaignVarPlan(e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none" placeholder="e.g. Growth Plan" />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Promo Coupon Code</label>
-                            <input 
-                              type="text"
-                              value={campaignVarDiscount}
-                              onChange={(e) => setCampaignVarDiscount(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs"
-                            />
+                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Coupon Code</label>
+                            <input type="text" value={campaignVarDiscount} onChange={(e) => setCampaignVarDiscount(e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none" placeholder="e.g. PROMO20" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Discount Amount</label>
+                            <input type="text" value={campaignVarDiscountAmount} onChange={(e) => setCampaignVarDiscountAmount(e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none" placeholder="e.g. 20%" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date</label>
+                            <input type="text" value={campaignVarCouponExpiry} onChange={(e) => setCampaignVarCouponExpiry(e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none" placeholder="e.g. July 31, 2025" />
                           </div>
                         </div>
                       </div>
                     )}
 
+                    {/* Custom Message Fields */}
                     {!campaignTemplate && (
                       <>
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Subject Line</label>
-                          <input 
-                            type="text"
-                            required
-                            value={campaignSubject}
+                          <input
+                            type="text" required value={campaignSubject}
                             onChange={(e) => setCampaignSubject(e.target.value)}
-                            placeholder="e.g. Action Required: Update Your Billing Settings"
+                            placeholder="e.g. Exclusive offer just for you 🎁"
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all"
                           />
                         </div>
-
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Email HTML Body</label>
-                          <textarea 
-                            rows="4"
-                            required
-                            value={campaignBody}
+                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Email Body (HTML supported)</label>
+                          <textarea
+                            rows="5" required value={campaignBody}
                             onChange={(e) => setCampaignBody(e.target.value)}
-                            placeholder="Write your raw newsletter text or HTML body..."
+                            placeholder={"Write your message here. You can use:\n{{fullName}} — recipient's name\n{{couponCode}} — promo code"}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all resize-none font-sans"
                           />
                         </div>
                       </>
                     )}
 
+                    {/* Campaign Result Stats */}
+                    {campaignResult && (
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-black text-emerald-800">Campaign Dispatch Results</span>
+                          <button type="button" onClick={() => setCampaignResult(null)} className="text-[9px] text-emerald-600 hover:text-emerald-800 border-none bg-transparent cursor-pointer">✕ Clear</button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center bg-white rounded-xl p-2.5 border border-emerald-100">
+                            <div className="text-lg font-black text-emerald-700">{campaignResult.sentCount}</div>
+                            <div className="text-[8px] text-emerald-600 uppercase font-bold">Sent</div>
+                          </div>
+                          <div className="text-center bg-white rounded-xl p-2.5 border border-emerald-100">
+                            <div className="text-lg font-black text-red-500">{campaignResult.failCount || 0}</div>
+                            <div className="text-[8px] text-red-400 uppercase font-bold">Failed</div>
+                          </div>
+                          <div className="text-center bg-white rounded-xl p-2.5 border border-emerald-100">
+                            <div className="text-lg font-black text-neutral-700">{campaignResult.totalUsers}</div>
+                            <div className="text-[8px] text-neutral-400 uppercase font-bold">Total</div>
+                          </div>
+                        </div>
+                        {campaignResult.perKeyStats?.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-[9px] font-bold text-emerald-700 uppercase block">Per-Key Breakdown</span>
+                            {campaignResult.perKeyStats.map((ks, i) => (
+                              <div key={i} className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-emerald-100 text-[10px]">
+                                <div>
+                                  <span className="font-bold text-neutral-700">{ks.keyLabel}</span>
+                                  <span className="text-neutral-400 ml-2 font-mono">{ks.senderEmail}</span>
+                                </div>
+                                <div className="flex gap-3">
+                                  <span className="text-emerald-600 font-bold">{ks.sent} sent</span>
+                                  {ks.failed > 0 && <span className="text-red-500 font-bold">{ks.failed} failed</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <button
                       type="submit"
                       disabled={isSendingCampaign}
-                      className="w-full px-4 py-3 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 h-[42px]"
+                      className="w-full px-4 py-3 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 h-[44px]"
                     >
-                      {isSendingCampaign ? 'Sending Campaign Blast...' : '🚀 Launch Campaign Blast'}
+                      {isSendingCampaign ? '⏳ Dispatching Campaign...' : '🚀 Launch Campaign Blast'}
                     </button>
                   </form>
                 </div>

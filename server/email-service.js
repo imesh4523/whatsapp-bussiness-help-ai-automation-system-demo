@@ -305,7 +305,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         {
           iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/sale.png',
           title: 'Promo Code Discount',
-          desc: `Enjoy 20% off your package upgrade! Use coupon: ${variables.discountCode || 'PROMO20'}`
+          desc: `Enjoy ${variables.discountAmount || '20%'} off your package upgrade! Use coupon: <strong>${variables.couponCode || variables.discountCode || 'PROMO20'}</strong>`
         },
         {
           iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/clock.png',

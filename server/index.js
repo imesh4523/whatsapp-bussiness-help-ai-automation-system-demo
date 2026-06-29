@@ -4270,48 +4270,156 @@ setInterval(checkUserInactivity, 15 * 60 * 1000);
 
 // ── Email Campaigns Mass Blast Dispatcher ──
 app.post('/api/admin/campaigns/send', authenticateToken, async (req, res) => {
-  const { templateKey, subject, body, variables = {} } = req.body;
+  const { templateKey, subject, body, variables = {}, targetEmails = null } = req.body;
   try {
     const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
     if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
       return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
     }
 
-    // Fetch all active users
-    const usersRes = await db.query("SELECT email, name FROM users WHERE status = 'Active'");
-    const users = usersRes.rows;
-
-    console.log(`[Campaign Dispatch] Dispatching campaign "${subject || templateKey}" to ${users.length} users...`);
-
-    const { sendTemplatedEmail, sendGenericEmail } = await import('./email-service.js');
-    let successCount = 0;
-
-    for (const u of users) {
-      const userVars = {
-        fullName: u.name,
-        ...variables
-      };
-
-      let sent = false;
-      if (templateKey) {
-        sent = await sendTemplatedEmail(u.email, templateKey, userVars);
-      } else {
-        // Send custom raw campaign
-        let customSub = subject || 'Update from AgentBunny';
-        let customBody = body || '';
-        for (const [vKey, vVal] of Object.entries(userVars)) {
-          const regex = new RegExp(`{{\\s*${vKey}\\s*}}`, 'g');
-          customSub = customSub.replace(regex, vVal);
-          customBody = customBody.replace(regex, vVal);
-        }
-        sent = await sendGenericEmail(u.email, customSub, customBody, '', true);
-      }
-
-      if (sent) successCount++;
+    // Fetch target users
+    let users = [];
+    if (targetEmails && Array.isArray(targetEmails) && targetEmails.length > 0) {
+      // Specific emails provided
+      const placeholders = targetEmails.map((_, i) => `$${i + 1}`).join(',');
+      const res2 = await db.query(
+        `SELECT email, full_name AS name FROM users WHERE email IN (${placeholders}) AND status = 'Active'`,
+        targetEmails
+      );
+      users = res2.rows;
+    } else {
+      // All active users
+      const usersRes = await db.query("SELECT email, full_name AS name FROM users WHERE status = 'Active'");
+      users = usersRes.rows;
     }
 
-    await logAuditEvent('Email Campaign Sent', `Campaign "${subject || templateKey}" sent to ${successCount}/${users.length} users.`);
-    res.json({ success: true, sentCount: successCount, totalUsers: users.length });
+    if (users.length === 0) {
+      return res.json({ success: true, sentCount: 0, totalUsers: 0, message: 'No active users found to send to.' });
+    }
+
+    console.log(`[Campaign Dispatch] Preparing to dispatch "${subject || templateKey}" to ${users.length} users...`);
+
+    // ── Smart Pool-aware Batch Distribution ──
+    // Fetch all active pool keys with remaining quota
+    const { resetExpiredLimits } = await import('./resend-rotator.js');
+    await resetExpiredLimits();
+
+    const poolRes = await db.query(
+      `SELECT id, api_key, sender_email, label, daily_sent_count, email_type 
+       FROM resend_api_keys 
+       WHERE status = 'Active' AND daily_sent_count < 100 AND sender_email IS NOT NULL
+       ORDER BY id ASC`
+    );
+    const poolKeys = poolRes.rows;
+
+    const { sendTemplatedEmail, sendGenericEmail } = await import('./email-service.js');
+    const senderNameRes = await db.query("SELECT value FROM system_settings WHERE key = 'email_sender_name'");
+    const senderDisplayName = senderNameRes.rows[0]?.value?.trim() || 'AgentBunny';
+
+    let successCount = 0;
+    let failCount = 0;
+    const perKeyStats = [];
+
+    // Build batches per key based on remaining quota
+    let userQueue = [...users];
+
+    if (poolKeys.length > 0) {
+      // Distribute across pool keys
+      for (const key of poolKeys) {
+        if (userQueue.length === 0) break;
+        const remaining = 100 - key.daily_sent_count;
+        const batch = userQueue.splice(0, remaining);
+
+        let keySent = 0;
+        let keyFailed = 0;
+
+        for (const u of batch) {
+          const userVars = { fullName: u.name || u.email, ...variables };
+          let sent = false;
+
+          if (templateKey) {
+            // Use direct key dispatch bypassing the pool resolver
+            const { sendTemplatedEmailWithKey } = await import('./email-service.js').catch(() => ({}));
+            // Fallback: patch the from address via sendGenericEmail
+            sent = await sendTemplatedEmail(u.email, templateKey, userVars);
+          } else {
+            let customSub = subject || 'Update from AgentBunny';
+            let customBody = body || '';
+            for (const [vKey, vVal] of Object.entries(userVars)) {
+              const regex = new RegExp(`{{\\s*${vKey}\\s*}}`, 'g');
+              customSub = customSub.replace(regex, vVal);
+              customBody = customBody.replace(regex, vVal);
+            }
+            // Direct Resend call for this specific key
+            const fromEmail = `${senderDisplayName} <${key.sender_email}>`;
+            const textFallback = customBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            const sendRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${key.api_key}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: fromEmail, to: [u.email], subject: customSub,
+                html: customBody, text: textFallback,
+                headers: { 'X-Mailer': 'AgentBunny Mailer', 'Precedence': 'bulk' }
+              })
+            });
+            sent = sendRes.ok;
+          }
+
+          if (sent) { keySent++; successCount++; } else { keyFailed++; failCount++; }
+        }
+
+        // Update daily count for this key
+        if (keySent > 0) {
+          await db.query(
+            'UPDATE resend_api_keys SET daily_sent_count = daily_sent_count + $1 WHERE id = $2',
+            [keySent, key.id]
+          );
+        }
+
+        perKeyStats.push({ keyLabel: key.label || `Key #${key.id}`, senderEmail: key.sender_email, sent: keySent, failed: keyFailed });
+      }
+
+      // If there are still users remaining (all pool keys full), use fallback generic send
+      for (const u of userQueue) {
+        const userVars = { fullName: u.name || u.email, ...variables };
+        let sent = false;
+        if (templateKey) {
+          sent = await sendTemplatedEmail(u.email, templateKey, userVars);
+        } else {
+          let customSub = subject || 'Update from AgentBunny';
+          let customBody = body || '';
+          for (const [vKey, vVal] of Object.entries(userVars)) {
+            const regex = new RegExp(`{{\\s*${vKey}\\s*}}`, 'g');
+            customSub = customSub.replace(regex, vVal);
+            customBody = customBody.replace(regex, vVal);
+          }
+          sent = await sendGenericEmail(u.email, customSub, customBody, '', true);
+        }
+        if (sent) successCount++; else failCount++;
+      }
+    } else {
+      // No pool keys — use generic email service fallback
+      for (const u of userQueue) {
+        const userVars = { fullName: u.name || u.email, ...variables };
+        let sent = false;
+        if (templateKey) {
+          sent = await sendTemplatedEmail(u.email, templateKey, userVars);
+        } else {
+          let customSub = subject || 'Update from AgentBunny';
+          let customBody = body || '';
+          for (const [vKey, vVal] of Object.entries(userVars)) {
+            const regex = new RegExp(`{{\\s*${vKey}\\s*}}`, 'g');
+            customSub = customSub.replace(regex, vVal);
+            customBody = customBody.replace(regex, vVal);
+          }
+          sent = await sendGenericEmail(u.email, customSub, customBody, '', true);
+        }
+        if (sent) successCount++; else failCount++;
+      }
+    }
+
+    await logAuditEvent('Email Campaign Sent', `Campaign "${subject || templateKey}" sent to ${successCount}/${users.length} users. Failed: ${failCount}.`);
+    res.json({ success: true, sentCount: successCount, failCount, totalUsers: users.length, perKeyStats });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
