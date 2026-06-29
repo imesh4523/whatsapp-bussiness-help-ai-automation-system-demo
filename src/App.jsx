@@ -89,6 +89,22 @@ function App() {
     loadProducts();
   }, []);
 
+  // Register PWA Service Worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(
+          (registration) => {
+            console.log('PWA Service Worker registered successfully: ', registration.scope);
+          },
+          (err) => {
+            console.warn('PWA Service Worker registration failed: ', err);
+          }
+        );
+      });
+    }
+  }, []);
+
   // Sync user and route path from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

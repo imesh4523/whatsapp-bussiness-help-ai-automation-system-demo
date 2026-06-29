@@ -133,11 +133,13 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     let customerName = "Valued Customer";
     try {
       const chatRes = await db.query(
-        'SELECT c.id, c.remote_jid, c.sender_name FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
+        'SELECT c.id, c.remote_jid, c.sender_name, c.shipping_memory FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
         [sessionPhone, senderPhone]
       );
+      let shippingMemory = null;
       if (chatRes.rows.length > 0) {
         customerName = chatRes.rows[0].sender_name || "Valued Customer";
+        shippingMemory = chatRes.rows[0].shipping_memory;
         const chatId = chatRes.rows[0].id;
         const remoteJid = chatRes.rows[0].remote_jid || '';
         if (remoteJid.endsWith('@lid') || senderPhone.length > 13) {
@@ -198,6 +200,26 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     - If the customer asks you to send them a photo, showcase, or preview of a product we have in stock (e.g. "photo ekak evnnako eke", "show me a picture of it", "photo eka balන්න puluwanda"), identify the product's database ID from the [AVAILABLE INVENTORY] and reply with a warm caption containing the product's name, price, available sizes, and colors, and append the [IMAGE: <Product ID>] tag (e.g., [IMAGE: 7]) at the very end of your reply.
     - Example of a correct photo response format: "මෙන්න සර් Aroow Tee එකේ photo එක. මිල රු. 1500යි. S, M sizes වලින් ගන්න පුළුවන්. [IMAGE: 7]".
     - ALWAYS ensure the price and size details of the product are included in the caption of the photo response itself!`;
+
+    // Inject saved customer shipping details (database memory)
+    if (shippingMemory && Object.keys(shippingMemory).length > 0) {
+      systemPrompt += `\n\n[SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)]\n`;
+      if (shippingMemory.name) systemPrompt += `Recipient Name: ${shippingMemory.name}\n`;
+      if (shippingMemory.phone) systemPrompt += `Phone Number: ${shippingMemory.phone}\n`;
+      if (shippingMemory.address) systemPrompt += `Delivery Address: ${shippingMemory.address}\n`;
+      if (shippingMemory.province) systemPrompt += `Province: ${shippingMemory.province}\n`;
+      if (shippingMemory.payment_method) systemPrompt += `Payment Method: ${shippingMemory.payment_method}\n`;
+      
+      systemPrompt += `\nCRITICAL CONVERSATIONAL MEMORY RULES:
+1. Refer STRICTLY to the [SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)].
+2. If any shipping field (Recipient Name, Phone Number, Delivery Address, Province, or Payment Method) is ALREADY saved in memory, DO NOT ask the customer for that detail again!
+3. Only ask for details that are missing from the [SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)].
+4. If all details are present, do NOT ask any details; proceed directly to order summary confirmation!
+5. If the customer explicitly mentions that they want to change or update a detail (e.g., they say "change my address to X" or give a new name/phone), reply that you have updated it, and use the new details. Do NOT re-ask details they didn't ask to change!`;
+    } else {
+      systemPrompt += `\n\n[SAVED CUSTOMER SHIPPING DETAILS (DATABASE MEMORY)]\nNo saved shipping details are present yet.\n\nCONVERSATIONAL MEMORY RULES:
+1. If the customer provides their name, phone, address, province, or payment method in their chat message, check it and do NOT ask for it again! Only ask for the remaining missing fields.`;
+    }
 
     if (businessProfile) {
       systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\nBank Details: ${businessProfile.bank_details || ''}`;

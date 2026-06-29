@@ -2288,6 +2288,21 @@ function WhatsAppOrderManager() {
     stopCamera();
   };
 
+  const [notificationPermission, setNotificationPermission] = useState('default');
+  const seenOrderIdsRef = React.useRef(new Set());
+  const isInitialLoadRef = React.useRef(true);
+
+  const requestNotificationPermission = () => {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(perm => {
+        setNotificationPermission(perm);
+        if (perm === 'granted' && window.notify) {
+          window.notify('success', 'Desktop notifications enabled successfully!');
+        }
+      });
+    }
+  };
+
   const fetchLogo = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/business-profile`, {
@@ -2313,6 +2328,42 @@ function WhatsAppOrderManager() {
       });
       if (res.ok) {
         const data = await res.json();
+        
+        // Check for new orders
+        const newOrders = [];
+        data.forEach(o => {
+          if (!seenOrderIdsRef.current.has(o.id)) {
+            seenOrderIdsRef.current.add(o.id);
+            if (!isInitialLoadRef.current) {
+              newOrders.push(o);
+            }
+          }
+        });
+
+        isInitialLoadRef.current = false;
+
+        // If new orders exist, alert the merchant!
+        if (newOrders.length > 0) {
+          newOrders.forEach(o => {
+            // Play a notification alert chime
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav');
+            audio.play().catch(e => console.warn('Audio playback blocked by user interaction requirements:', e.message));
+
+            // Trigger native browser notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('New Storefront Order Received! 🛍️', {
+                body: `Order #${o.id} from ${o.shipping_details?.fullName || o.shipping_details?.name || 'Customer'} (Rs. ${parseFloat(o.total_amount).toFixed(2)})`,
+                icon: '/agentbunny-logo-cropped.png',
+                vibrate: [200, 100, 200]
+              });
+            }
+
+            if (window.notify) {
+              window.notify('success', `New Order #${o.id} received!`);
+            }
+          });
+        }
+
         setOrders(data);
       }
     } catch (err) {
@@ -2325,6 +2376,19 @@ function WhatsAppOrderManager() {
   useEffect(() => {
     fetchOrders();
     fetchLogo();
+
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(perm => {
+          setNotificationPermission(perm);
+        });
+      }
+    }
+
+    // Set polling interval for checking new orders every 15 seconds
+    const interval = setInterval(fetchOrders, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const deleteOrder = async (orderId) => {
@@ -2503,6 +2567,23 @@ function WhatsAppOrderManager() {
           ))}
         </div>
       </div>
+
+      {notificationPermission !== 'granted' && (
+        <div className="mt-4 p-3.5 bg-amber-50 border border-amber-100 rounded-3xl flex items-center justify-between text-xs text-amber-800 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <i className="las la-bell-slash text-base text-amber-600"></i>
+            <span>Enable desktop push notifications to get real-time sound alarms when new customers place orders.</span>
+          </div>
+          <button
+            type="button"
+            onClick={requestNotificationPermission}
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold border-none cursor-pointer transition-colors shadow-sm text-[10px]"
+            style={{ border: 'none', cursor: 'pointer' }}
+          >
+            Enable Alerts
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden mt-4">
         {/* Search header */}

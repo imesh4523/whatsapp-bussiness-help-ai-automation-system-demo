@@ -169,6 +169,7 @@ async function init() {
 
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS max_history_limit INTEGER DEFAULT 10;
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS include_kb_images BOOLEAN DEFAULT TRUE;
+      ALTER TABLE chats ADD COLUMN IF NOT EXISTS shipping_memory JSONB DEFAULT '{}'::JSONB;
     `);
     
     console.log('Database tables verified/created successfully.');

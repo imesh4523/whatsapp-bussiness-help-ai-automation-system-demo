@@ -329,6 +329,11 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
         [chatId, text, 'customer']
       );
 
+      // Async update customer shipping memory details from incoming message
+      updateShippingMemoryOnTheFly(chatId, text).catch(err => {
+        console.error('[SHIPPING MEMORY] Failed to run memory update asynchronously:', err.message);
+      });
+
       // Check if global AI configuration is active for this user
       let isAIActive = true;
       let typingDelayMultiplier = 150; // ms per word
@@ -1091,3 +1096,70 @@ export async function decrementProductStock(userId, items) {
     }
   }
 }
+
+export async function updateShippingMemoryOnTheFly(chatId, text) {
+  if (!text) return;
+  
+  // Heuristic regex filter to save AI tokens: only analyze if it contains address/phone/name keywords
+  const triggerRegex = /නම|address|ලිපිනය|phone|දුරකථන|පළාත|province|road|street|පාර|07\d{8}|\+94\d{9}|cod|delivery|transfer/i;
+  if (!triggerRegex.test(text)) {
+    return;
+  }
+  
+  console.log(`[SHIPPING MEMORY] Heuristic match triggered for message: "${text.substring(0, 50)}...". Running extraction...`);
+  
+  try {
+    // 1. Fetch current shipping memory
+    const chatRes = await db.query('SELECT shipping_memory FROM chats WHERE id = $1', [chatId]);
+    if (chatRes.rows.length === 0) return;
+    const currentMemory = chatRes.rows[0].shipping_memory || {};
+    
+    // 2. Ask Gemini to extract new details from the message
+    const prompt = `Analyze this WhatsApp message from a customer. Extract any shipping/delivery details mentioned:
+- Name of recipient
+- Phone number
+- Delivery address
+- Province (e.g. Western, Southern, Central)
+- Payment Method (COD or Bank Transfer)
+
+Only extract fields that are explicitly provided in the message. If a field is not mentioned, return null for it.
+If the customer is modifying/updating an existing detail, extract the new value.
+
+Return strict JSON ONLY (no explanation, no markdown blocks):
+{
+  "name": "extracted name or null",
+  "phone": "extracted phone or null",
+  "address": "extracted address or null",
+  "province": "extracted province or null",
+  "payment_method": "extracted payment method or null"
+}
+
+Customer message:
+"${text}"`;
+
+    const textResult = await callActiveAI(prompt, "application/json");
+    if (textResult && textResult !== 'NONE' && !textResult.includes('NONE')) {
+      const extracted = JSON.parse(textResult);
+      if (extracted) {
+        // Merge extracted values into current memory (only overwrite if not null)
+        const updatedMemory = { ...currentMemory };
+        let hasChanges = false;
+        
+        for (const key of ['name', 'phone', 'address', 'province', 'payment_method']) {
+          if (extracted[key] !== undefined && extracted[key] !== null) {
+            updatedMemory[key] = extracted[key];
+            hasChanges = true;
+          }
+        }
+        
+        if (hasChanges) {
+          await db.query('UPDATE chats SET shipping_memory = $1 WHERE id = $2', [JSON.stringify(updatedMemory), chatId]);
+          console.log(`[SHIPPING MEMORY] Successfully updated memory for chat ${chatId}:`, updatedMemory);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[SHIPPING MEMORY] Failed to extract shipping details:', err.message);
+  }
+}
+
