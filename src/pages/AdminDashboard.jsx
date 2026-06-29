@@ -330,6 +330,7 @@ function AdminDashboard({ admin, onLogout }) {
   const [testEmailRecipient, setTestEmailRecipient] = useState('');
   const [testEmailSubject, setTestEmailSubject] = useState('');
   const [testEmailHtml, setTestEmailHtml] = useState('');
+  const [testEmailTemplateKey, setTestEmailTemplateKey] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   // Edit User Profile Modal States
@@ -898,6 +899,7 @@ function AdminDashboard({ admin, onLogout }) {
       const payload = {
         toEmail: testEmailRecipient.trim()
       };
+      if (testEmailTemplateKey) payload.templateKey = testEmailTemplateKey;
       if (testEmailSubject.trim()) payload.subject = testEmailSubject.trim();
       if (testEmailHtml.trim()) payload.htmlContent = testEmailHtml.trim();
 
@@ -915,6 +917,7 @@ function AdminDashboard({ admin, onLogout }) {
         setTestEmailRecipient('');
         setTestEmailSubject('');
         setTestEmailHtml('');
+        setTestEmailTemplateKey('');
       } else {
         if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to send test email.');
       }
@@ -3225,6 +3228,26 @@ function AdminDashboard({ admin, onLogout }) {
                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all"
                       />
                     </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Select Template (Optional)</label>
+                      <select 
+                        value={testEmailTemplateKey}
+                        onChange={(e) => setTestEmailTemplateKey(e.target.value)}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all bg-white"
+                      >
+                        <option value="">Default Generic Test Email</option>
+                        <option value="welcome">Welcome Email (welcome)</option>
+                        <option value="reset_password">Reset Password Email (reset_password)</option>
+                        <option value="invoice">Subscription Invoice Email (invoice)</option>
+                      </select>
+                    </div>
+
+                    {testEmailTemplateKey && (
+                      <div className="bg-emerald-50 text-emerald-800 text-[10px] p-3 rounded-xl border border-emerald-100 font-medium">
+                        ℹ️ Using the pre-designed professional brand template. Subject and Body fields below will be ignored.
+                      </div>
+                    )}
 
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Subject (Optional)</label>

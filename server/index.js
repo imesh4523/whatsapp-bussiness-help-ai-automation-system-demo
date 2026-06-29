@@ -2241,7 +2241,7 @@ app.get('/api/admin/domain/status', authenticateToken, async (req, res) => {
 
 // Test Email Send
 app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => {
-  const { toEmail, subject, htmlContent } = req.body;
+  const { toEmail, subject, htmlContent, templateKey } = req.body;
   try {
     const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
     if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
@@ -2252,11 +2252,31 @@ app.post('/api/admin/domain/test-email', authenticateToken, async (req, res) => 
       return res.status(400).json({ error: 'Invalid recipient email address.' });
     }
 
+    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
+    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agent-bunny.com';
+
+    // If a template key is specified, send the templated brand email
+    if (templateKey && ['welcome', 'reset_password', 'invoice'].includes(templateKey)) {
+      const { sendTemplatedEmail } = await import('./email-service.js');
+      let testVariables = { fullName: 'Test User' };
+      if (templateKey === 'reset_password') {
+        testVariables.resetLink = `https://${domain}/auth/reset-password?token=test_token_123_verification&email=${encodeURIComponent(toEmail)}`;
+      } else if (templateKey === 'invoice') {
+        testVariables.planName = 'Enterprise AI Plan';
+        testVariables.amount = 'LKR 14,990.00';
+        testVariables.billingCycle = 'Monthly';
+      }
+      
+      const success = await sendTemplatedEmail(toEmail, templateKey, testVariables);
+      if (success) {
+        return res.json({ success: true, message: `Templated email '${templateKey}' sent successfully.` });
+      } else {
+        return res.status(500).json({ error: `Failed to send templated email '${templateKey}'. Check server logs.` });
+      }
+    }
+
     const { sendGenericEmail } = await import('./email-service.js');
     
-    const domainQuery = await db.query("SELECT value FROM system_settings WHERE key = 'domain_name'");
-    const domain = domainQuery.rows.length > 0 ? domainQuery.rows[0].value?.trim() : 'agentbunny.com';
-
     const defaultHtml = `
       <div style="font-family: sans-serif; padding: 25px; max-width: 550px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
         <div style="text-align: center; margin-bottom: 20px;">
