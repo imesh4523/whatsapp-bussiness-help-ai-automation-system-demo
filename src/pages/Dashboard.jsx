@@ -4489,15 +4489,21 @@ function Dashboard({ user, setUser, onLogout }) {
     };
 
     const handleFormSubmit = (e) => {
-      const form = e.target.closest('form');
+      // Always prevent default FIRST to stop any native form redirect
+      const form = e.target.closest ? e.target.closest('form') : e.target;
+      if (form && form.classList && (form.classList.contains('purchase-form') || form.action)) {
+        e.preventDefault();
+      }
       if (form) {
         if (form.id === 'mock-chat-form') return;
 
-        // Check if it's the purchase plan form
         // Bootstrap moves modal to body, so e.target.closest may fail — use document-level query as fallback
         const purchaseForm = e.target.closest('.purchase-form') || document.querySelector('.purchase-form');
         if (purchaseForm) {
+          // Ensure form does not redirect natively
           e.preventDefault();
+          purchaseForm.removeAttribute('action');
+          purchaseForm.removeAttribute('method');
           
           const planIdInput = purchaseForm.querySelector('#pricing_plan_id');
           const planId = planIdInput ? planIdInput.value : '';
@@ -4671,14 +4677,15 @@ function Dashboard({ user, setUser, onLogout }) {
     if (container) {
       container.addEventListener('click', handleGlobalClick);
       container.addEventListener('change', handleGlobalChange);
-      container.addEventListener('submit', handleFormSubmit);
     }
+    // Attach submit on document to catch Bootstrap modal forms moved to body
+    document.addEventListener('submit', handleFormSubmit, true);
     return () => {
       if (container) {
         container.removeEventListener('click', handleGlobalClick);
         container.removeEventListener('change', handleGlobalChange);
-        container.removeEventListener('submit', handleFormSubmit);
       }
+      document.removeEventListener('submit', handleFormSubmit, true);
     };
   }, [tab, onLogout]);
 
