@@ -1451,7 +1451,9 @@ app.get('/api/ai-config', authenticateToken, async (req, res) => {
       systemPrompt: row.system_prompt,
       temperature: parseFloat(row.temperature),
       typingDelay: row.typing_delay,
-      globalAIActive: row.global_ai_active
+      globalAIActive: row.global_ai_active,
+      maxHistoryLimit: row.max_history_limit,
+      includeKbImages: row.include_kb_images
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1599,19 +1601,21 @@ app.post('/api/user/claim-coupon', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/ai-config', authenticateToken, async (req, res) => {
-  const { defaultModel, systemPrompt, temperature, typingDelay, globalAIActive } = req.body;
+  const { defaultModel, systemPrompt, temperature, typingDelay, globalAIActive, maxHistoryLimit, includeKbImages } = req.body;
   try {
     await db.query(
-      `INSERT INTO ai_configs (user_id, default_model, system_prompt, temperature, typing_delay, global_ai_active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+      `INSERT INTO ai_configs (user_id, default_model, system_prompt, temperature, typing_delay, global_ai_active, max_history_limit, include_kb_images, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO UPDATE SET 
          default_model = $2, 
          system_prompt = $3, 
          temperature = $4, 
          typing_delay = $5, 
          global_ai_active = $6,
+         max_history_limit = $7,
+         include_kb_images = $8,
          updated_at = CURRENT_TIMESTAMP`,
-      [req.user.id, defaultModel, systemPrompt, temperature, typingDelay, globalAIActive]
+      [req.user.id, defaultModel, systemPrompt, temperature, typingDelay, globalAIActive, maxHistoryLimit ?? 10, includeKbImages !== false]
     );
     res.json({ success: true, message: 'AI configuration updated.' });
   } catch (err) {
@@ -3238,6 +3242,38 @@ app.get('/api/admin/ai-usage', authenticateToken, async (req, res) => {
       ORDER BY ai_messages_count DESC
     `);
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/token-usage', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  try {
+    const result = await db.query(`
+      SELECT t.*, u.email as user_email, u.full_name as user_name
+      FROM ai_token_usage t
+      LEFT JOIN users u ON t.user_id = u.id
+      ORDER BY t.created_at DESC
+      LIMIT 200
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/token-usage/clear', authenticateToken, async (req, res) => {
+  const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+  if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+    return res.status(403).json({ error: 'Access denied: Admin only.' });
+  }
+  try {
+    await db.query('DELETE FROM ai_token_usage');
+    res.json({ success: true, message: 'AI Token Usage logs cleared.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

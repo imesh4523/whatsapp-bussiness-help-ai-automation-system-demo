@@ -1,4 +1,4 @@
-﻿import db from './db.js';
+import db from './db.js';
 
 /**
  * Retrieves the OpenRouter API key from DB or env.
@@ -86,5 +86,8 @@ export async function callOpenRouterAPI(model, messages, options = {}) {
   if (!text) {
     throw new Error('Empty response from OpenRouter.');
   }
-  return text.trim();
+  return {
+    text: text.trim(),
+    usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+  };
 }

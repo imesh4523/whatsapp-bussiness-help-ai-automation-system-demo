@@ -11,6 +11,23 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+export async function logTokenUsage({ userId, chatId, purpose, provider, model, promptTokens, completionTokens, promptText, completionText }) {
+  try {
+    const promptPreview = promptText ? promptText.slice(0, 500) + (promptText.length > 500 ? '...' : '') : null;
+    const completionPreview = completionText ? completionText.slice(0, 500) + (completionText.length > 500 ? '...' : '') : null;
+    const totalTokens = (promptTokens || 0) + (completionTokens || 0);
+
+    await db.query(
+      `INSERT INTO ai_token_usage 
+       (user_id, chat_id, purpose, provider, model, prompt_tokens, completion_tokens, total_tokens, prompt_preview, completion_preview) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [userId || 1, chatId, purpose || 'Chat Reply', provider, model, promptTokens || 0, completionTokens || 0, totalTokens, promptPreview, completionPreview]
+    );
+  } catch (err) {
+    console.error('Failed to log token usage:', err.message);
+  }
+}
+
 /**
  * Generate AI reply using Gemini API (with local fallback if key is missing)
  * @param {string} sessionPhone - The phone number of the whatsapp session
@@ -65,7 +82,9 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     defaultModel: 'Gemini 1.5 Pro',
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     temperature: 0.6,
-    typingDelay: 150
+    typingDelay: 150,
+    maxHistoryLimit: 10,
+    includeKbImages: true
   };
 
   let businessProfile = null;
@@ -88,7 +107,9 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
           defaultModel: row.default_model,
           systemPrompt: row.system_prompt || DEFAULT_SYSTEM_PROMPT,
           temperature: parseFloat(row.temperature),
-          typingDelay: row.typing_delay
+          typingDelay: row.typing_delay,
+          maxHistoryLimit: row.max_history_limit ?? 10,
+          includeKbImages: row.include_kb_images !== false
         };
       }
 
@@ -122,8 +143,8 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
         }
 
         const msgRes = await db.query(
-          'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 30',
-          [chatId]
+          'SELECT text, sender FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT $2',
+          [chatId, config.maxHistoryLimit]
         );
         // Exclude the current incoming message from history to prevent duplication in LLM prompt
         let rows = msgRes.rows;
@@ -142,7 +163,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
 
     // 4. Load knowledge files (sizing charts/photos) to send to Gemini as inlineData if customer sent an image
     const imageParts = [];
-    if (imageBuffer && businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
+    if (imageBuffer && businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0 && config.includeKbImages) {
       // Top 5 photos maximum
       const photos = businessProfile.photo_urls.slice(0, 5);
       for (const photoUrl of photos) {
@@ -297,7 +318,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       }
 
       // Add business knowledge base images (up to 5) for visual comparison if customer sent an image
-      if (imageBuffer && businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0) {
+      if (imageBuffer && businessProfile && businessProfile.photo_urls && businessProfile.photo_urls.length > 0 && config.includeKbImages) {
         const photos = businessProfile.photo_urls.slice(0, 5);
         for (const photoUrl of photos) {
           try {
@@ -329,9 +350,23 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
         content: userContent
       });
 
-      replyText = await callOpenRouterAPI(orModel, orMessages, {
+      const orResult = await callOpenRouterAPI(orModel, orMessages, {
         temperature: config.temperature,
         max_tokens: 500
+      });
+      replyText = orResult.text;
+
+      // Log Token Usage
+      await logTokenUsage({
+        userId,
+        chatId: senderPhone,
+        purpose: 'Chat Reply',
+        provider: 'openrouter',
+        model: orModel,
+        promptTokens: orResult.usage?.prompt_tokens || 0,
+        completionTokens: orResult.usage?.completion_tokens || 0,
+        promptText: systemPrompt + '\n' + (imageBuffer ? 'Image Uploaded' : historyContext + '\nCustomer: ' + messageText),
+        completionText: replyText
       });
     } else {
       // --- Gemini path (default) ---
@@ -343,6 +378,21 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       if (!replyText) {
         throw new Error('Empty response from Gemini candidate parts.');
       }
+
+      // Log Token Usage
+      const promptTokens = data.usageMetadata?.promptTokenCount || 0;
+      const completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
+      await logTokenUsage({
+        userId,
+        chatId: senderPhone,
+        purpose: 'Chat Reply',
+        provider: 'gemini',
+        model: modelName,
+        promptTokens,
+        completionTokens,
+        promptText: systemPrompt + '\n' + (imageBuffer ? 'Image Uploaded' : historyContext + '\nCustomer: ' + messageText),
+        completionText: replyText
+      });
     }
 
     return replyText.trim();
@@ -416,7 +466,19 @@ export async function callActiveAI(prompt, responseMimeType = "text/plain") {
     const messages = [
       { role: 'user', content: prompt }
     ];
-    return await callOpenRouterAPI(model, messages, { temperature: 0.1 });
+    const orResult = await callOpenRouterAPI(model, messages, { temperature: 0.1 });
+    // Log Token Usage
+    await logTokenUsage({
+      userId: 1, // Default System/Admin User ID
+      purpose: 'System Task',
+      provider: 'openrouter',
+      model,
+      promptTokens: orResult.usage?.prompt_tokens || 0,
+      completionTokens: orResult.usage?.completion_tokens || 0,
+      promptText: prompt,
+      completionText: orResult.text
+    });
+    return orResult.text;
   } else {
     const payload = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -428,6 +490,20 @@ export async function callActiveAI(prompt, responseMimeType = "text/plain") {
     const data = await callGeminiAPI('gemini-1.5-flash', payload);
     const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!replyText) throw new Error('Empty response from Gemini');
+
+    // Log Token Usage
+    const promptTokens = data.usageMetadata?.promptTokenCount || 0;
+    const completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
+    await logTokenUsage({
+      userId: 1,
+      purpose: 'System Task',
+      provider: 'gemini',
+      model: 'gemini-1.5-flash',
+      promptTokens,
+      completionTokens,
+      promptText: prompt,
+      completionText: replyText
+    });
     return replyText.trim();
   }
 }

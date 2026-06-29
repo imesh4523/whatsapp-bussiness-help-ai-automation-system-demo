@@ -164,6 +164,65 @@ function ToastItem({ toast, onDismiss }) {
   );
 }
 
+function TokenUsageRow({ log }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <tr 
+        onClick={() => setExpanded(!expanded)}
+        className="border-b border-gray-50 hover:bg-neutral-50/50 cursor-pointer transition-all font-medium text-neutral-700"
+      >
+        <td className="py-4 text-neutral-400 text-xs font-mono">
+          {new Date(log.created_at).toLocaleString()}
+        </td>
+        <td className="py-4 text-neutral-800 text-xs">
+          {log.user_email || 'System / Default'}
+        </td>
+        <td className="py-4 text-neutral-600 text-xs font-mono font-bold">
+          {log.chat_id || 'System Task'}
+        </td>
+        <td className="py-4">
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+            log.purpose === 'Chat Reply' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-neutral-600'
+          }`}>
+            {log.purpose}
+          </span>
+        </td>
+        <td className="py-4 text-xs">
+          <span className="text-neutral-400 font-mono text-[10px] uppercase font-bold mr-1.5">[{log.provider}]</span>
+          <span className="font-bold text-neutral-800">{log.model}</span>
+        </td>
+        <td className="py-4 text-right font-mono font-bold text-xs text-neutral-900">
+          {log.total_tokens?.toLocaleString()}
+          <span className="text-[10px] text-gray-400 block font-normal font-sans">
+            ({log.prompt_tokens}p / {log.completion_tokens}c)
+          </span>
+        </td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan="6" className="bg-gray-50/50 p-4 border-b border-gray-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-light">
+              <div className="space-y-1">
+                <span className="font-extrabold uppercase tracking-wider text-[10px] text-gray-400">Prompt Snippet / Input Context</span>
+                <pre className="bg-white border border-gray-100 p-3 rounded-xl max-h-40 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] text-neutral-600 leading-relaxed shadow-sm">
+                  {log.prompt_preview || 'No prompt preview available.'}
+                </pre>
+              </div>
+              <div className="space-y-1">
+                <span className="font-extrabold uppercase tracking-wider text-[10px] text-gray-400">AI Completion / Generated Output</span>
+                <pre className="bg-white border border-gray-100 p-3 rounded-xl max-h-40 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] text-neutral-700 leading-relaxed shadow-sm">
+                  {log.completion_preview || 'No completion preview available.'}
+                </pre>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 function AdminDashboard({ admin, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'users', 'sessions', 'ai-config'
   const [searchQuery, setSearchQuery] = useState('');
@@ -229,6 +288,7 @@ function AdminDashboard({ admin, onLogout }) {
 
   const [transactionsList, setTransactionsList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [tokenUsageList, setTokenUsageList] = useState([]);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [isApiKeySaved, setIsApiKeySaved] = useState(false);
   // OpenRouter & AI Provider states
@@ -368,6 +428,13 @@ function AdminDashboard({ admin, onLogout }) {
       fetch(`${API_BASE_URL}/admin/audit-logs`)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setAuditLogs(data); })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'token-usage') {
+      fetch(`${API_BASE_URL}/admin/token-usage`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setTokenUsageList(data); })
         .catch(err => console.warn(err));
     } else if (activeTab === 'ai-config') {
       fetch(`${API_BASE_URL}/admin/system-settings`)
@@ -1206,6 +1273,15 @@ function AdminDashboard({ admin, onLogout }) {
               {activeTab === 'audit-logs' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
               <FileText className="w-4 h-4 flex-shrink-0" />
               <span>System Audit Logs</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('token-usage')}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'token-usage' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              {activeTab === 'token-usage' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Cpu className="w-4 h-4 flex-shrink-0" />
+              <span>AI Token Usage Logs</span>
             </button>
             <button 
               onClick={() => setActiveTab('tickets')}
@@ -2122,6 +2198,151 @@ function AdminDashboard({ admin, onLogout }) {
               </div>
             </div>
           )}
+
+          {/* 6.5. AI TOKEN USAGE LOGS VIEW */}
+          {activeTab === 'token-usage' && (() => {
+            const filteredLogs = tokenUsageList.filter(log => {
+              const query = searchQuery.toLowerCase();
+              return (
+                (log.chat_id && log.chat_id.toLowerCase().includes(query)) ||
+                (log.user_email && log.user_email.toLowerCase().includes(query)) ||
+                (log.model && log.model.toLowerCase().includes(query)) ||
+                (log.purpose && log.purpose.toLowerCase().includes(query)) ||
+                (log.provider && log.provider.toLowerCase().includes(query))
+              );
+            });
+
+            const totalTokensUsed = filteredLogs.reduce((acc, log) => acc + (log.total_tokens || 0), 0);
+            const totalPromptTokens = filteredLogs.reduce((acc, log) => acc + (log.prompt_tokens || 0), 0);
+            const totalCompletionTokens = filteredLogs.reduce((acc, log) => acc + (log.completion_tokens || 0), 0);
+            const estimatedCost = (totalTokensUsed / 1000000) * 0.15;
+
+            return (
+              <div className="space-y-6">
+                {/* Metrics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex items-center gap-4" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold" style={{ width: '48px', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e6f4ea', color: '#00832e' }}>Σ</div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block" style={{ fontSize: '10px', textTransform: 'uppercase', color: '#a3a3a3' }}>Total Tokens</span>
+                      <h4 className="text-xl font-extrabold text-neutral-800" style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{totalTokensUsed.toLocaleString()}</h4>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex items-center gap-4" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold" style={{ width: '48px', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e8f0fe', color: '#1a73e8' }}>In</div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block" style={{ fontSize: '10px', textTransform: 'uppercase', color: '#a3a3a3' }}>Prompt Tokens</span>
+                      <h4 className="text-xl font-extrabold text-neutral-800" style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{totalPromptTokens.toLocaleString()}</h4>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex items-center gap-4" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold" style={{ width: '48px', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e0e0ff', color: '#3f51b5' }}>Out</div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block" style={{ fontSize: '10px', textTransform: 'uppercase', color: '#a3a3a3' }}>Completion Tokens</span>
+                      <h4 className="text-xl font-extrabold text-neutral-800" style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{totalCompletionTokens.toLocaleString()}</h4>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex items-center gap-4" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold" style={{ width: '48px', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fef3c7', color: '#d97706' }}>$</div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block" style={{ fontSize: '10px', textTransform: 'uppercase', color: '#a3a3a3' }}>Est. Cost (USD)</span>
+                      <h4 className="text-xl font-extrabold text-neutral-800" style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>${estimatedCost.toFixed(5)}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Logs Table */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+                  <div className="flex justify-between items-center pb-3 border-b border-gray-100" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' }}>
+                    <div className="flex items-center gap-3" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500" style={{ margin: 0, fontSize: '14px' }}>AI Call Metrics stream</h3>
+                      <button 
+                        onClick={() => {
+                          fetch(`${API_BASE_URL}/admin/token-usage`, {
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+                          })
+                            .then(res => res.json())
+                            .then(data => { if (Array.isArray(data)) setTokenUsageList(data); })
+                            .catch(err => console.warn(err));
+                        }}
+                        className="text-neutral-400 hover:text-neutral-600 border-none bg-transparent p-0 cursor-pointer"
+                        style={{ background: 'none', border: 'none', padding: 0 }}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" style={{ width: '14px', height: '14px' }} />
+                      </button>
+                    </div>
+                    <div>
+                      <button 
+                        onClick={async () => {
+                          if (window.confirm("Are you sure you want to clear all AI Token Usage logs?")) {
+                            try {
+                              const res = await fetch(`${API_BASE_URL}/admin/token-usage/clear`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+                              });
+                              if (res.ok) {
+                                setTokenUsageList([]);
+                                if (_toastDispatchAdmin) {
+                                  _toastDispatchAdmin('success', 'AI Token Usage logs cleared.');
+                                }
+                              }
+                            } catch (e) {
+                              if (_toastDispatchAdmin) {
+                                _toastDispatchAdmin('error', 'Failed to clear token logs.');
+                              }
+                            }
+                          }
+                        }}
+                        className="flex items-center gap-2 text-[10px] bg-red-50 hover:bg-red-100 text-red-500 font-black uppercase px-3 py-1.5 rounded-full border-none cursor-pointer"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: '900', color: '#ef4444', backgroundColor: '#fee2e2', border: 'none', borderRadius: '9999px', padding: '6px 12px' }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" style={{ width: '14px', height: '14px' }} />
+                        Clear Logs
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-4 py-3 rounded-2xl" style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: '16px', padding: '12px' }}>
+                    <Search className="w-4 h-4 text-gray-400 flex-shrink-0" style={{ width: '16px', height: '16px', color: '#9ca3af' }} />
+                    <input 
+                      type="text"
+                      placeholder="Search by customer phone, model, email, or purpose..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="bg-transparent border-none outline-none text-xs w-full font-light"
+                      style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', width: '100%' }}
+                    />
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr className="border-b border-gray-100 text-neutral-400 text-xs font-bold uppercase tracking-widest" style={{ borderBottom: '1px solid #f3f4f6', fontSize: '12px', textTransform: 'uppercase', color: '#9ca3af' }}>
+                          <th className="py-4" style={{ padding: '16px 0' }}>Timestamp</th>
+                          <th className="py-4" style={{ padding: '16px 0' }}>User</th>
+                          <th className="py-4" style={{ padding: '16px 0' }}>Customer Chat</th>
+                          <th className="py-4" style={{ padding: '16px 0' }}>Purpose</th>
+                          <th className="py-4" style={{ padding: '16px 0' }}>Provider / Model</th>
+                          <th className="py-4 text-right" style={{ padding: '16px 0', textAlign: 'right' }}>Tokens</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredLogs.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-8 text-center text-gray-400 font-light" style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af' }}>No token usage logs match the filters or exist.</td>
+                          </tr>
+                        ) : (
+                          filteredLogs.map(log => (
+                            <TokenUsageRow key={log.id} log={log} />
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 7. SAVED CARDS MANAGER VIEW */}
           {activeTab === 'user-cards' && (

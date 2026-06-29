@@ -151,6 +151,24 @@ async function init() {
         body TEXT NOT NULL,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS ai_token_usage (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        chat_id VARCHAR(255),
+        purpose VARCHAR(100) DEFAULT 'Chat Reply',
+        provider VARCHAR(100) NOT NULL,
+        model VARCHAR(255) NOT NULL,
+        prompt_tokens INTEGER DEFAULT 0,
+        completion_tokens INTEGER DEFAULT 0,
+        total_tokens INTEGER DEFAULT 0,
+        prompt_preview TEXT,
+        completion_preview TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS max_history_limit INTEGER DEFAULT 10;
+      ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS include_kb_images BOOLEAN DEFAULT TRUE;
     `);
     
     console.log('Database tables verified/created successfully.');

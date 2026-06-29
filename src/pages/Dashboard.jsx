@@ -646,6 +646,36 @@ function WhatsAppAIBotManager({ user, activeSessionId }) {
                 </div>
               </div>
 
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="label-two required form--label text-xs font-bold uppercase tracking-wider text-gray-400">Max Chat History Messages</label>
+                  <select 
+                    value={config.maxHistoryLimit ?? 10}
+                    onChange={(e) => setConfig(prev => ({ ...prev, maxHistoryLimit: parseInt(e.target.value, 10) }))}
+                    className="form--control form-two w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-black focus:outline-none"
+                  >
+                    <option value={5}>Last 5 messages</option>
+                    <option value={10}>Last 10 messages</option>
+                    <option value={15}>Last 15 messages</option>
+                    <option value={20}>Last 20 messages</option>
+                    <option value={30}>Last 30 messages (Expensive)</option>
+                  </select>
+                </div>
+
+                <div className="col-md-6" style={{ display: 'flex', alignItems: 'center', paddingTop: '1.5rem' }}>
+                  <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      checked={config.includeKbImages !== false}
+                      onChange={(e) => setConfig(prev => ({ ...prev, includeKbImages: e.target.checked }))}
+                      id="includeKbImages"
+                      className="w-4 h-4 accent-black rounded border-gray-200"
+                    />
+                    <label htmlFor="includeKbImages" className="text-xs font-bold uppercase tracking-wider text-gray-600 cursor-pointer mb-0">Include KB images in photo requests (Vision Tokens)</label>
+                  </div>
+                </div>
+              </div>
+
               <div className="form-group">
                 <label className="label-two required form--label text-xs font-bold uppercase tracking-wider text-gray-400">Model Temperature</label>
                 <div className="d-flex align-items-center gap-3">
