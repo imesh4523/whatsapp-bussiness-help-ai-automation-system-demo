@@ -191,7 +191,7 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
         <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
           <tr>
             <td align="center" style="vertical-align: middle;">
-              <img src="https://img.icons8.com/material-outlined/96/00d166/bunny.png" width="36" height="36" style="width: 36px; height: 36px; vertical-align: middle; display: inline-block; margin-right: 8px; border: 0;" />
+              <img src="https://img.icons8.com/ios/96/00d166/rabbit.png" width="36" height="36" style="width: 36px; height: 36px; vertical-align: middle; display: inline-block; margin-right: 8px; border: 0;" />
               <span style="font-size: 22px; font-weight: 800; color: #111827; letter-spacing: -0.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; vertical-align: middle; display: inline-block; line-height: 36px;">agent<span style="color: #00d166;">bunny</span></span>
             </td>
           </tr>
