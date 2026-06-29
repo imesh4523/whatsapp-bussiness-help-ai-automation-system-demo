@@ -4494,7 +4494,8 @@ function Dashboard({ user, setUser, onLogout }) {
         if (form.id === 'mock-chat-form') return;
 
         // Check if it's the purchase plan form
-        const purchaseForm = e.target.closest('.purchase-form');
+        // Bootstrap moves modal to body, so e.target.closest may fail — use document-level query as fallback
+        const purchaseForm = e.target.closest('.purchase-form') || document.querySelector('.purchase-form');
         if (purchaseForm) {
           e.preventDefault();
           
@@ -4506,6 +4507,12 @@ function Dashboard({ user, setUser, onLogout }) {
 
           const selectedCardInput = purchaseForm.querySelector('input[name="payment_card_id"]:checked');
           const paymentMethodId = selectedCardInput ? selectedCardInput.value : '';
+
+          // If no saved card is selected, show error — do NOT redirect externally
+          if (!paymentMethodId) {
+            if (window.notify) window.notify('error', 'Please select a payment card or add a new card first.');
+            return;
+          }
 
           // Close the bootstrap purchaseModal if open to clear screen
           const purchaseModalEl = document.getElementById('purchaseModal');
@@ -4622,95 +4629,9 @@ function Dashboard({ user, setUser, onLogout }) {
             return;
           }
 
-          // Fallback to Stripe Hosted Checkout if no card is saved/selected
-          fetch(`${API_BASE_URL}/payments/create-checkout-session`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-            },
-            body: JSON.stringify({ plan: planId, billingCycle: isYearly ? 'Yearly' : 'Monthly' })
-          })
-          .then(res => res.json())
-          .then(data => {
-            // Delay redirect slightly for premium loading experience
-            setTimeout(() => {
-              if (data.url) {
-                if (data.url.includes('mock=true')) {
-                  // Confirm session inline so user sees checkout animation
-                  const sessionUrl = new URL(data.url);
-                  const sessionId = sessionUrl.searchParams.get('session_id');
-                  const cycleVal = sessionUrl.searchParams.get('billing_cycle');
-                  
-                  fetch(`${API_BASE_URL}/payments/confirm-session`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-                    },
-                    body: JSON.stringify({ session_id: sessionId, billing_cycle: cycleVal })
-                  })
-                  .then(async (confirmRes) => {
-                    const confirmData = await confirmRes.json();
-                    if (confirmRes.ok && confirmData.success) {
-                      setPaymentResult('success');
-                      
-                      // Refresh user session state details
-                      const savedUser = JSON.parse(localStorage.getItem('aura_user') || '{}');
-                      savedUser.plan = confirmData.user.plan;
-                      savedUser.status = confirmData.user.status;
-                      savedUser.billing_cycle = confirmData.user.billing_cycle;
-                      localStorage.setItem('aura_user', JSON.stringify(savedUser));
-                      if (setUser) setUser(savedUser);
-
-                      setTimeout(() => {
-                        window.location.reload();
-                      }, 2000);
-                    } else {
-                      // Report failure to log failed transaction
-                      fetch(`${API_BASE_URL}/payments/fail-session`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-                        },
-                        body: JSON.stringify({ sessionId })
-                      }).finally(() => {
-                        setPaymentResult('error');
-                      });
-                    }
-                  })
-                  .catch(() => {
-                    // Report failure to log failed transaction
-                    fetch(`${API_BASE_URL}/payments/fail-session`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
-                      },
-                      body: JSON.stringify({ sessionId })
-                    }).finally(() => {
-                      setPaymentResult('error');
-                    });
-                  });
-                } else {
-                  // For real Stripe payment, redirect to Stripe hosted checkout page
-                  setPaymentResult('success');
-                  setTimeout(() => {
-                    window.location.href = data.url;
-                  }, 1200);
-                }
-              } else {
-                setPaymentResult('error');
-              }
-            }, 2000);
-          })
-          .catch(err => {
-            console.error(err);
-            setTimeout(() => {
-              setPaymentResult('error');
-            }, 2000);
-          });
+          // No saved card was available — show error instead of redirecting to external Stripe
+          if (window.notify) window.notify('error', 'No saved card found. Please add a payment card first.');
+          setPaymentResult('error');
           return;
         }
 
