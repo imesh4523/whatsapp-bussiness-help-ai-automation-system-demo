@@ -5586,10 +5586,10 @@ function Dashboard({ user, setUser, onLogout }) {
                     let bodyHtml = currentPage.body || '<h3>Page not found</h3>';
                     
                     if (resolvedTab === 'dashboard') {
-                      // Hide the original card on mobile views
+                      // Hide the original card on mobile views (use regex matching both escaped and unescaped quotes)
                       bodyHtml = bodyHtml.replace(
-                        'class=\\"dash-v2-card wallet-v2-card bg-animated-green h-100\\"',
-                        'class=\\"dash-v2-card wallet-v2-card bg-animated-green h-100 d-none d-lg-block\\"'
+                        /class=\\"dash-v2-card wallet-v2-card bg-animated-green h-100\\"|class="dash-v2-card wallet-v2-card bg-animated-green h-100"/i,
+                        'class="dash-v2-card wallet-v2-card bg-animated-green h-100 d-none d-lg-block"'
                       );
                       
                       // Prepend the mobile-only card right before the main rows grid container
@@ -5642,8 +5642,8 @@ function Dashboard({ user, setUser, onLogout }) {
                       `;
                       
                       bodyHtml = bodyHtml.replace(
-                        '<div class=\\"row gy-4 mb-5\\">',
-                        mobileWalletCard + '<div class=\\"row gy-4 mb-5\\">'
+                        /<div class=\\"row gy-4 mb-5\\">|<div class="row gy-4 mb-5">/i,
+                        (match) => mobileWalletCard + match
                       );
                     }
                     
