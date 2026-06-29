@@ -130,12 +130,14 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     // We get conversation history for this specific contact to maintain context
     let historyContext = "";
     let isLid = false;
+    let customerName = "Valued Customer";
     try {
       const chatRes = await db.query(
-        'SELECT c.id, c.remote_jid FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
+        'SELECT c.id, c.remote_jid, c.sender_name FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
         [sessionPhone, senderPhone]
       );
       if (chatRes.rows.length > 0) {
+        customerName = chatRes.rows[0].sender_name || "Valued Customer";
         const chatId = chatRes.rows[0].id;
         const remoteJid = chatRes.rows[0].remote_jid || '';
         if (remoteJid.endsWith('@lid') || senderPhone.length > 13) {
@@ -188,6 +190,10 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
 
     // 5. Expand System Prompt with Business Details & Sizing rules
     let systemPrompt = config.systemPrompt;
+    
+    // Add customer name and tone rules to prompt
+    systemPrompt += `\n\n[ACTIVE CUSTOMER DETAILS]\nName: ${customerName}\n\nCRITICAL GENDER DETECTION & SALUTATION RULE:\n1. Analyze the customer's name ("${customerName}").\n2. If the name is "Rochana Imesh", "Imesh", "Sadisi", "Rochana", or any clearly male name, you MUST address the customer respectfully as "සර්" (Sir) and NEVER as "මැඩම්" (Madam).\n3. If the name is clearly female, address as "මැඩම්" (Madam).\n4. Default to "සර්" (Sir) if unsure. Do NOT use the wrong salutation under any circumstance.`;
+
     if (businessProfile) {
       systemPrompt += `\n\n[BUSINESS KNOWLEDGE BASE]\nCompany Name: ${businessProfile.business_name || 'Our Store'}\nAbout Us: ${businessProfile.description || ''}\nAddress: ${businessProfile.address || ''}\nSizing Guides & Sizing details: ${businessProfile.sizes_info || ''}\nBank Details: ${businessProfile.bank_details || ''}`;
     }
@@ -257,7 +263,9 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
             ...imageParts,
             {
               text: imageBuffer 
-                ? `The customer uploaded this screenshot/image. Identify which product it matches in our [AVAILABLE INVENTORY]. Confirm if it is in stock, the price, sizes, and ask if they would like to order it. Additional message/caption from customer (if any): "${messageText || ''}"`
+                ? `The customer uploaded this screenshot/image. Compare this image against our [AVAILABLE INVENTORY] products. If the image matches one of our inventory products (either by visually matching one of our knowledge base photos or matching the product name/description), confirm it is in stock and state its details. 
+                   CRITICAL: If the image does NOT match any of our inventory products, politely tell the customer that we do not have this exact item, but show what products we DO have in our inventory, and ask if they are interested in those instead. Do NOT lie or falsely claim a match if the customer's image does not correspond to a product in our inventory.
+                   Additional message/caption from customer (if any): "${messageText || ''}"`
                 : `Here is the conversation history:\n${historyContext}\n\nCustomer: ${messageText}\nAssistant:`
             }
           ]
@@ -299,7 +307,9 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       // Final user message
       let userContent = [];
       const userText = imageBuffer
-        ? `The customer uploaded this screenshot/image. Identify which product it matches in our [AVAILABLE INVENTORY]. Confirm if it is in stock, the price, sizes, and ask if they would like to order it. Additional message/caption from customer (if any): "${messageText || ''}"`
+        ? `The customer uploaded this screenshot/image. Compare this image against our [AVAILABLE INVENTORY] products. If the image matches one of our inventory products (either by visually matching one of our knowledge base photos or matching the product name/description), confirm it is in stock and state its details. 
+           CRITICAL: If the image does NOT match any of our inventory products, politely tell the customer that we do not have this exact item, but show what products we DO have in our inventory, and ask if they are interested in those instead. Do NOT lie or falsely claim a match if the customer's image does not correspond to a product in our inventory.
+           Additional message/caption from customer (if any): "${messageText || ''}"`
         : messageText;
 
       userContent.push({
