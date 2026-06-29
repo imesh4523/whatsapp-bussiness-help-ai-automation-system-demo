@@ -336,6 +336,15 @@ app.post('/api/auth/reset-password', async (req, res) => {
       [passwordHash, user.id]
     );
 
+    // Fetch user profile to send password reset successful email notification
+    const userProfileRes = await db.query('SELECT full_name FROM users WHERE id = $1', [user.id]);
+    const fullName = userProfileRes.rows[0]?.full_name || 'Customer';
+    import('./email-service.js').then(({ sendTemplatedEmail }) => {
+      sendTemplatedEmail(email, 'password_reset_success', { fullName }).catch(e => {
+        console.error('[Reset Password] Failed to send success email notification:', e.message);
+      });
+    }).catch(e => console.error('[Reset Password] Failed to import email service:', e.message));
+
     res.json({ success: true, message: 'Password has been reset successfully.' });
   } catch (err) {
     console.error('[Reset Password Route Error]:', err.message);
@@ -3767,10 +3776,22 @@ app.post('/api/admin/users/:id/plan', async (req, res) => {
     return res.status(400).json({ error: 'Invalid plan' });
   }
   try {
-    const userRes = await db.query('SELECT email FROM users WHERE id = $1', [id]);
+    const userRes = await db.query('SELECT email, full_name FROM users WHERE id = $1', [id]);
     const email = userRes.rows.length > 0 ? userRes.rows[0].email : `ID ${id}`;
+    const fullName = userRes.rows.length > 0 ? userRes.rows[0].full_name : 'Customer';
     await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, id]);
     await logAuditEvent('User Plan Overridden', `Admin manually updated User ${email} (ID ${id}) plan to ${plan}`);
+    
+    // Trigger plan upgraded email notification
+    import('./email-service.js').then(({ sendTemplatedEmail }) => {
+      sendTemplatedEmail(email, 'plan_upgraded', {
+        fullName: fullName,
+        planName: plan
+      }).catch(e => {
+        console.error('[Admin Update User Plan] Failed to send email:', e.message);
+      });
+    }).catch(e => console.error('[Admin Update User Plan] Failed to import email service:', e.message));
+
     res.json({ success: true, message: `User plan upgraded to ${plan}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -4163,6 +4184,89 @@ async function downgradeUserToFree(userId, reason) {
 
 // Run checks every 10 minutes to auto-charge expired users
 setInterval(processSubscriptionRenewals, 10 * 60 * 1000);
+
+// Inactivity Checker: Select users who joined 3+ hours ago with 0 whatsapp sessions, send followup
+async function checkUserInactivity() {
+  console.log('Running user inactivity checks...');
+  try {
+    const inactiveUsersRes = await db.query(`
+      SELECT u.id, u.full_name as name, u.email 
+      FROM users u
+      LEFT JOIN whatsapp_sessions w ON u.id = w.user_id
+      WHERE u.inactivity_email_sent = FALSE 
+        AND u.joined < NOW() - INTERVAL '3 hours'
+        AND w.id IS NULL
+    `);
+
+    if (inactiveUsersRes.rows.length > 0) {
+      const { sendTemplatedEmail } = await import('./email-service.js');
+      for (const user of inactiveUsersRes.rows) {
+        console.log(`[Inactivity Checker] User ${user.email} (ID: ${user.id}) is inactive after 3 hours. Sending wakeup email...`);
+        const emailSent = await sendTemplatedEmail(user.email, 'inactivity_followup', {
+          fullName: user.name
+        });
+        if (emailSent) {
+          await db.query("UPDATE users SET inactivity_email_sent = TRUE WHERE id = $1", [user.id]);
+          await logAuditEvent('Inactivity Email Sent', `Sent inactive user follow-up to ${user.email}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Inactivity Checker] Error in inactivity check background loop:', err.message);
+  }
+}
+
+// Run inactivity checker loop every 15 minutes
+setInterval(checkUserInactivity, 15 * 60 * 1000);
+
+// ── Email Campaigns Mass Blast Dispatcher ──
+app.post('/api/admin/campaigns/send', authenticateToken, async (req, res) => {
+  const { templateKey, subject, body, variables = {} } = req.body;
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    // Fetch all active users
+    const usersRes = await db.query("SELECT email, name FROM users WHERE status = 'Active'");
+    const users = usersRes.rows;
+
+    console.log(`[Campaign Dispatch] Dispatching campaign "${subject || templateKey}" to ${users.length} users...`);
+
+    const { sendTemplatedEmail, sendGenericEmail } = await import('./email-service.js');
+    let successCount = 0;
+
+    for (const u of users) {
+      const userVars = {
+        fullName: u.name,
+        ...variables
+      };
+
+      let sent = false;
+      if (templateKey) {
+        sent = await sendTemplatedEmail(u.email, templateKey, userVars);
+      } else {
+        // Send custom raw campaign
+        let customSub = subject || 'Update from AgentBunny';
+        let customBody = body || '';
+        for (const [vKey, vVal] of Object.entries(userVars)) {
+          const regex = new RegExp(`{{\\s*${vKey}\\s*}}`, 'g');
+          customSub = customSub.replace(regex, vVal);
+          customBody = customBody.replace(regex, vVal);
+        }
+        sent = await sendGenericEmail(u.email, customSub, customBody, '', true);
+      }
+
+      if (sent) successCount++;
+    }
+
+    await logAuditEvent('Email Campaign Sent', `Campaign "${subject || templateKey}" sent to ${successCount}/${users.length} users.`);
+    res.json({ success: true, sentCount: successCount, totalUsers: users.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Serve static assets from React client build folder in production
 const distPath = path.join(__dirname, '../dist');

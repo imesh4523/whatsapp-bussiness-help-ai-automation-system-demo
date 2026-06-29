@@ -341,33 +341,67 @@ async function init() {
       }
     }
 
-    // Seed default email templates if empty
-    const templateCheck = await db.query('SELECT COUNT(*) FROM email_templates');
-    if (parseInt(templateCheck.rows[0].count) === 0) {
-      console.log('Seeding default email templates...');
-      const defaultTemplates = [
-        {
-          key: 'welcome',
-          subject: 'Welcome to AgentBunny!',
-          body: 'Hello {{fullName}},\n\nWelcome to AgentBunny! Start automating your WhatsApp business today.\n\nBest Regards,\nAgentBunny Team'
-        },
-        {
-          key: 'invoice',
-          subject: 'Your Subscription Invoice',
-          body: 'Hello {{fullName}},\n\nYour subscription invoice for your plan has been processed successfully. Thank you for your business!\n\nBest Regards,\nAgentBunny Team'
-        },
-        {
-          key: 'reset_password',
-          subject: 'Reset Your Password',
-          body: 'Hello {{fullName}},\n\nYou requested a password reset. To confirm it\'s you, please use the button below to reset your password.\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
-        }
-      ];
-      for (const t of defaultTemplates) {
-        await db.query(
-          'INSERT INTO email_templates (key, subject, body) VALUES ($1, $2, $3)',
-          [t.key, t.subject, t.body]
-        );
+    await db.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS inactivity_email_sent BOOLEAN DEFAULT FALSE;
+    `);
+    
+    console.log('Database tables verified/created successfully.');
+
+    // Seed default email templates
+    console.log('Seeding email templates...');
+    const defaultTemplates = [
+      {
+        key: 'welcome',
+        subject: 'Welcome to AgentBunny!',
+        body: 'Hello {{fullName}},\n\nWelcome to AgentBunny! Start automating your WhatsApp business today. We are here to help you scale your business operations instantly.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'invoice',
+        subject: 'Your Subscription Invoice',
+        body: 'Hello {{fullName}},\n\nYour subscription invoice for your plan has been processed successfully. Thank you for your business!\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'reset_password',
+        subject: 'Reset Your Password',
+        body: 'Hello {{fullName}},\n\nYou requested a password reset. To confirm it\'s you, please use the button below to reset your password.\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'password_reset_success',
+        subject: 'Password Reset Successful',
+        body: 'Hello {{fullName}},\n\nYour account password has been reset successfully. You can now log back in using your new credentials.\n\nIf you did not request this change, please contact our support team immediately.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'plan_upgraded',
+        subject: 'Subscription Upgraded Successfully!',
+        body: 'Hello {{fullName}},\n\nCongratulations! Your subscription has been successfully upgraded to the {{planName}} Plan. All limits and premium features are now unlocked for your store.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'inactivity_followup',
+        subject: 'Boost your business sales with AgentBunny WhatsApp AI',
+        body: 'Hello {{fullName}},\n\nWe noticed you signed up for AgentBunny but haven\'t connected your WhatsApp number yet. It takes less than 2 minutes to automate your sales using our AI assistants!\n\nUse the link below to get started and scan the QR code to sync your WhatsApp.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'promotional',
+        subject: 'New Features & WhatsApp AI Updates',
+        body: 'Hello {{fullName}},\n\nWe are excited to share some major updates to AgentBunny! We have added support for more advanced AI models, faster reply speeds, and detailed analytics on your dashboard.\n\nRead the announcement below to check out all the new features.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'offer_discount',
+        subject: 'Exclusive 20% discount offer for AgentBunny',
+        body: 'Hello {{fullName}},\n\nFor a limited time, get 20% off on your plan upgrade with code: {{discountCode}}!\n\nUpgrade your subscription today to automate more chats and increase conversions.\n\nBest Regards,\nAgentBunny Team'
+      },
+      {
+        key: 'price_update',
+        subject: 'Important: Update regarding plan pricing',
+        body: 'Hello {{fullName}},\n\nWe are writing to inform you about upcoming updates to our subscription packages. We are adding unlimited responses to all paid plans and introducing premium enterprise features.\n\nView details on your dashboard.\n\nBest Regards,\nAgentBunny Team'
       }
+    ];
+
+    for (const t of defaultTemplates) {
+      await db.query(
+        'INSERT INTO email_templates (key, subject, body) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET subject = $2, body = $3',
+        [t.key, t.subject, t.body]
+      );
     }
 
     console.log('Database initialization completed successfully!');

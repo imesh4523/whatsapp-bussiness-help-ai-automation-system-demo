@@ -337,6 +337,12 @@ function AdminDashboard({ admin, onLogout }) {
   const [testEmailHtml, setTestEmailHtml] = useState('');
   const [testEmailTemplateKey, setTestEmailTemplateKey] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [campaignTemplate, setCampaignTemplate] = useState('');
+  const [campaignSubject, setCampaignSubject] = useState('');
+  const [campaignBody, setCampaignBody] = useState('');
+  const [campaignVarPlan, setCampaignVarPlan] = useState('Premium');
+  const [campaignVarDiscount, setCampaignVarDiscount] = useState('PROMO20');
+  const [isSendingCampaign, setIsSendingCampaign] = useState(false);
 
   // Edit User Profile Modal States
   const [editingUser, setEditingUser] = useState(null);
@@ -1021,6 +1027,51 @@ function AdminDashboard({ admin, onLogout }) {
       if (window.notifyAdmin) window.notifyAdmin('error', 'Network error sending test email.');
     } finally {
       setIsSendingTest(false);
+    }
+  };
+
+  const handleSendCampaign = async (e) => {
+    e.preventDefault();
+    if (!campaignTemplate && !campaignSubject.trim()) {
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Please select a template or enter a custom subject.');
+      return;
+    }
+    if (!confirm('Are you sure you want to blast this email campaign to ALL active registered users? This action cannot be undone.')) return;
+    
+    setIsSendingCampaign(true);
+    try {
+      const payload = {
+        templateKey: campaignTemplate || null,
+        subject: campaignSubject || null,
+        body: campaignBody || null,
+        variables: {
+          planName: campaignVarPlan,
+          discountCode: campaignVarDiscount
+        }
+      };
+
+      const res = await fetch(`${API_BASE_URL}/admin/campaigns/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (window.notifyAdmin) window.notifyAdmin('success', `Campaign sent successfully to ${data.sentCount} users!`);
+        setCampaignTemplate('');
+        setCampaignSubject('');
+        setCampaignBody('');
+      } else {
+        if (window.notifyAdmin) window.notifyAdmin('error', data.error || 'Failed to send campaign.');
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.notifyAdmin) window.notifyAdmin('error', 'Network error dispatching email campaign.');
+    } finally {
+      setIsSendingCampaign(false);
     }
   };
 
@@ -3459,7 +3510,13 @@ function AdminDashboard({ admin, onLogout }) {
                         <option value="">Default Generic Test Email</option>
                         <option value="welcome">Welcome Email (welcome)</option>
                         <option value="reset_password">Reset Password Email (reset_password)</option>
-                        <option value="invoice">Subscription Invoice Email (invoice)</option>
+                        <option value="password_reset_success">Password Reset Success (password_reset_success)</option>
+                        <option value="plan_upgraded">Plan Upgraded (plan_upgraded)</option>
+                        <option value="invoice">Subscription Invoice (invoice)</option>
+                        <option value="inactivity_followup">3-Hour Inactivity Wakeup (inactivity_followup)</option>
+                        <option value="promotional">News & Update Announcement (promotional)</option>
+                        <option value="offer_discount">20% Coupon Offer (offer_discount)</option>
+                        <option value="price_update">Pricing Package Update (price_update)</option>
                       </select>
                     </div>
 
@@ -3500,6 +3557,108 @@ function AdminDashboard({ admin, onLogout }) {
                       {isSendingTest ? 'Sending Test...' : 'Send Test Email'}
                     </button>
                   </div>
+                </div>
+
+                {/* Email Campaigns Dispatcher Card */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-neutral-700">Email Campaigns & Announcements</h4>
+                    <p className="text-[10px] text-gray-500">Send custom messages or pre-designed newsletters to ALL registered users.</p>
+                  </div>
+
+                  <form onSubmit={handleSendCampaign} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Recipient Group</label>
+                      <input 
+                        type="text"
+                        disabled
+                        value="All Active Registered Users (System Blast)"
+                        className="w-full px-4 py-2.5 bg-neutral-100 border border-gray-200 rounded-xl text-xs text-neutral-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Select Campaign Template (Optional)</label>
+                      <select 
+                        value={campaignTemplate}
+                        onChange={(e) => setCampaignTemplate(e.target.value)}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all bg-white"
+                      >
+                        <option value="">Custom Raw Newsletter (No Template)</option>
+                        <option value="welcome">Welcome Onboarding (welcome)</option>
+                        <option value="reset_password">Reset Password Form (reset_password)</option>
+                        <option value="password_reset_success">Password Reset Success (password_reset_success)</option>
+                        <option value="plan_upgraded">Plan Upgraded Notification (plan_upgraded)</option>
+                        <option value="invoice">Subscription Payment Invoice (invoice)</option>
+                        <option value="inactivity_followup">3-Hour Onboarding Wakeup (inactivity_followup)</option>
+                        <option value="promotional">News & Product Updates (promotional)</option>
+                        <option value="offer_discount">20% Promo Coupon Discount (offer_discount)</option>
+                        <option value="price_update">Subscription Price Adjustment (price_update)</option>
+                      </select>
+                    </div>
+
+                    {campaignTemplate && (
+                      <div className="bg-neutral-50 border border-neutral-100 rounded-2xl p-3 space-y-2.5">
+                        <span className="text-[9px] font-black uppercase text-gray-400 block">Template Merge Variables</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Plan Name</label>
+                            <input 
+                              type="text"
+                              value={campaignVarPlan}
+                              onChange={(e) => setCampaignVarPlan(e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Promo Coupon Code</label>
+                            <input 
+                              type="text"
+                              value={campaignVarDiscount}
+                              onChange={(e) => setCampaignVarDiscount(e.target.value)}
+                              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!campaignTemplate && (
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Subject Line</label>
+                          <input 
+                            type="text"
+                            required
+                            value={campaignSubject}
+                            onChange={(e) => setCampaignSubject(e.target.value)}
+                            placeholder="e.g. Action Required: Update Your Billing Settings"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Email HTML Body</label>
+                          <textarea 
+                            rows="4"
+                            required
+                            value={campaignBody}
+                            onChange={(e) => setCampaignBody(e.target.value)}
+                            placeholder="Write your raw newsletter text or HTML body..."
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:border-[#00832e] focus:outline-none transition-all resize-none font-sans"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSendingCampaign}
+                      className="w-full px-4 py-3 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 h-[42px]"
+                    >
+                      {isSendingCampaign ? 'Sending Campaign Blast...' : '🚀 Launch Campaign Blast'}
+                    </button>
+                  </form>
                 </div>
 
                 {/* Console Log Panel */}

@@ -211,6 +211,112 @@ export async function sendTemplatedEmail(toEmail, key, variables = {}) {
           desc: 'If you did not request a password reset, you can safely ignore this email. Your account remains secure.'
         }
       ];
+    } else if (key === 'password_reset_success') {
+      title = 'Password Changed Successfully';
+      ctaText = 'Go to Dashboard';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/lock.png',
+          title: 'Secure Update',
+          desc: 'Your account login password has been changed. If this wasn\'t you, suspend your account immediately.'
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/warning-shield.png',
+          title: 'Password Best Practices',
+          desc: 'We recommend using a strong password with a mix of numbers, letters, and special symbols.'
+        }
+      ];
+    } else if (key === 'plan_upgraded') {
+      title = 'Subscription Plan Upgraded!';
+      ctaText = 'Explore Dashboard';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/filled-star.png',
+          title: 'Tier Unlocked',
+          desc: `Your store is now upgraded to the premium ${variables.planName || 'Pro'} package!`
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/rocket.png',
+          title: 'Response Quotas Expanded',
+          desc: 'Your monthly AI response messages limits have been expanded immediately.'
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/checked.png',
+          title: 'Premium Model Access',
+          desc: 'Access top-tier models with low latency and smart training contexts.'
+        }
+      ];
+    } else if (key === 'inactivity_followup') {
+      title = 'Connect WhatsApp & Automate Sales';
+      ctaText = 'Sync WhatsApp Now';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/phone.png',
+          title: '2-Minute QR Sync',
+          desc: 'Head to your user dashboard, scan the active QR code, and connect your phone number.'
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/robot.png',
+          title: 'Train Customer Agents',
+          desc: 'Feed your store info to our AI bot so it can answer customer inquiries instantly.'
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/activity.png',
+          title: '24/7 Operations',
+          desc: 'Capture leads, display products, and collect client order details while you sleep.'
+        }
+      ];
+    } else if (key === 'promotional') {
+      title = 'Latest System Announcements';
+      ctaText = 'View Details';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/rocket.png',
+          title: 'Advanced AI Architectures',
+          desc: 'We added support for deep reasoning contexts to resolve customer questions smoothly.'
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/activity.png',
+          title: 'Analytics Dashboard',
+          desc: 'Detailed token stats, order maps, and conversion analytics are now live.'
+        }
+      ];
+    } else if (key === 'offer_discount') {
+      title = 'Exclusive Onboarding Offer!';
+      ctaText = 'Claim Discount';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/sale.png',
+          title: 'Promo Code Discount',
+          desc: `Enjoy 20% off your package upgrade! Use coupon: ${variables.discountCode || 'PROMO20'}`
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/clock.png',
+          title: 'Limited Validity',
+          desc: 'This special promo coupon discount is valid only for the next 48 hours.'
+        }
+      ];
+    } else if (key === 'price_update') {
+      title = 'Pricing Structure Updates';
+      ctaText = 'Manage Subscription';
+      ctaLink = `${baseUrl}/user/dashboard`;
+      subFeatures = [
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/wallet.png',
+          title: 'Subscription Pricing Changes',
+          desc: 'Updating pricing details to add more unlimited AI responses on paid plans.'
+        },
+        {
+          iconUrl: 'https://img.icons8.com/material-outlined/48/00d166/checked.png',
+          title: 'System Upgrades',
+          desc: 'We are expanding background server resources for faster WhatsApp webhooks reply speeds.'
+        }
+      ];
     } else if (key === 'invoice') {
       title = 'Payment Successful';
       ctaText = 'Manage Subscription';
