@@ -3535,6 +3535,21 @@ function Dashboard({ user, setUser, onLogout }) {
     const cardsHtml = renderModalPaymentSectionHtml(savedCards, isCardsLoading);
     body = body.replace('<div id="modal-payment-section"></div>', `<div id="modal-payment-section">${cardsHtml}</div>`);
 
+    // CRITICAL: Strip the hardcoded wpp.raybeamdigital.com form action & method
+    // so the browser NEVER does a native form redirect — JS handles submit instead
+    body = body.replace(
+      /(<form[^>]*class="[^"]*purchase-form[^"]*"[^>]*)\s+method="POST"\s+action="https?:\/\/[^"]*"/gi,
+      '$1'
+    );
+    body = body.replace(
+      /(<form[^>]*)\s+action="https?:\/\/wpp\.raybeamdigital\.com[^"]*"/gi,
+      '$1'
+    );
+    body = body.replace(
+      /action="https?:\/\/wpp\.raybeamdigital\.com[^"]*"/gi,
+      ''
+    );
+
     return body;
   };
 
