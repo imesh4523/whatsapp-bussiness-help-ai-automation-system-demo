@@ -3989,19 +3989,8 @@ function Dashboard({ user, setUser, onLogout }) {
       '@font-face{font-family:"Font Awesome 5 Free";src:url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-regular-400.woff2") format("woff2");font-weight:400;font-style:normal;}',
       '@font-face{font-family:"Font Awesome 5 Brands";src:url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-brands-400.woff2") format("woff2");font-weight:normal;font-style:normal;}',
       '@font-face{font-family:"Font Awesome 6 Free";src:url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/webfonts/fa-solid-900.woff2") format("woff2");font-weight:900;font-style:normal;}',
-      // Sidebar hover
-      '.dashboard .sidebar-menu:hover{width:280px!important;}',
-      '.dashboard .sidebar-menu:hover .sidebar-menu-list__link .text{display:inline-block!important;opacity:1!important;visibility:visible!important;}',
-      '.dashboard .sidebar-menu:hover .sidebar-menu-list__title{display:block!important;}',
-      'body .sidebar-menu .sidebar-logo{display:flex!important; opacity:1!important; visibility:visible!important;}',
-      'body .sidebar-menu .sidebar-logo img{display:block!important; max-height:48px!important; object-fit:contain!important; margin:0 auto!important; opacity:1!important; visibility:visible!important;}',
-      '.brand-text{display:none!important;}',
-      '.sidebar-menu:hover .brand-text{display:block!important;}',
-      '.dashboard .sidebar-menu:not(:hover) .sidebar-logo img{display:block!important;}',
-      '.dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after{display:none!important;}',
-      '.dashboard .sidebar-menu:not(:hover) .sidebar-logo{margin:20px 0!important; padding:0!important; justify-content:center!important;}',
-      '.dashboard .sidebar-menu:hover .sidebar-logo__link::after{display:none!important;}',
-      '.dashboard .sidebar-menu:hover .sidebar-menu-list__item.has-dropdown>.sidebar-menu-list__link::after{display:block!important;}',
+      // Sidebar hover and collapse styling restricted strictly to desktop screens (width >= 992px)
+      '@media(min-width:992px){.dashboard .sidebar-menu:hover{width:280px!important;}.dashboard .sidebar-menu:hover .sidebar-menu-list__link .text{display:inline-block!important;opacity:1!important;visibility:visible!important;}.dashboard .sidebar-menu:hover .sidebar-menu-list__title{display:block!important;}body .sidebar-menu .sidebar-logo{display:flex!important; opacity:1!important; visibility:visible!important;}body .sidebar-menu .sidebar-logo img{display:block!important; max-height:48px!important; object-fit:contain!important; margin:0 auto!important; opacity:1!important; visibility:visible!important;}.brand-text{display:none!important;}.sidebar-menu:hover .brand-text{display:block!important;}.dashboard .sidebar-menu:not(:hover) .sidebar-logo img{display:block!important;}.dashboard .sidebar-menu:not(:hover) .sidebar-logo__link::after{display:none!important;}.dashboard .sidebar-menu:not(:hover) .sidebar-logo{margin:20px 0!important; padding:0!important; justify-content:center!important;}.dashboard .sidebar-menu:hover .sidebar-logo__link::after{display:none!important;}.dashboard .sidebar-menu:hover .sidebar-menu-list__item.has-dropdown>.sidebar-menu-list__link::after{display:block!important;}}',
       // High-performance mobile viewport locks to prevent horizontal side-swipes and sidebar wiggling
       '@media(max-width:991px){html,body{overflow-x:hidden!important;position:relative!important;width:100%!important;}.sidebar-menu{position:fixed!important;top:0!important;bottom:0!important;left:-280px!important;width:280px!important;height:100%!important;z-index:10005!important;transition:left 0.3s cubic-bezier(0.4,0,0.2,1)!important;overflow-y:auto!important;box-shadow:0 0 20px rgba(0,0,0,0.15)!important;}.sidebar-menu.show-sidebar{left:0!important;}}',
       // Inbox whatsapp-empty-screen
