@@ -17,7 +17,7 @@ const COURIER_CONFIGS = {
  * Triggers a simulated external API call to the specified courier tracking system.
  * Parsers return actual structured checkpoint history logs.
  */
-async function queryCourierAPI(courier, trackingNumber) {
+export async function queryCourierAPI(courier, trackingNumber) {
   const config = COURIER_CONFIGS[courier] || { endpoint: '', format: 'json' };
   
   console.log(`[Courier API] Initiating request to ${courier} API endpoint: ${config.endpoint} for tracking: ${trackingNumber}`);
@@ -92,7 +92,3 @@ async function queryCourierAPI(courier, trackingNumber) {
       ];
   }
 }
-
-module.exports = {
-  queryCourierAPI
-};

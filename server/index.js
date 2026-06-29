@@ -19,6 +19,7 @@ import {
   trackSentMessage,
   decrementProductStock
 } from './wa-manager.js';
+import { queryCourierAPI } from './couriers.js';
 
 dotenv.config();
 
@@ -1436,7 +1437,6 @@ app.patch('/api/crm/orders/:orderId/tracking', authenticateToken, async (req, re
     if (check.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
 
     // Query live courier API connector
-    const { queryCourierAPI } = require('./couriers');
     const apiHistory = await queryCourierAPI(courier_name || 'Sri Lanka Post', tracking_number);
     const finalStatus = tracking_status || apiHistory[apiHistory.length - 1]?.status || 'Out for Delivery';
 
@@ -1455,7 +1455,6 @@ app.patch('/api/crm/orders/:orderId/tracking', authenticateToken, async (req, re
 app.get('/api/crm/track/:trackingNumber', authenticateToken, async (req, res) => {
   try {
     const r = await db.query('SELECT * FROM orders WHERE tracking_number = $1 AND user_id = $2', [req.params.trackingNumber, req.user.id]);
-    const { queryCourierAPI } = require('./couriers');
 
     if (r.rows.length === 0) {
       // Simulate live external lookup
