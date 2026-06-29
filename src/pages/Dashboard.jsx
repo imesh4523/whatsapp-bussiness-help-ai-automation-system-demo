@@ -4001,13 +4001,7 @@ function Dashboard({ user, setUser, onLogout }) {
       "https://wpp.raybeamdigital.com/assets/global/css/iziToast.min.css",
       "https://wpp.raybeamdigital.com/assets/global/css/iziToast_custom.css",
     ];
-    stylesheets.forEach((href) => {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = href;
-      link.dataset.dashboardAsset = 'true';
-      document.head.appendChild(link);
-    });
+    // Stylesheets are loaded asynchronously in the main loader IIFE below to prevent FOUC
 
     // Inline CSS: loader + font-face + sidebar hover + inbox page styles
     const styleEl = document.createElement('style');
@@ -4106,6 +4100,23 @@ function Dashboard({ user, setUser, onLogout }) {
     }, 2500);
 
     (async () => {
+      // 1. Load stylesheets in parallel and wait for all of them
+      if (mounted) {
+        const stylesheetPromises = stylesheets.map((href) => {
+          return new Promise((resolve) => {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.dataset.dashboardAsset = 'true';
+            link.onload = resolve;
+            link.onerror = resolve;
+            document.head.appendChild(link);
+          });
+        });
+        await Promise.all(stylesheetPromises);
+      }
+
+      // 2. Load scripts sequentially
       for (const src of scripts) {
         if (!mounted) break;
         await new Promise((resolve) => {
