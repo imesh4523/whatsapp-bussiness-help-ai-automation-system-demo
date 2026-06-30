@@ -153,7 +153,7 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     shouldSyncHistoryDevices: () => false, // Do not sync historic messages to save memory & prevent lag disconnects
     syncFullHistory: false,               // Bypasses sync history
     markOnlineOnConnect: false,           // Prevents showing online status and reduces sync notification spam
-    browser: ['AgentBunny', 'Chrome', '115.0.0'] // Custom browser user agent string
+    browser: ['Ubuntu', 'Chrome', '20.0.04'] // Standard user agent to allow pairing code verification
   };
 
   const sock = makeWASocket(sockConfig);
