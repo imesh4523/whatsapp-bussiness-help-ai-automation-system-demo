@@ -1407,7 +1407,7 @@ function AdminDashboard({ admin, onLogout }) {
             >
               {activeTab === 'domain-config' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
               <Globe className="w-4 h-4 flex-shrink-0" />
-              <span>Domain & Email</span>
+              <span>📢 Campaigns & Emails</span>
             </button>
             <button 
               onClick={() => setActiveTab('coupons')}
