@@ -3,6 +3,7 @@ import dashboardPages from '../data/dashboardPages.json';
 import { API_BASE_URL } from '../config';
 import ManageInventory from './ManageInventory';
 import AISupportAssistant from './AISupportAssistant';
+import WhatsAppBulkCampaign from './WhatsAppBulkCampaign';
 
 
 
@@ -4794,7 +4795,6 @@ function Dashboard({ user, setUser, onLogout }) {
       'contact_list', 'contact_tag_list', 'contactlist_list',
       'saved_reply_index', 'saved_reply_create',
       'template_create', 'template_create_carousel', 'template_index',
-      'campaign_create', 'campaign_index',
       'automation_welcome_message', 'flow_builder', 'automation_ai_bot',
       'shortlink_create', 'shortlink_index',
       'floater_create', 'floater_index',
@@ -4859,14 +4859,20 @@ function Dashboard({ user, setUser, onLogout }) {
             
             <!-- Buttons -->
             <div class="d-flex flex-column gap-2 justify-content-center align-items-center" style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
-              <a href="/ticket" class="btn btn--base py-3 px-5 d-inline-flex align-items-center gap-2 font-semibold" 
+              \${(user?.plan === 'Free' || user?.plan === 'Starter' || !user?.plan) ? \`
+                <button id="claim-free-trial-btn" class="btn py-3 px-5 d-inline-flex align-items-center gap-2 font-semibold"
+                        style="background: linear-gradient(135deg, #00832e 0%, #006020 100%); border: none; color: #ffffff; border-radius: 12px; font-size: 14px; padding: 12px 32px; text-transform: uppercase; letter-spacing: 0.8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(0, 131, 46, 0.3); font-family: 'Outfit', sans-serif; font-weight: 700; outline: none; border-style: none; margin: 0;">
+                  <i class="las la-gift" style="font-size: 18px; margin: 0; padding: 0; line-height: 1;"></i> Start 14-Day Free Trial
+                </button>
+              \` : ''}
+              <a href="/ticket" class="btn btn--base py-2.5 px-4 d-inline-flex align-items-center gap-2 font-semibold" 
                  data-route="ticket"
-                 style="background: #0a938a; border: none; color: #ffffff; border-radius: 12px; font-size: 15px; padding: 12px 32px; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
-                <i class="las la-headset" style="font-size: 18px;"></i> Contact Support Team
+                 style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; border-radius: 12px; font-size: 13.5px; padding: 10px 24px; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="las la-headset" style="font-size: 16px;"></i> Contact Support Team
               </a>
               <a href="/user/dashboard" class="btn text-slate-400 hover:text-slate-600 font-medium transition-all" 
                  data-route="dashboard"
-                 style="color: #94a3b8; font-size: 14px; text-decoration: none; border: none; background: transparent; margin-top: 10px; display: inline-block; cursor: pointer;">
+                 style="color: #94a3b8; font-size: 13px; text-decoration: none; border: none; background: transparent; margin-top: 10px; display: inline-block; cursor: pointer;">
                 Return to Dashboard
               </a>
             </div>
@@ -5605,7 +5611,8 @@ function Dashboard({ user, setUser, onLogout }) {
                 <UserTransactions userTransactions={userTransactions} />
               ) : tab === 'agentbunny_assistant' ? (
                 <AISupportAssistant setTab={setTab} />
-
+              ) : (tab === 'campaign_create' || tab === 'campaign_index') ? (
+                <WhatsAppBulkCampaign tab={tab} setTab={setTab} />
               ) : (tab === 'subscription_index' || tab === 'subscription_monthly' || tab === 'subscription_yearly') ? (
                 <div dangerouslySetInnerHTML={{
                   __html: renderSubscriptionBody()
