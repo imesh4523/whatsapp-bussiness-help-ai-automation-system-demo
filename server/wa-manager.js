@@ -152,6 +152,7 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     defaultQueryTimeoutMs: 60000,        // Wait 60s for queries to prevent timeouts
     shouldSyncHistoryDevices: () => false, // Do not sync historic messages to save memory & prevent lag disconnects
     syncFullHistory: false,               // Bypasses sync history
+    markOnlineOnConnect: false,           // Prevents showing online status and reduces sync notification spam
     browser: ['AgentBunny', 'Chrome', '115.0.0'] // Custom browser user agent string
   };
 
