@@ -5509,7 +5509,13 @@ function Dashboard({ user, setUser, onLogout }) {
                   <div className="user-info">
                     <div className="user-info__right" onClick={() => setIsProfileOpen(!isProfileOpen)}>
                       <div className="user-info__button" tabIndex="-1">
-                        <div className="user-info__thumb"><span>{userInitials}</span></div>
+                        <div className="user-info__thumb" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {user?.avatar_url ? (
+                            <img src={user.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                          ) : (
+                            <span>{userInitials}</span>
+                          )}
+                        </div>
                         <div className="user-info__profile">
                           <p className="user-info__name">{userName}</p>
                           <span className="user-info__desc">

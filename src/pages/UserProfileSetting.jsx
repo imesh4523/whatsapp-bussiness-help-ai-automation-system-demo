@@ -53,6 +53,9 @@ export default function UserProfileSetting({ user, setUser }) {
         zip: user.zip || '',
         country: user.country || 'Sri Lanka'
       });
+      if (user.avatar_url) {
+        setAvatarPreview(user.avatar_url);
+      }
     }
   }, [user]);
 

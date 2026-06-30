@@ -85,6 +85,7 @@ async function init() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50) DEFAULT 'Monthly';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_message_count INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500) DEFAULT NULL;
       
       ALTER TABLE plans ADD COLUMN IF NOT EXISTS response_limit INTEGER DEFAULT 500;
       

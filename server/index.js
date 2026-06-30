@@ -441,6 +441,11 @@ app.get('/api/auth/google/callback', async (req, res) => {
       if (user.status === 'Suspended') {
         return res.redirect(`${state}?social_error=suspended`);
       }
+      // Update Google profile picture if it changed
+      if (googleUser.picture && googleUser.picture !== user.avatar_url) {
+        await db.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [googleUser.picture, user.id]);
+        user.avatar_url = googleUser.picture;
+      }
     } else {
       // Create a new user profile
       const nameParts = fullName.trim().split(/\s+/);
@@ -451,8 +456,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
       const passwordHash = await bcrypt.hash(randomPassword, 10);
 
       const insertRes = await db.query(
-        'INSERT INTO users (email, password_hash, full_name, firstname, lastname, plan, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [email, passwordHash, fullName, firstname, lastname, 'Starter', 'Active']
+        'INSERT INTO users (email, password_hash, full_name, firstname, lastname, plan, status, avatar_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+        [email, passwordHash, fullName, firstname, lastname, 'Starter', 'Active', googleUser.picture || null]
       );
       user = insertRes.rows[0];
 
@@ -484,7 +489,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
       email: user.email,
       name: user.full_name,
       plan: user.plan,
-      status: user.status
+      status: user.status,
+      avatar_url: user.avatar_url
     };
 
     res.redirect(`${state}?social_token=${encodeURIComponent(token)}&social_user=${encodeURIComponent(JSON.stringify(userData))}`);
@@ -496,7 +502,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle, firstname, lastname, mobile, dial_code, city, state, zip, country, ai_message_count FROM users WHERE id = $1', [req.user.id]);
+    const userRes = await db.query('SELECT id, email, full_name, plan, status, auto_renewal, plan_expires_at, billing_cycle, firstname, lastname, mobile, dial_code, city, state, zip, country, ai_message_count, avatar_url FROM users WHERE id = $1', [req.user.id]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -518,7 +524,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       state: user.state || '',
       zip: user.zip || '',
       country: user.country || '',
-      ai_message_count: user.ai_message_count || 0
+      ai_message_count: user.ai_message_count || 0,
+      avatar_url: user.avatar_url
     });
   } catch (err) {
     console.error('Get me error:', err.message);
