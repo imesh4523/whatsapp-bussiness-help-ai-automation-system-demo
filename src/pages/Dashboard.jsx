@@ -5695,27 +5695,27 @@ function Dashboard({ user, setUser, onLogout }) {
                       .replaceAll('__USER_PLAN__', user?.plan || 'Free')
                       .replaceAll('__TRIAL_BUTTON__', (user?.plan === 'Free' || !user?.plan) ? `
                         <button id="claim-free-trial-btn" class="btn btn-sm" style="
-                          background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+                          background: linear-gradient(135deg, #00832e 0%, #006020 100%);
                           color: #ffffff;
                           border: none;
-                          font-size: 9.5px;
-                          font-weight: 700;
-                          padding: 5px 11px;
-                          border-radius: 20px;
-                          box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
+                          font-size: 9px;
+                          font-weight: 800;
+                          padding: 5px 12px;
+                          border-radius: 9999px;
+                          box-shadow: 0 4px 12px rgba(0, 131, 46, 0.3);
                           cursor: pointer;
                           display: flex;
                           align-items: center;
-                          gap: 4px;
+                          gap: 5px;
                           text-transform: uppercase;
-                          letter-spacing: 0.6px;
+                          letter-spacing: 0.8px;
                           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                           animation: pulseGlow 2s infinite ease-in-out;
                           outline: none;
                           border-style: none;
                           margin: 0;
                         ">
-                          <i class="las la-gift" style="margin: 0; padding: 0; line-height: 1; font-size: 13px;"></i> Free Trial
+                          <i class="las la-gift" style="margin: 0; padding: 0; line-height: 1; font-size: 12px;"></i> Free Trial
                         </button>
                       ` : '')
                       .replaceAll('__TOTAL_EARNED__', (stats?.total_earned ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
