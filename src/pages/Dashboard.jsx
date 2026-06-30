@@ -5693,7 +5693,7 @@ function Dashboard({ user, setUser, onLogout }) {
                     
                     return bodyHtml
                       .replaceAll('__USER_PLAN__', user?.plan || 'Free')
-                      .replaceAll('__TRIAL_BUTTON__', (user?.plan === 'Free' || user?.plan === 'Starter' || !user?.plan) ? `
+                      .replaceAll('__TRIAL_BUTTON__', (user?.plan === 'Free' || user?.plan === 'Starter' || user?.plan === 'Growth' || !user?.plan) ? `
                         <button id="claim-free-trial-btn" class="btn btn-sm" style="
                           background: linear-gradient(135deg, #00832e 0%, #006020 100%);
                           color: #ffffff;
