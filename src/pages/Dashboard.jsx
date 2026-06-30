@@ -2983,8 +2983,7 @@ function Dashboard({ user, setUser, onLogout }) {
 
   const setTab = (newTab) => {
     const newPath = getPathFromTab(newTab);
-    setTabState(newTab);
-    window.history.pushState(null, '', newPath);
+    window.location.href = newPath;
   };
 
   const [sessions, setSessions] = useState([]);
