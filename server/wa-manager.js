@@ -73,9 +73,10 @@ function findEphemeralExpirationRecursive(obj) {
 export async function initWhatsAppSessions() {
   console.log('Scanning database for saved WhatsApp sessions...');
   try {
-    const res = await db.query("SELECT * FROM whatsapp_sessions WHERE status = 'Connected'");
+    // Restore any session that has credentials saved, even if it was temporarily marked disconnected when the server stopped
+    const res = await db.query("SELECT * FROM whatsapp_sessions WHERE session_data_encrypted IS NOT NULL");
     for (const row of res.rows) {
-      console.log(`Restoring WhatsApp session: ${row.id} (${row.phone})...`);
+      console.log(`Restoring WhatsApp session: ${row.id} (${row.phone || 'Unknown'})...`);
       startWhatsAppSocket(row.id, row.user_id).catch(err => {
         console.error(`Failed to restore session ${row.id}:`, err.message);
       });
@@ -96,6 +97,26 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
   const sessionPath = path.join(SESSIONS_DIR, sessionId);
   if (!fs.existsSync(sessionPath)) {
     fs.mkdirSync(sessionPath, { recursive: true });
+  }
+
+  // 0. Clean up any existing active socket and listeners to avoid duplicate socket loops/conflicts
+  const existingSock = activeSockets[sessionId];
+  if (existingSock) {
+    console.log(`[WhatsApp Socket] Cleaning up existing active socket for session ${sessionId} to prevent duplicates.`);
+    try {
+      if (existingSock.reconnectTimer) {
+        clearTimeout(existingSock.reconnectTimer);
+      }
+      if (existingSock.ev) {
+        existingSock.ev.removeAllListeners('connection.update');
+        existingSock.ev.removeAllListeners('creds.update');
+        existingSock.ev.removeAllListeners('messages.upsert');
+      }
+      existingSock.end();
+    } catch (e) {
+      console.warn(`[WhatsApp Socket] Error cleaning up old socket for ${sessionId}:`, e.message);
+    }
+    delete activeSockets[sessionId];
   }
 
   // 1. Try to restore credentials from database
@@ -125,7 +146,13 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     version,
     printQRInTerminal: false,
     auth: state,
-    logger
+    logger,
+    keepAliveIntervalMs: 30000,          // Send keepalive ping every 30 seconds
+    connectTimeoutMs: 60000,             // Wait 60s for connection
+    defaultQueryTimeoutMs: 60000,        // Wait 60s for queries to prevent timeouts
+    shouldSyncHistoryDevices: () => false, // Do not sync historic messages to save memory & prevent lag disconnects
+    syncFullHistory: false,               // Bypasses sync history
+    browser: ['AgentBunny', 'Chrome', '115.0.0'] // Custom browser user agent string
   };
 
   const sock = makeWASocket(sockConfig);
@@ -182,21 +209,33 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut || 
-                         statusCode === DisconnectReason.badSession || 
-                         statusCode === 401 || 
-                         statusCode === 403 || 
-                         statusCode === 411 || 
-                         statusCode === 500;
+      
+      // ONLY treat it as logged out if code is explicitly DisconnectReason.loggedOut (401)
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       const shouldReconnect = !isLoggedOut;
-      console.log(`Connection closed for session ${sessionId} (code ${statusCode}). Reconnecting?`, shouldReconnect, 'Reason:', lastDisconnect?.error);
+      
+      console.log(`[WhatsApp Socket] Session ${sessionId} closed (code ${statusCode}). Reconnecting? ${shouldReconnect}. Reason:`, lastDisconnect?.error);
       
       await db.query('UPDATE whatsapp_sessions SET status = $1, uptime = $2 WHERE id = $3', ['Disconnected', '0s', sessionId]);
       
       if (shouldReconnect) {
-        startWhatsAppSocket(sessionId, userId, pairingPhone);
+        // Debounce/Delay connection retries to prevent hammering
+        if (!activeSockets[sessionId]) {
+          activeSockets[sessionId] = {};
+        }
+        
+        if (activeSockets[sessionId].reconnectTimer) {
+          clearTimeout(activeSockets[sessionId].reconnectTimer);
+        }
+        
+        activeSockets[sessionId].reconnectTimer = setTimeout(() => {
+          console.log(`[WhatsApp Socket] Automatically reconnecting session ${sessionId}...`);
+          startWhatsAppSocket(sessionId, userId, pairingPhone).catch(err => {
+            console.error(`[WhatsApp Socket] Reconnect failed for ${sessionId}:`, err.message);
+          });
+        }, 5000);
       } else {
-        // Logged out
+        // Logged out permanently
         cleanSessionDirectory(sessionId);
         await db.query('DELETE FROM whatsapp_sessions WHERE id = $1', [sessionId]);
         delete activeSockets[sessionId];
