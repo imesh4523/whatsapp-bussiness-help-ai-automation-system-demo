@@ -2983,7 +2983,8 @@ function Dashboard({ user, setUser, onLogout }) {
 
   const setTab = (newTab) => {
     const newPath = getPathFromTab(newTab);
-    window.location.href = newPath;
+    setTabState(newTab);
+    window.history.pushState(null, '', newPath);
   };
 
   const [sessions, setSessions] = useState([]);
@@ -4519,7 +4520,7 @@ function Dashboard({ user, setUser, onLogout }) {
           else if (href.includes('/user/logout')) { e.preventDefault(); onLogout(); }
           else if (href.includes('#') && (anchor.classList.contains('sidebar-menu-list__link') || anchor.closest('.has-dropdown'))) {
             // Let sidebar dropdowns pass through
-          } else if (href.startsWith('http') && !href.includes('localhost')) {
+          } else if (href.startsWith('http') && !href.includes(window.location.hostname)) {
             e.preventDefault();
             if (window.notify) window.notify('info', 'This feature is running in demo mode.');
           }
@@ -4791,6 +4792,10 @@ function Dashboard({ user, setUser, onLogout }) {
 
   // ── 7. Update browser page title dynamically ────────────────────────────
   const isMarketingTool = (tabKey) => {
+    // Paid plans (Growth, Premium, Enterprise) have all marketing tools unlocked!
+    if (user?.plan === 'Premium' || user?.plan === 'Enterprise' || user?.plan === 'Growth') {
+      return false;
+    }
     const marketingTools = [
       'contact_list', 'contact_tag_list', 'contactlist_list',
       'saved_reply_index', 'saved_reply_create',
@@ -4800,7 +4805,8 @@ function Dashboard({ user, setUser, onLogout }) {
       'floater_create', 'floater_index',
       'cta_url_create', 'cta_url_index',
       'interactive_list_create', 'interactive_list_index',
-      'ecommerce_woocommerce_products', 'ecommerce_woocommerce_config'
+      'ecommerce_woocommerce_products', 'ecommerce_woocommerce_config',
+      'campaign_create', 'campaign_index'
     ];
     return marketingTools.includes(tabKey);
   };
