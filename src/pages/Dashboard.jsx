@@ -2985,9 +2985,31 @@ function Dashboard({ user, setUser, onLogout }) {
   // Initialize tab state dynamically based on the browser's current URL path
   const [tab, setTabState] = useState(() => getTabFromPath(window.location.pathname));
 
+  // Tabs that are rendered as React components — no full reload needed
+  const REACT_COMPONENT_TABS = new Set([
+    'dashboard', 'inbox', 'customer_list', 'customer_create',
+    'orders_list', 'manage_inventory', 'automation_ai_bot', 'business_profile',
+    'track_orders', 'transactions', 'agentbunny_assistant',
+    'campaign_create', 'campaign_index',
+    'contact_list', 'contact_tag_list', 'contactlist_list',
+    'template_index', 'template_create', 'template_create_carousel',
+    'saved_reply_index', 'saved_reply_create',
+    'automation_welcome_message',
+    'whatsapp_account',
+    'subscription_index', 'subscription_monthly', 'subscription_yearly',
+  ]);
+
   const setTab = (newTab) => {
-    const newPath = getPathFromTab(newTab);
-    window.location.href = newPath;
+    if (REACT_COMPONENT_TABS.has(newTab)) {
+      // React component tab → update state directly, no page reload
+      const newPath = getPathFromTab(newTab);
+      window.history.pushState(null, '', newPath);
+      setTabState(newTab);
+    } else {
+      // Scraped HTML page → full reload to ensure correct content
+      const newPath = getPathFromTab(newTab);
+      window.location.href = newPath;
+    }
   };
 
   const [sessions, setSessions] = useState([]);
