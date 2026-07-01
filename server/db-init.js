@@ -190,6 +190,79 @@ async function init() {
       ALTER TABLE resend_api_keys ADD COLUMN IF NOT EXISTS subdomain VARCHAR(255);
       ALTER TABLE resend_api_keys ADD COLUMN IF NOT EXISTS sender_email VARCHAR(255);
       ALTER TABLE resend_api_keys ADD COLUMN IF NOT EXISTS email_type VARCHAR(100) DEFAULT 'All';
+
+      -- Marketing Tools Tables
+      CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        first_name VARCHAR(255) NOT NULL,
+        last_name VARCHAR(255) DEFAULT '',
+        mobile_code VARCHAR(10) DEFAULT '+94',
+        mobile VARCHAR(50) NOT NULL,
+        email VARCHAR(255) DEFAULT '',
+        company VARCHAR(255) DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS contact_tags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        color VARCHAR(50) DEFAULT '#00832e',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS contact_lists (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS contact_list_members (
+        list_id INTEGER REFERENCES contact_lists(id) ON DELETE CASCADE,
+        contact_id INTEGER REFERENCES contacts(id) ON DELETE CASCADE,
+        PRIMARY KEY (list_id, contact_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS contact_tag_members (
+        tag_id INTEGER REFERENCES contact_tags(id) ON DELETE CASCADE,
+        contact_id INTEGER REFERENCES contacts(id) ON DELETE CASCADE,
+        PRIMARY KEY (tag_id, contact_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS whatsapp_templates (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) DEFAULT 'MARKETING',
+        language VARCHAR(50) DEFAULT 'en_US',
+        header_type VARCHAR(50) DEFAULT 'NONE',
+        header_text TEXT DEFAULT '',
+        body_text TEXT NOT NULL,
+        footer_text TEXT DEFAULT '',
+        buttons JSONB DEFAULT '[]'::JSONB,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS saved_replies (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        shortcut VARCHAR(100) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS welcome_message_settings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        is_active BOOLEAN DEFAULT FALSE,
+        message TEXT DEFAULT 'Hello! Welcome to our business. How can we help you today?',
+        delay_seconds INTEGER DEFAULT 2,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     
     console.log('Database tables verified/created successfully.');

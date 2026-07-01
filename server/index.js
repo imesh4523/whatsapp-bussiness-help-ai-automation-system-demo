@@ -28,12 +28,37 @@ import { manuallyActivateKey } from './resend-rotator.js';
 
 dotenv.config();
 
-// Run dynamic schema migrations for password reset columns
+// Run dynamic schema migrations for password reset columns and marketing campaign tables
 db.query(`
   ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255) DEFAULT NULL;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+
+  CREATE TABLE IF NOT EXISTS marketing_campaigns (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    message_text TEXT NOT NULL,
+    total_numbers INTEGER DEFAULT 0,
+    sent_count INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    delay_min INTEGER DEFAULT 5,
+    delay_max INTEGER DEFAULT 15,
+    status VARCHAR(50) DEFAULT 'Pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS campaign_logs (
+    id SERIAL PRIMARY KEY,
+    campaign_id INTEGER REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
+    phone_number VARCHAR(50) NOT NULL,
+    status VARCHAR(50) DEFAULT 'Pending',
+    error_message TEXT DEFAULT NULL,
+    sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
+  );
 `).then(() => {
-  console.log('PostgreSQL database users table migration succeeded (reset columns checked).');
+  console.log('PostgreSQL database users and marketing campaign table migrations succeeded.');
   // Update old password reset template in DB to remove raw link text
   db.query(`
     UPDATE email_templates 
@@ -41,7 +66,7 @@ db.query(`
     WHERE key = 'reset_password' AND body LIKE '%following link%';
   `).catch(err => console.warn('Reset template DB migration check failed:', err.message));
 }).catch(err => {
-  console.warn('Optional users table migration check warning:', err.message);
+  console.warn('Optional migrations check warning:', err.message);
 });
 
 let stripeInstance = null;
@@ -2778,6 +2803,370 @@ INSTRUCTIONS:
   }
 });
 
+// ── Marketing Bulk Campaigns Background Worker and Endpoints ───────────────────
+let campaignWorkerTimeout = null;
+async function processCampaignQueue() {
+  try {
+    // Find a pending log belonging to a running campaign
+    const pendingLogRes = await db.query(`
+      SELECT cl.*, mc.user_id, mc.message_text, mc.delay_min, mc.delay_max, mc.title
+      FROM campaign_logs cl
+      JOIN marketing_campaigns mc ON cl.campaign_id = mc.id
+      WHERE cl.status = 'Pending' AND mc.status = 'Running'
+      ORDER BY cl.id ASC
+      LIMIT 1
+    `);
+
+    if (pendingLogRes.rows.length === 0) {
+      // Check if there are any 'Running' campaigns that have no pending logs left and mark them 'Completed'
+      await db.query(`
+        UPDATE marketing_campaigns
+        SET status = 'Completed', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'Running' AND id NOT IN (
+          SELECT DISTINCT campaign_id FROM campaign_logs WHERE status = 'Pending'
+        )
+      `);
+      
+      // Schedule next check in 5 seconds
+      campaignWorkerTimeout = setTimeout(processCampaignQueue, 5000);
+      return;
+    }
+
+    const log = pendingLogRes.rows[0];
+    const { id: logId, campaign_id: campaignId, phone_number: rawPhone, message_text: text, delay_min, delay_max, user_id: userId } = log;
+
+    // Resolve WhatsApp session ID for the user
+    let sessionId;
+    const dbRes = await db.query(
+      'SELECT id FROM whatsapp_sessions WHERE user_id = $1 AND status = \'Connected\' ORDER BY created_at ASC LIMIT 1',
+      [userId]
+    );
+    if (dbRes.rows.length > 0) {
+      sessionId = dbRes.rows[0].id;
+    } else {
+      sessionId = `user_${userId}`;
+    }
+
+    const sock = getActiveSocket(sessionId);
+    if (!sock) {
+      // If socket is not active, we fail this send
+      await db.query(`
+        UPDATE campaign_logs
+        SET status = 'Failed', error_message = 'No active/connected WhatsApp session found.', sent_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [logId]);
+
+      await db.query(`
+        UPDATE marketing_campaigns
+        SET sent_count = sent_count + 1, failed_count = failed_count + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [campaignId]);
+
+      // Schedule next check immediately since we didn't send anything
+      campaignWorkerTimeout = setTimeout(processCampaignQueue, 1000);
+      return;
+    }
+
+    // Clean phone number formatting
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      await db.query(`
+        UPDATE campaign_logs
+        SET status = 'Failed', error_message = 'Invalid phone number format.', sent_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [logId]);
+
+      await db.query(`
+        UPDATE marketing_campaigns
+        SET sent_count = sent_count + 1, failed_count = failed_count + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [campaignId]);
+
+      campaignWorkerTimeout = setTimeout(processCampaignQueue, 1000);
+      return;
+    }
+
+    // Send the message via Baileys
+    const recipientJid = `${cleanPhone}@s.whatsapp.net`;
+    try {
+      console.log(`Campaign worker: Sending message to ${recipientJid}...`);
+      await sock.sendMessage(recipientJid, { text });
+      
+      // Update DB logs for success
+      await db.query(`
+        UPDATE campaign_logs
+        SET status = 'Success', sent_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [logId]);
+
+      await db.query(`
+        UPDATE marketing_campaigns
+        SET sent_count = sent_count + 1, success_count = success_count + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [campaignId]);
+
+      // Track the message count under stats if needed
+      await db.query(
+        'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
+        [`${sessionId}_${cleanPhone}`, text, 'agent']
+      );
+
+    } catch (sendErr) {
+      console.error(`Campaign worker send error to ${recipientJid}:`, sendErr);
+      
+      // Update DB logs for failure
+      await db.query(`
+        UPDATE campaign_logs
+        SET status = 'Failed', error_message = $1, sent_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [sendErr.message || 'WhatsApp sending failed.', logId]);
+
+      await db.query(`
+        UPDATE marketing_campaigns
+        SET sent_count = sent_count + 1, failed_count = failed_count + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [campaignId]);
+    }
+
+    // Delay before the next message to avoid bans (human simulation)
+    const delaySec = Math.floor(Math.random() * (delay_max - delay_min + 1)) + delay_min;
+    console.log(`Campaign worker: Waiting for ${delaySec} seconds before next send...`);
+    campaignWorkerTimeout = setTimeout(processCampaignQueue, delaySec * 1000);
+
+  } catch (queueErr) {
+    console.error('Error in processCampaignQueue:', queueErr);
+    campaignWorkerTimeout = setTimeout(processCampaignQueue, 5000);
+  }
+}
+
+app.post('/api/marketing/generate-ai-message', authenticateToken, async (req, res) => {
+  const { instructions, customVariables } = req.body;
+  if (!instructions) {
+    return res.status(400).json({ error: 'AI instructions/prompt are required.' });
+  }
+
+  try {
+    let systemInstruction = `You are a premium, highly effective marketing copywriter.
+Your task is to generate a compelling WhatsApp message based on the user's instructions and custom variables.
+
+Rules:
+1. Make the message engaging, professional, and clear.
+2. Use spacing and paragraphs to make it highly readable.
+3. You can use standard formatting allowed in WhatsApp (like *bold*, _italics_, ~strikethrough~, and emojis).
+4. Do NOT include any placeholders like [Name] in the final text. Replace them using the provided custom variables if available, or write a natural alternative.
+5. Provide ONLY the final generated message content, nothing else (no explanations, no intros like "Here is your message:").
+`;
+
+    if (customVariables && typeof customVariables === 'object') {
+      systemInstruction += `\nHere are the custom variables for personalizing the message:\n` + 
+        Object.entries(customVariables).map(([k, v]) => `- ${k}: ${v}`).join('\n');
+    }
+
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: `Generate a WhatsApp message following these instructions: ${instructions}` }] }],
+      systemInstruction: {
+        parts: [{ text: systemInstruction }]
+      }
+    };
+
+    const provider = await getAIProvider();
+    let text = "";
+
+    if (provider === 'openrouter') {
+      try {
+        const orMessages = [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: `Generate a WhatsApp message following these instructions: ${instructions}` }
+        ];
+        const orModel = await getOpenRouterModel() || 'google/gemini-2.5-flash';
+        const orResult = await callOpenRouterAPI(orModel, orMessages, { temperature: 0.7 });
+        text = orResult.text;
+      } catch (orErr) {
+        console.warn("OpenRouter failed in marketing message generation, falling back to Gemini...", orErr.message);
+        const data = await callGeminiAPI('gemini-3.5-flash', payload);
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      }
+    } else {
+      try {
+        const data = await callGeminiAPI('gemini-3.5-flash', payload);
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      } catch (gemErr) {
+        console.warn("Gemini failed in marketing message generation, falling back to OpenRouter...", gemErr.message);
+        const orMessages = [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: `Generate a WhatsApp message following these instructions: ${instructions}` }
+        ];
+        const orModel = await getOpenRouterModel() || 'google/gemini-2.5-flash';
+        const orResult = await callOpenRouterAPI(orModel, orMessages, { temperature: 0.7 });
+        text = orResult.text;
+      }
+    }
+
+    res.json({ success: true, text: text ? text.trim() : "" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create campaign and queue numbers
+app.post('/api/marketing/campaigns', authenticateToken, async (req, res) => {
+  const { title, messageText, numbers, delayMin, delayMax } = req.body;
+  if (!title || !messageText || !Array.isArray(numbers) || numbers.length === 0) {
+    return res.status(400).json({ error: 'Title, message text, and list of numbers are required.' });
+  }
+
+  const dMin = parseInt(delayMin) || 5;
+  const dMax = parseInt(delayMax) || 15;
+
+  try {
+    // 1. Deduplicate numbers to prevent sending to the same number repeatedly
+    const uniqueNumbers = [...new Set(numbers.map(n => n.trim().replace(/\D/g, '')).filter(Boolean))];
+    if (uniqueNumbers.length === 0) {
+      return res.status(400).json({ error: 'No valid phone numbers found after formatting.' });
+    }
+
+    // 2. Insert the campaign into database
+    const campaignRes = await db.query(`
+      INSERT INTO marketing_campaigns (user_id, title, message_text, total_numbers, delay_min, delay_max, status)
+      VALUES ($1, $2, $3, $4, $5, $6, 'Running')
+      RETURNING *
+    `, [req.user.id, title, messageText, uniqueNumbers.length, dMin, dMax]);
+
+    const campaign = campaignRes.rows[0];
+
+    // 3. Insert each recipient number into campaign_logs as Pending
+    const insertPromises = uniqueNumbers.map(phone => {
+      return db.query(`
+        INSERT INTO campaign_logs (campaign_id, phone_number, status)
+        VALUES ($1, $2, 'Pending')
+      `, [campaign.id, phone]);
+    });
+    await Promise.all(insertPromises);
+
+    // Trigger queue processing worker loop instantly
+    if (campaignWorkerTimeout) {
+      clearTimeout(campaignWorkerTimeout);
+    }
+    processCampaignQueue();
+
+    res.json({ success: true, campaign });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get user campaigns list
+app.get('/api/marketing/campaigns', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT * FROM marketing_campaigns
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [req.user.id]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get campaign details and recipient logs
+app.get('/api/marketing/campaigns/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const campaignRes = await db.query(`
+      SELECT * FROM marketing_campaigns
+      WHERE id = $1 AND user_id = $2
+    `, [id, req.user.id]);
+
+    if (campaignRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Campaign not found.' });
+    }
+
+    const campaign = campaignRes.rows[0];
+
+    const logsRes = await db.query(`
+      SELECT * FROM campaign_logs
+      WHERE campaign_id = $1
+      ORDER BY id ASC
+    `, [id]);
+
+    res.json({ campaign, logs: logsRes.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Pause campaign
+app.post('/api/marketing/campaigns/:id/pause', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await db.query(`
+      UPDATE marketing_campaigns
+      SET status = 'Paused', updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND user_id = $2 AND status = 'Running'
+      RETURNING *
+    `, [id, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Campaign not found or is not running.' });
+    }
+
+    res.json({ success: true, campaign: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Resume campaign
+app.post('/api/marketing/campaigns/:id/resume', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await db.query(`
+      UPDATE marketing_campaigns
+      SET status = 'Running', updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND user_id = $2 AND status = 'Paused'
+      RETURNING *
+    `, [id, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Campaign not found or is not paused.' });
+    }
+
+    // Trigger queue processing worker loop instantly
+    if (campaignWorkerTimeout) {
+      clearTimeout(campaignWorkerTimeout);
+    }
+    processCampaignQueue();
+
+    res.json({ success: true, campaign: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cancel campaign
+app.post('/api/marketing/campaigns/:id/cancel', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await db.query(`
+      UPDATE marketing_campaigns
+      SET status = 'Cancelled', updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND user_id = $2 AND (status = 'Running' OR status = 'Paused')
+      RETURNING *
+    `, [id, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Campaign not found or is already completed/cancelled.' });
+    }
+
+    res.json({ success: true, campaign: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Support Tickets API Endpoints ─────────────────────────────────────────────
 // User endpoints
 
@@ -4432,6 +4821,315 @@ app.post('/api/admin/campaigns/send', authenticateToken, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 📇 MARKETING TOOLS API ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Contacts ──────────────────────────────────────────────────────────────────
+app.get('/api/contacts', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT c.*, 
+        COALESCE(json_agg(DISTINCT jsonb_build_object('id', ct.id, 'name', ct.name, 'color', ct.color)) FILTER (WHERE ct.id IS NOT NULL), '[]') as tags
+       FROM contacts c
+       LEFT JOIN contact_tag_members ctm ON ctm.contact_id = c.id
+       LEFT JOIN contact_tags ct ON ct.id = ctm.tag_id
+       WHERE c.user_id = $1
+       GROUP BY c.id
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/contacts', authenticateToken, async (req, res) => {
+  try {
+    const { first_name, last_name = '', mobile_code = '+94', mobile, email = '', company = '' } = req.body;
+    if (!first_name || !mobile) return res.status(400).json({ error: 'First name and mobile are required' });
+    const result = await db.query(
+      `INSERT INTO contacts (user_id, first_name, last_name, mobile_code, mobile, email, company)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, first_name, last_name, mobile_code, mobile, email, company]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/contacts/:id', authenticateToken, async (req, res) => {
+  try {
+    const { first_name, last_name, mobile_code, mobile, email, company } = req.body;
+    const result = await db.query(
+      `UPDATE contacts SET first_name=$1, last_name=$2, mobile_code=$3, mobile=$4, email=$5, company=$6
+       WHERE id=$7 AND user_id=$8 RETURNING *`,
+      [first_name, last_name, mobile_code, mobile, email, company, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Contact not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/contacts/:id', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM contacts WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Contact Tags ──────────────────────────────────────────────────────────────
+app.get('/api/contact-tags', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT ct.*, COUNT(ctm.contact_id) as contact_count
+       FROM contact_tags ct
+       LEFT JOIN contact_tag_members ctm ON ctm.tag_id = ct.id
+       WHERE ct.user_id = $1
+       GROUP BY ct.id
+       ORDER BY ct.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/contact-tags', authenticateToken, async (req, res) => {
+  try {
+    const { name, color = '#00832e' } = req.body;
+    if (!name) return res.status(400).json({ error: 'Tag name is required' });
+    const result = await db.query(
+      `INSERT INTO contact_tags (user_id, name, color) VALUES ($1,$2,$3) RETURNING *`,
+      [req.user.id, name, color]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/contact-tags/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, color } = req.body;
+    const result = await db.query(
+      `UPDATE contact_tags SET name=$1, color=$2 WHERE id=$3 AND user_id=$4 RETURNING *`,
+      [name, color, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Tag not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/contact-tags/:id', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM contact_tags WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Contact Lists ─────────────────────────────────────────────────────────────
+app.get('/api/contact-lists', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT cl.*, COUNT(clm.contact_id) as contact_count
+       FROM contact_lists cl
+       LEFT JOIN contact_list_members clm ON clm.list_id = cl.id
+       WHERE cl.user_id = $1
+       GROUP BY cl.id
+       ORDER BY cl.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/contact-lists', authenticateToken, async (req, res) => {
+  try {
+    const { name, description = '' } = req.body;
+    if (!name) return res.status(400).json({ error: 'List name is required' });
+    const result = await db.query(
+      `INSERT INTO contact_lists (user_id, name, description) VALUES ($1,$2,$3) RETURNING *`,
+      [req.user.id, name, description]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/contact-lists/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const result = await db.query(
+      `UPDATE contact_lists SET name=$1, description=$2 WHERE id=$3 AND user_id=$4 RETURNING *`,
+      [name, description, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'List not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/contact-lists/:id', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM contact_lists WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── WhatsApp Templates ────────────────────────────────────────────────────────
+app.get('/api/whatsapp-templates', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT * FROM whatsapp_templates WHERE user_id=$1 ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/whatsapp-templates', authenticateToken, async (req, res) => {
+  try {
+    const { name, category = 'MARKETING', language = 'en_US', header_type = 'NONE', header_text = '', body_text, footer_text = '', buttons = [] } = req.body;
+    if (!name || !body_text) return res.status(400).json({ error: 'Template name and body text are required' });
+    const result = await db.query(
+      `INSERT INTO whatsapp_templates (user_id, name, category, language, header_type, header_text, body_text, footer_text, buttons)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [req.user.id, name, category, language, header_type, header_text, body_text, footer_text, JSON.stringify(buttons)]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/whatsapp-templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, category, language, header_type, header_text, body_text, footer_text, buttons } = req.body;
+    const result = await db.query(
+      `UPDATE whatsapp_templates SET name=$1, category=$2, language=$3, header_type=$4, header_text=$5, body_text=$6, footer_text=$7, buttons=$8
+       WHERE id=$9 AND user_id=$10 RETURNING *`,
+      [name, category, language, header_type, header_text, body_text, footer_text, JSON.stringify(buttons || []), req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Template not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/whatsapp-templates/:id', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM whatsapp_templates WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Saved Replies ─────────────────────────────────────────────────────────────
+app.get('/api/saved-replies', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT * FROM saved_replies WHERE user_id=$1 ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saved-replies', authenticateToken, async (req, res) => {
+  try {
+    const { title, shortcut, message } = req.body;
+    if (!title || !shortcut || !message) return res.status(400).json({ error: 'Title, shortcut and message are required' });
+    const result = await db.query(
+      `INSERT INTO saved_replies (user_id, title, shortcut, message) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.user.id, title, shortcut, message]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saved-replies/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, shortcut, message } = req.body;
+    const result = await db.query(
+      `UPDATE saved_replies SET title=$1, shortcut=$2, message=$3 WHERE id=$4 AND user_id=$5 RETURNING *`,
+      [title, shortcut, message, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Reply not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/saved-replies/:id', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM saved_replies WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Welcome Message Settings ──────────────────────────────────────────────────
+app.get('/api/welcome-message', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT * FROM welcome_message_settings WHERE user_id=$1`,
+      [req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ user_id: req.user.id, is_active: false, message: 'Hello! Welcome to our business. How can we help you today?', delay_seconds: 2 });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/welcome-message', authenticateToken, async (req, res) => {
+  try {
+    const { is_active, message, delay_seconds } = req.body;
+    const result = await db.query(
+      `INSERT INTO welcome_message_settings (user_id, is_active, message, delay_seconds)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (user_id) DO UPDATE SET is_active=$2, message=$3, delay_seconds=$4, updated_at=NOW()
+       RETURNING *`,
+      [req.user.id, is_active, message, delay_seconds]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Serve static assets from React client build folder in production
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
@@ -4450,6 +5148,8 @@ app.listen(PORT, () => {
   initWhatsAppSessions();
   // Trigger subscription check on server start
   processSubscriptionRenewals();
+  // Initialize campaign processor
+  processCampaignQueue();
 });
 
 

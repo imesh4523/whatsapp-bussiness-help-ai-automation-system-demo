@@ -4,6 +4,10 @@ import { API_BASE_URL } from '../config';
 import ManageInventory from './ManageInventory';
 import AISupportAssistant from './AISupportAssistant';
 import WhatsAppBulkCampaign from './WhatsAppBulkCampaign';
+import ManageContacts from './ManageContacts';
+import ManageTemplates from './ManageTemplates';
+import ManageSavedReplies from './ManageSavedReplies';
+import WelcomeMessage from './WelcomeMessage';
 
 
 
@@ -5618,6 +5622,14 @@ function Dashboard({ user, setUser, onLogout }) {
                 <AISupportAssistant setTab={setTab} />
               ) : (tab === 'campaign_create' || tab === 'campaign_index') ? (
                 <WhatsAppBulkCampaign tab={tab} setTab={setTab} />
+              ) : (tab === 'contact_list' || tab === 'contact_tag_list' || tab === 'contactlist_list') ? (
+                <ManageContacts tab={tab} />
+              ) : (tab === 'template_index' || tab === 'template_create' || tab === 'template_create_carousel') ? (
+                <ManageTemplates tab={tab} setTab={setTab} />
+              ) : tab === 'saved_reply_index' ? (
+                <ManageSavedReplies />
+              ) : tab === 'automation_welcome_message' ? (
+                <WelcomeMessage />
               ) : (tab === 'subscription_index' || tab === 'subscription_monthly' || tab === 'subscription_yearly') ? (
                 <div dangerouslySetInnerHTML={{
                   __html: renderSubscriptionBody()
