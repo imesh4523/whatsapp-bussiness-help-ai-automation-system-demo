@@ -17,7 +17,7 @@ async function getSAToken(sa) {
 
   const payload = {
     iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/generative-language',
+    scope: 'https://www.googleapis.com/auth/cloud-platform',
     aud: 'https://oauth2.googleapis.com/token',
     exp: now + 3600,
     iat: now
@@ -147,9 +147,21 @@ export async function callGeminiAPI(endpointModel, payload) {
       };
 
       if (isServiceAccount) {
-        console.log(`Attempting Gemini API request using Service Account #${i + 1}/${keys.length} (${keyItem.client_email})...`);
+        console.log(`Attempting Gemini API request using Service Account #${i + 1}/${keys.length} (${keyItem.client_email}) via Vertex AI...`);
         const token = await getSAToken(keyItem);
-        url = `https://generativelanguage.googleapis.com/v1beta/models/${endpointModel}:generateContent`;
+        const projectId = keyItem.project_id || 'ai-support-501313';
+        const region = 'us-central1';
+        
+        let vertexModel = endpointModel;
+        if (vertexModel.includes('1.5') || vertexModel.includes('2.0') || vertexModel.includes('3.5') || vertexModel.includes('3.1')) {
+          if (vertexModel.includes('lite')) {
+            vertexModel = 'gemini-2.5-flash-lite';
+          } else {
+            vertexModel = 'gemini-2.5-flash';
+          }
+        }
+        
+        url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${vertexModel}:generateContent`;
         headers['Authorization'] = `Bearer ${token}`;
       } else {
         console.log(`Attempting Gemini API request with Key #${i + 1}/${keys.length}...`);
