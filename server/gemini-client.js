@@ -1,15 +1,79 @@
 import db from './db.js';
+import crypto from 'crypto';
+
+const saTokenCache = {}; // key: client_email -> { token, expiresAt }
+
+async function getSAToken(sa) {
+  const cached = saTokenCache[sa.client_email];
+  const now = Math.floor(Date.now() / 1000);
+  if (cached && cached.expiresAt > now + 60) {
+    return cached.token;
+  }
+
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT'
+  };
+
+  const payload = {
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/generative-language',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now
+  };
+
+  const base64url = (strOrBuf) => {
+    const buf = Buffer.isBuffer(strOrBuf) ? strOrBuf : Buffer.from(strOrBuf);
+    return buf.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  };
+
+  const encodedHeader = base64url(JSON.stringify(header));
+  const encodedPayload = base64url(JSON.stringify(payload));
+  
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(`${encodedHeader}.${encodedPayload}`);
+  const signature = sign.sign(sa.private_key);
+  const encodedSignature = base64url(signature);
+
+  const jwt = `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`Token request failed: ${JSON.stringify(data)}`);
+  }
+
+  const token = data.access_token;
+  if (!token) {
+    throw new Error(`OAuth server response did not include access_token: ${JSON.stringify(data)}`);
+  }
+
+  saTokenCache[sa.client_email] = {
+    token,
+    expiresAt: now + (data.expires_in || 3600)
+  };
+  return token;
+}
 
 /**
- * Retrieves all configured Gemini API keys.
- * Deduplicates and returns an array of keys.
+ * Retrieves all configured Gemini API keys or service accounts.
+ * Deduplicates and returns an array of keys/credentials.
  */
 export async function getGeminiKeys() {
-  let keys = [];
+  let rawKeys = [];
   
   // 1. Check process.env
   if (process.env.GEMINI_API_KEY) {
-    keys.push(process.env.GEMINI_API_KEY.trim());
+    rawKeys.push(process.env.GEMINI_API_KEY.trim());
   }
 
   // 2. Fetch from database system_settings
@@ -25,15 +89,15 @@ export async function getGeminiKeys() {
           if (Array.isArray(parsed)) {
             parsed.forEach(k => {
               if (k && typeof k === 'string' && k.trim()) {
-                keys.push(k.trim());
+                rawKeys.push(k.trim());
               }
             });
           }
         } catch (e) {
-          keys.push(val);
+          rawKeys.push(val);
         }
       } else {
-        keys.push(val);
+        rawKeys.push(val);
       }
     }
   } catch (err) {
@@ -41,45 +105,76 @@ export async function getGeminiKeys() {
   }
 
   // Deduplicate and filter empty
-  keys = [...new Set(keys)].filter(Boolean);
+  rawKeys = [...new Set(rawKeys)].filter(Boolean);
+
+  const keys = [];
+  for (const raw of rawKeys) {
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.type === 'service_account' && parsed.client_email && parsed.private_key) {
+          keys.push(parsed);
+          continue;
+        }
+      } catch (e) {
+        // Fallback to plain string key
+      }
+    }
+    keys.push(raw);
+  }
   return keys;
 }
 
 /**
- * Rotates through Gemini keys and calls the official REST API.
- * If all keys fail, throws an error.
+ * Rotates through Gemini keys/service accounts and calls the official REST API.
+ * If all fail, throws an error.
  */
 export async function callGeminiAPI(endpointModel, payload) {
   const keys = await getGeminiKeys();
   if (keys.length === 0) {
-    throw new Error('No Gemini API keys are configured.');
+    throw new Error('No Gemini API keys or service accounts are configured.');
   }
 
   let lastError = null;
   for (let i = 0; i < keys.length; i++) {
-    const key = keys[i];
-    // Strip model if the endpoint has double model path prefix
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${endpointModel}:generateContent?key=${key}`;
+    const keyItem = keys[i];
+    const isServiceAccount = typeof keyItem === 'object' && keyItem !== null;
+
     try {
-      console.log(`Attempting Gemini API request with Key #${i + 1}/${keys.length}...`);
+      let url;
+      let headers = {
+        'Content-Type': 'application/json'
+      };
+
+      if (isServiceAccount) {
+        console.log(`Attempting Gemini API request using Service Account #${i + 1}/${keys.length} (${keyItem.client_email})...`);
+        const token = await getSAToken(keyItem);
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${endpointModel}:generateContent`;
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.log(`Attempting Gemini API request with Key #${i + 1}/${keys.length}...`);
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${endpointModel}:generateContent?key=${keyItem}`;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify(payload)
       });
+
       if (response.ok) {
         const data = await response.json();
         return data;
       }
       const errText = await response.text();
-      console.warn(`Gemini Key #${i + 1} returned status ${response.status}: ${errText}`);
-      lastError = new Error(`Gemini API key #${i + 1} failed (${response.status}): ${errText}`);
+      const identifier = isServiceAccount ? keyItem.client_email : `Key #${i + 1}`;
+      console.warn(`Gemini API with ${identifier} returned status ${response.status}: ${errText}`);
+      lastError = new Error(`Gemini API with ${identifier} failed (${response.status}): ${errText}`);
     } catch (err) {
-      console.warn(`Gemini Key #${i + 1} connection error:`, err.message);
+      const identifier = isServiceAccount ? keyItem.client_email : `Key #${i + 1}`;
+      console.warn(`Gemini API with ${identifier} connection error:`, err.message);
       lastError = err;
     }
   }
-  throw lastError || new Error('All Gemini API keys failed.');
+  throw lastError || new Error('All Gemini API keys and service accounts failed.');
 }
