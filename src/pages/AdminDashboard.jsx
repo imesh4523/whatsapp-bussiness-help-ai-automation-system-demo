@@ -30,7 +30,9 @@ import {
   Copy,
   CheckCircle2,
   XCircle,
-  Sliders
+  Sliders,
+  Menu,
+  X
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -225,7 +227,13 @@ function TokenUsageRow({ log }) {
 
 function AdminDashboard({ admin, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'users', 'sessions', 'ai-config'
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    setIsSidebarOpen(false);
+  };
   
   const [allSavedCards, setAllSavedCards] = useState([]);
   const [suspiciousActivities, setSuspiciousActivities] = useState({
@@ -1349,23 +1357,40 @@ function AdminDashboard({ admin, onLogout }) {
   );
 
   return (
-    <div className="flex h-screen bg-[#f4f6f8] text-[#111111] font-sans antialiased overflow-hidden">
+    <div className="flex h-screen bg-[#f4f6f8] text-[#111111] font-sans antialiased overflow-hidden relative">
       
       {/* ── Left Sidebar ── */}
-      <div className="w-64 bg-white border-r border-gray-150 flex flex-col justify-between p-6 overflow-y-auto h-screen">
+      {/* Overlay backdrop for mobile view when sidebar is open */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      <div className={`fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-150 flex flex-col justify-between p-6 overflow-y-auto h-screen z-50 transition-transform duration-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="space-y-8">
-          {/* Logo */}
-          <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-            <span className="w-3.5 h-3.5 rounded-full bg-[#00832e]"></span>
-            <span className="text-neutral-800 font-extrabold tracking-tight text-lg uppercase" style={{ fontFamily: 'Inter, sans-serif' }}>
-              AgentBunny <span className="text-[#00832e]">Admin</span>
-            </span>
+          {/* Logo & Close Button */}
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <span className="w-3.5 h-3.5 rounded-full bg-[#00832e]"></span>
+              <span className="text-neutral-800 font-extrabold tracking-tight text-lg uppercase" style={{ fontFamily: 'Inter, sans-serif' }}>
+                AgentBunny <span className="text-[#00832e]">Admin</span>
+              </span>
+            </div>
+            {/* Close Button for mobile */}
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-50 transition-colors border-none outline-none focus:outline-none bg-transparent"
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Sidebar Tabs */}
           <nav className="space-y-2">
             <button 
-              onClick={() => setActiveTab('overview')}
+              onClick={() => handleTabChange('overview')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'overview' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1374,7 +1399,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>Overview</span>
             </button>
             <button 
-              onClick={() => setActiveTab('users')}
+              onClick={() => handleTabChange('users')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'users' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1383,7 +1408,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>User Accounts</span>
             </button>
             <button 
-              onClick={() => setActiveTab('sessions')}
+              onClick={() => handleTabChange('sessions')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'sessions' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1392,7 +1417,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>WhatsApp Sessions</span>
             </button>
             <button 
-              onClick={() => setActiveTab('ai-config')}
+              onClick={() => handleTabChange('ai-config')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'ai-config' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1401,7 +1426,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>System Settings</span>
             </button>
             <button 
-              onClick={() => setActiveTab('domain-config')}
+              onClick={() => handleTabChange('domain-config')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'domain-config' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1410,7 +1435,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>📢 Campaigns & Emails</span>
             </button>
             <button 
-              onClick={() => setActiveTab('coupons')}
+              onClick={() => handleTabChange('coupons')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'coupons' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1420,7 +1445,7 @@ function AdminDashboard({ admin, onLogout }) {
             </button>
 
             <button 
-              onClick={() => setActiveTab('transactions')}
+              onClick={() => handleTabChange('transactions')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'transactions' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1429,7 +1454,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>Billing & Payments</span>
             </button>
             <button 
-              onClick={() => setActiveTab('user-cards')}
+              onClick={() => handleTabChange('user-cards')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'user-cards' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1438,7 +1463,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>Saved Cards Manager</span>
             </button>
             <button 
-              onClick={() => setActiveTab('suspicious')}
+              onClick={() => handleTabChange('suspicious')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'suspicious' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1447,7 +1472,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>Suspicious Activities</span>
             </button>
             <button 
-              onClick={() => setActiveTab('audit-logs')}
+              onClick={() => handleTabChange('audit-logs')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'audit-logs' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1456,7 +1481,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>System Audit Logs</span>
             </button>
             <button 
-              onClick={() => setActiveTab('token-usage')}
+              onClick={() => handleTabChange('token-usage')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'token-usage' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1465,7 +1490,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>AI Token Usage Logs</span>
             </button>
             <button 
-              onClick={() => setActiveTab('tickets')}
+              onClick={() => handleTabChange('tickets')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'tickets' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1474,7 +1499,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>Support Tickets</span>
             </button>
             <button 
-              onClick={() => setActiveTab('email-templates')}
+              onClick={() => handleTabChange('email-templates')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'email-templates' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1483,7 +1508,7 @@ function AdminDashboard({ admin, onLogout }) {
               <span>Email Templates</span>
             </button>
             <button 
-              onClick={() => setActiveTab('plans')}
+              onClick={() => handleTabChange('plans')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'plans' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
             >
@@ -1516,15 +1541,25 @@ function AdminDashboard({ admin, onLogout }) {
       </div>
 
       {/* ── Main Content Area ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden w-full">
         
         {/* Header bar */}
-        <header className="h-16 border-b border-gray-200 bg-white px-8 flex items-center justify-between shadow-sm">
-          <h1 className="font-black text-lg tracking-tight uppercase text-neutral-800">
-            {activeTab.replace('-', ' ')}
-          </h1>
-          <div className="flex items-center gap-4 text-xs font-bold tracking-wider text-neutral-500 uppercase">
-            <span>System Status:</span>
+        <header className="h-16 border-b border-gray-200 bg-white px-4 sm:px-8 flex items-center justify-between shadow-sm gap-4">
+          <div className="flex items-center gap-3">
+            {/* Hamburger Button for mobile */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-xl text-neutral-500 hover:bg-neutral-50 transition-colors border-none outline-none focus:outline-none bg-transparent"
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h1 className="font-black text-base sm:text-lg tracking-tight uppercase text-neutral-800 whitespace-nowrap">
+              {activeTab.replace('-', ' ')}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-bold tracking-wider text-neutral-500 uppercase">
+            <span className="hidden sm:inline">System Status:</span>
             <span className="flex items-center gap-1.5 text-[#00832e]">
               <span className="w-2.5 h-2.5 rounded-full bg-[#00832e] animate-pulse"></span>
               Operational
@@ -1533,7 +1568,7 @@ function AdminDashboard({ admin, onLogout }) {
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           
           {/* 1. OVERVIEW VIEW */}
           {activeTab === 'overview' && (
