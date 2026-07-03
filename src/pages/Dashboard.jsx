@@ -3006,16 +3006,8 @@ function Dashboard({ user, setUser, onLogout }) {
   ]);
 
   const setTab = (newTab) => {
-    if (REACT_COMPONENT_TABS.has(newTab)) {
-      // React component tab → update state directly, no page reload
-      const newPath = getPathFromTab(newTab);
-      window.history.pushState(null, '', newPath);
-      setTabState(newTab);
-    } else {
-      // Scraped HTML page → full reload to ensure correct content
-      const newPath = getPathFromTab(newTab);
-      window.location.href = newPath;
-    }
+    const newPath = getPathFromTab(newTab);
+    window.location.href = newPath;
   };
 
   const [sessions, setSessions] = useState([]);
