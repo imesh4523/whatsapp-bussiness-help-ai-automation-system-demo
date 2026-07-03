@@ -294,6 +294,17 @@ function AdminDashboard({ admin, onLogout }) {
     }
   };
 
+  // Backup configurations states
+  const [backupEnabled, setBackupEnabled] = useState(false);
+  const [backupIntervalHours, setBackupIntervalHours] = useState(24);
+  const [backupRetentionDays, setBackupRetentionDays] = useState(7);
+  const [backupFolderId, setBackupFolderId] = useState('');
+  const [backupTelegramToken, setBackupTelegramToken] = useState('');
+  const [backupTelegramChatId, setBackupTelegramChatId] = useState('');
+  const [backupLogs, setBackupLogs] = useState([]);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isBackupSettingsSaved, setIsBackupSettingsSaved] = useState(false);
+
   const [transactionsList, setTransactionsList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [tokenUsageList, setTokenUsageList] = useState([]);
@@ -520,6 +531,31 @@ function AdminDashboard({ admin, onLogout }) {
         .then(res => res.json())
         .then(data => {
           if (data) setDomainStatus(data);
+        })
+        .catch(err => console.warn(err));
+    } else if (activeTab === 'backups') {
+      fetch(`${API_BASE_URL}/admin/backup/settings`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            setBackupEnabled(data.enabled);
+            setBackupIntervalHours(data.intervalHours);
+            setBackupRetentionDays(data.retentionDays);
+            setBackupFolderId(data.folderId);
+            setBackupTelegramToken(data.telegramToken);
+            setBackupTelegramChatId(data.telegramChatId);
+          }
+        })
+        .catch(err => console.warn(err));
+
+      fetch(`${API_BASE_URL}/admin/backup/logs`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setBackupLogs(data);
         })
         .catch(err => console.warn(err));
     } else if (activeTab === 'coupons') {
@@ -836,6 +872,67 @@ function AdminDashboard({ admin, onLogout }) {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleSaveBackupSettings = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/backup/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+        },
+        body: JSON.stringify({
+          enabled: backupEnabled,
+          intervalHours: backupIntervalHours,
+          retentionDays: backupRetentionDays,
+          folderId: backupFolderId,
+          telegramToken: backupTelegramToken,
+          telegramChatId: backupTelegramChatId
+        })
+      });
+      if (res.ok) {
+        setIsBackupSettingsSaved(true);
+        setTimeout(() => setIsBackupSettingsSaved(false), 2000);
+        fetchBackupLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchBackupLogs = () => {
+    fetch(`${API_BASE_URL}/admin/backup/logs`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setBackupLogs(data);
+      })
+      .catch(err => console.warn(err));
+  };
+
+  const handleRunManualBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/backup/run`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        if (window.notifyAdmin) window.notifyAdmin('success', 'Backup process initiated in the background.');
+        setTimeout(() => {
+          fetchBackupLogs();
+          setIsBackingUp(false);
+        }, 3000);
+      } else {
+        setIsBackingUp(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsBackingUp(false);
     }
   };
 
@@ -1443,7 +1540,15 @@ function AdminDashboard({ admin, onLogout }) {
               <Gift className="w-4 h-4 flex-shrink-0" />
               <span>Coupon Codes</span>
             </button>
-
+            <button 
+              onClick={() => handleTabChange('backups')}
+              className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'backups' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
+              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+            >
+              {activeTab === 'backups' && <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#00832e] rounded-r-full"></span>}
+              <Database className="w-4 h-4 flex-shrink-0" />
+              <span>Database Backups</span>
+            </button>
             <button 
               onClick={() => handleTabChange('transactions')}
               className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl text-[10.5px] font-bold uppercase tracking-wider transition-all ${activeTab === 'transactions' ? 'bg-[#00832e]/5 text-[#00832e]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
@@ -3026,6 +3131,165 @@ function AdminDashboard({ admin, onLogout }) {
                     </div>
                   </form>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* 4.5. DATABASE BACKUPS VIEW */}
+          {activeTab === 'backups' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Settings Form */}
+              <div className="lg:col-span-1 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm space-y-6">
+                <form onSubmit={handleSaveBackupSettings} className="space-y-6">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-neutral-800 mb-4 pb-3 border-b border-gray-100 flex items-center gap-2">
+                    <Database className="w-4 h-4 text-[#00832e]" /> Backup Configuration
+                  </h3>
+
+                  <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+                    <div className="space-y-0.5">
+                      <label className="text-xs font-bold text-neutral-700">Enable Auto Backups</label>
+                      <p className="text-[10px] text-neutral-400 font-light">Trigger automated backups at scheduled intervals</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={backupEnabled}
+                        onChange={(e) => setBackupEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00832e]"></div>
+                    </label>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Backup Interval</label>
+                    <select 
+                      value={backupIntervalHours}
+                      onChange={(e) => setBackupIntervalHours(parseInt(e.target.value, 10))}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                    >
+                      <option value={1}>Every 1 Hour</option>
+                      <option value={6}>Every 6 Hours</option>
+                      <option value={12}>Every 12 Hours</option>
+                      <option value={24}>Every 24 Hours (Daily)</option>
+                      <option value={168}>Every 7 Days (Weekly)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Backup Retention (Days)</label>
+                    <input 
+                      type="number"
+                      value={backupRetentionDays}
+                      onChange={(e) => setBackupRetentionDays(parseInt(e.target.value, 10))}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                      min="1"
+                      max="90"
+                    />
+                    <p className="text-[9px] text-neutral-400 font-light">Backups older than this number of days will be deleted from Google Drive automatically.</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Google Drive Folder ID</label>
+                    <input 
+                      type="text"
+                      value={backupFolderId}
+                      onChange={(e) => setBackupFolderId(e.target.value)}
+                      placeholder="e.g. 1a2b3c4d5e6f..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                    />
+                    <p className="text-[9px] text-neutral-400 font-light">Share your Google Drive folder with the Service Account email to allow writes.</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Telegram Bot Token (Optional)</label>
+                    <input 
+                      type="password"
+                      value={backupTelegramToken}
+                      onChange={(e) => setBackupTelegramToken(e.target.value)}
+                      placeholder="e.g. 123456789:ABCdef..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Telegram Chat ID (Optional)</label>
+                    <input 
+                      type="text"
+                      value={backupTelegramChatId}
+                      onChange={(e) => setBackupTelegramChatId(e.target.value)}
+                      placeholder="e.g. -100123456789"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-black focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-black text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors shadow-sm"
+                  >
+                    {isBackupSettingsSaved ? '✓ Settings Saved!' : 'Save Configuration'}
+                  </button>
+                </form>
+
+                <div className="pt-4 border-t border-gray-100 space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-neutral-800">Quick Actions</h4>
+                  <button 
+                    onClick={handleRunManualBackup}
+                    disabled={isBackingUp}
+                    className="w-full bg-[#00832e] text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#006e25] disabled:bg-neutral-300 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center gap-2"
+                  >
+                    {isBackingUp ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Backing Up...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4" />
+                        <span>Trigger Backup Now</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Logs Console */}
+              <div className="lg:col-span-2 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex flex-col h-[650px]">
+                <h3 className="text-sm font-black uppercase tracking-wider text-neutral-800 mb-4 pb-3 border-b border-gray-100 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-[#00832e]" /> Backup History & Logs Console
+                </h3>
+
+                <div className="flex-1 bg-neutral-900 rounded-2xl p-6 font-mono text-[11px] text-green-400 overflow-y-auto leading-relaxed shadow-inner border border-neutral-800">
+                  <div className="text-neutral-500 mb-2 border-b border-neutral-800 pb-2">
+                    System Backup Log Shell v1.0.0
+                    <br />
+                    Connected to agentbunny_logs database...
+                  </div>
+                  {backupLogs.length === 0 ? (
+                    <div className="text-neutral-600 italic">No backup logs found in the database.</div>
+                  ) : (
+                    backupLogs.map((log) => (
+                      <div key={log.id} className="mb-3 border-b border-neutral-800/40 pb-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-neutral-400">[{new Date(log.timestamp).toLocaleString()}]</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-bold ${log.status === 'Success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                            {log.status}
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-neutral-300 font-bold">File:</span> {log.file_name} 
+                          <span className="text-neutral-500 mx-2">|</span> 
+                          <span className="text-neutral-300 font-bold">Size:</span> {log.file_size}
+                          <span className="text-neutral-500 mx-2">|</span>
+                          <span className="text-neutral-300 font-bold">Time:</span> {log.duration_ms}ms
+                        </div>
+                        <div className="mt-1 text-neutral-400 text-[10px]">
+                          <span className="text-neutral-300 font-bold">Log:</span> {log.log_message}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}

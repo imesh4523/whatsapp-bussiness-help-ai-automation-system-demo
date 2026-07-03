@@ -45,6 +45,16 @@ async function init() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS backup_logs (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(50) NOT NULL,
+        file_name VARCHAR(255),
+        file_size VARCHAR(50),
+        duration_ms INTEGER,
+        log_message TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS plans (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,

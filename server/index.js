@@ -23,6 +23,7 @@ import { queryCourierAPI } from './couriers.js';
 import { callGeminiAPI } from './gemini-client.js';
 import { callOpenRouterAPI, getAIProvider, getOpenRouterModel } from './openrouter-client.js';
 import { manuallyActivateKey } from './resend-rotator.js';
+import { getBackupConfig, runBackup, scheduleBackups } from './backup-manager.js';
 
 
 
@@ -2023,6 +2024,84 @@ app.post('/api/admin/system-settings', async (req, res) => {
 
     await logAuditEvent('System Settings Updated', 'Admin updated global system settings');
     res.json({ success: true, message: 'System settings updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Database Backup Manager Endpoints ─────────────────────────────────────────
+app.get('/api/admin/backup/settings', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    const config = await getBackupConfig();
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/backup/settings', authenticateToken, async (req, res) => {
+  const { enabled, intervalHours, retentionDays, folderId, telegramToken, telegramChatId } = req.body;
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+
+    const updates = [
+      { key: 'backup_enabled', value: enabled ? 'true' : 'false' },
+      { key: 'backup_interval_hours', value: String(intervalHours || 24) },
+      { key: 'backup_retention_days', value: String(retentionDays || 7) },
+      { key: 'backup_gdrive_folder_id', value: folderId?.trim() || '' },
+      { key: 'backup_telegram_token', value: telegramToken?.trim() || '' },
+      { key: 'backup_telegram_chat_id', value: telegramChatId?.trim() || '' }
+    ];
+
+    for (const update of updates) {
+      await db.query(
+        "INSERT INTO system_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
+        [update.key, update.value]
+      );
+    }
+
+    // Reschedule backups dynamically
+    await scheduleBackups();
+
+    await logAuditEvent('Backup Settings Updated', 'Admin updated backup configuration settings');
+    res.json({ success: true, message: 'Backup settings updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/backup/logs', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    const r = await db.query('SELECT * FROM backup_logs ORDER BY timestamp DESC LIMIT 100');
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/backup/run', authenticateToken, async (req, res) => {
+  try {
+    const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id]);
+    if (req.user.email !== 'admin@agentbunny.com' && adminCheck.rows[0]?.plan !== 'Enterprise') {
+      return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
+    }
+    
+    // Run in background so request doesn't timeout
+    runBackup().catch(err => console.error('Background manual backup failed:', err));
+    
+    await logAuditEvent('Manual Backup Triggered', 'Admin triggered a manual database backup');
+    res.json({ success: true, message: 'Backup process successfully initiated in the background.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -5168,6 +5247,8 @@ app.listen(PORT, () => {
   processSubscriptionRenewals();
   // Initialize campaign processor
   processCampaignQueue();
+  // Initialize automatic database backup scheduler
+  scheduleBackups();
 });
 
 
