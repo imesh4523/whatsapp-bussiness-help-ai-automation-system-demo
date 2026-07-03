@@ -69,6 +69,19 @@ db.query(`
   console.warn('Optional migrations check warning:', err.message);
 });
 
+// Seed default system settings from env if not present
+db.query("SELECT value FROM system_settings WHERE key = 'gemini_api_key'").then(async (res) => {
+  if ((res.rows.length === 0 || !res.rows[0].value) && process.env.GEMINI_API_KEY) {
+    const dbValue = JSON.stringify([process.env.GEMINI_API_KEY.trim()]);
+    await db.query(`
+      INSERT INTO system_settings (key, value)
+      VALUES ('gemini_api_key', $1)
+      ON CONFLICT (key) DO UPDATE SET value = $1
+    `, [dbValue]);
+    console.log('Seeded default Gemini API key from environment variable.');
+  }
+}).catch(err => console.warn('Failed to seed default Gemini API key:', err.message));
+
 let stripeInstance = null;
 async function getDynamicStripe() {
   let secretKey = process.env.STRIPE_SECRET_KEY;
@@ -1904,6 +1917,11 @@ app.get('/api/admin/system-settings', async (req, res) => {
           apiKey = parsed.join('\n');
         }
       } catch (e) {}
+    }
+
+    // Default to the environment variable key if the database configuration is empty
+    if (!apiKey && process.env.GEMINI_API_KEY) {
+      apiKey = process.env.GEMINI_API_KEY.trim();
     }
 
     const clientIdQuery = await db.query("SELECT value FROM system_settings WHERE key = 'google_client_id'");

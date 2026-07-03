@@ -635,8 +635,14 @@ function WhatsAppAIBotManager({ user, activeSessionId }) {
                     onChange={(e) => setConfig(prev => ({ ...prev, defaultModel: e.target.value }))}
                     className="form--control form-two w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-black focus:outline-none"
                   >
-                    <option>Gemini 1.5 Pro</option>
-                    <option>Gemini 1.5 Flash</option>
+                    <option value="Gemini 1.5 Flash">Gemini 1.5 Flash (Fast)</option>
+                    <option value="Gemini 1.5 Pro">Gemini 1.5 Pro (Smart)</option>
+                    <option value="Gemini 2.0 Flash">Gemini 2.0 Flash (Next-Gen)</option>
+                    <option value="Gemini 2.0 Pro">Gemini 2.0 Pro (Experimental)</option>
+                    <option value="Gemini 2.5 Flash">Gemini 2.5 Flash (Latest Value)</option>
+                    <option value="Gemini 2.5 Pro">Gemini 2.5 Pro (Latest Smart)</option>
+                    <option value="Gemini 3.5 Flash">Gemini 3.5 Flash (Next-Gen Value)</option>
+                    <option value="Gemini 3.5 Pro">Gemini 3.5 Pro (Next-Gen Smart)</option>
                   </select>
                 </div>
 

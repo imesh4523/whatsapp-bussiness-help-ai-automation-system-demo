@@ -781,7 +781,7 @@ function AdminDashboard({ admin, onLogout }) {
       const res = await fetch(`${API_BASE_URL}/admin/system-settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geminiApiKey })
+        body: JSON.stringify({ geminiApiKey, aiProvider })
       });
       if (res.ok) {
         setIsApiKeySaved(true);
@@ -3933,6 +3933,11 @@ function AdminDashboard({ admin, onLogout }) {
                       <option value="Gemini 1.5 Flash">Gemini 1.5 Flash (Fast)</option>
                       <option value="Gemini 1.5 Pro">Gemini 1.5 Pro (Smart)</option>
                       <option value="Gemini 2.0 Flash">Gemini 2.0 Flash (Next-Gen)</option>
+                      <option value="Gemini 2.0 Pro">Gemini 2.0 Pro (Experimental)</option>
+                      <option value="Gemini 2.5 Flash">Gemini 2.5 Flash (Latest Value)</option>
+                      <option value="Gemini 2.5 Pro">Gemini 2.5 Pro (Latest Smart)</option>
+                      <option value="Gemini 3.5 Flash">Gemini 3.5 Flash (Next-Gen Value)</option>
+                      <option value="Gemini 3.5 Pro">Gemini 3.5 Pro (Next-Gen Smart)</option>
                     </select>
                   </div>
                   <div className="space-y-1">

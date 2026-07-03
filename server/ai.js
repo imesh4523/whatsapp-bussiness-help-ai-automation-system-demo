@@ -131,12 +131,12 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
     let historyContext = "";
     let isLid = false;
     let customerName = "Valued Customer";
+    let shippingMemory = null;
     try {
       const chatRes = await db.query(
         'SELECT c.id, c.remote_jid, c.sender_name, c.shipping_memory FROM chats c WHERE c.session_id = $1 AND c.sender_phone = $2',
         [sessionPhone, senderPhone]
       );
-      let shippingMemory = null;
       if (chatRes.rows.length > 0) {
         customerName = chatRes.rows[0].sender_name || "Valued Customer";
         shippingMemory = chatRes.rows[0].shipping_memory;
@@ -411,9 +411,14 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       });
     } else {
       // --- Gemini path (default) ---
-      const modelName = config.defaultModel.toLowerCase().includes('pro')
-        ? 'gemini-2.5-pro'
-        : 'gemini-2.5-flash';
+      let modelName = 'gemini-1.5-flash';
+      if (config.defaultModel) {
+        const cleanName = config.defaultModel.split('(')[0].trim().toLowerCase();
+        modelName = cleanName.replace(/\s+/g, '-');
+        if (modelName === 'gemini-2.0-pro') {
+          modelName = 'gemini-2.0-pro-exp-02-05';
+        }
+      }
       const data = await callGeminiAPI(modelName, payload);
       replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!replyText) {
@@ -528,7 +533,7 @@ export async function callActiveAI(prompt, responseMimeType = "text/plain") {
     if (responseMimeType === "application/json") {
       payload.generationConfig.responseMimeType = "application/json";
     }
-    const data = await callGeminiAPI('gemini-1.5-flash', payload);
+    const data = await callGeminiAPI('gemini-2.5-flash', payload);
     const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!replyText) throw new Error('Empty response from Gemini');
 
@@ -539,7 +544,7 @@ export async function callActiveAI(prompt, responseMimeType = "text/plain") {
       userId: 1,
       purpose: 'System Task',
       provider: 'gemini',
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       promptTokens,
       completionTokens,
       promptText: prompt,
