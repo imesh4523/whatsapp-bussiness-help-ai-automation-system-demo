@@ -5810,6 +5810,7 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
   const [cardElement, setCardElement] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [canPayWithWallet, setCanPayWithWallet] = useState(false);
 
   // Fallback state for local HTTP environment testing — empty by default
   const [mockCardNumber, setMockCardNumber] = useState('');
@@ -5861,8 +5862,73 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
       card.mount(cardElementRef.current);
       setCardElement(card);
 
+      // Setup Payment Request for Apple Pay / Google Pay
+      const pr = stripe.paymentRequest({
+        country: 'US',
+        currency: 'usd',
+        total: {
+          label: 'AgentBunny Account Setup',
+          amount: 0,
+        },
+      });
+
+      let prButtonInstance = null;
+
+      pr.canMakePayment().then((result) => {
+        if (result) {
+          setCanPayWithWallet(true);
+          const prButton = elements.create('paymentRequestButton', {
+            paymentRequest: pr,
+            style: {
+              paymentRequestButton: {
+                type: 'default',
+                theme: 'dark',
+                height: '40px',
+              },
+            },
+          });
+          
+          prButtonInstance = prButton;
+
+          setTimeout(() => {
+            const container = document.getElementById('payment-request-button');
+            if (container) {
+              prButton.mount(container);
+            }
+          }, 250);
+
+          pr.on('paymentmethod', async (ev) => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/payments/methods/save`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+                },
+                body: JSON.stringify({ paymentMethodId: ev.paymentMethod.id })
+              });
+              
+              if (res.ok) {
+                ev.complete('success');
+                if (window.notify) window.notify('success', 'Card successfully saved from digital wallet!');
+                onSaveSuccess();
+              } else {
+                ev.complete('fail');
+                setError('Failed to save card from wallet.');
+              }
+            } catch (err) {
+              ev.complete('fail');
+              setError('Network error saving card.');
+            }
+          });
+        }
+      });
+
       return () => {
         card.destroy();
+        if (prButtonInstance) {
+          prButtonInstance.destroy();
+        }
       };
     }
   }, [isScriptLoaded, stripePublicKey, isMockInputMode]);
@@ -6038,6 +6104,16 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                 </svg>
               </div>
             </div>
+            {canPayWithWallet && !isMockInputMode && (
+              <div style={{ marginBottom: '16px' }}>
+                <div id="payment-request-button" />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '14px 0', gap: '10px' }}>
+                  <span style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+                  <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Or Pay With Credit Card</span>
+                  <span style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+                </div>
+              </div>
+            )}
             {isMockInputMode ? (
               <div className="stripe-mock-container" style={{
                 border: '1px solid #cbd5e1',
