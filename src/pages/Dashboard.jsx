@@ -5587,39 +5587,14 @@ function Dashboard({ user, setUser, onLogout }) {
             </div>
 
             {user?.status === 'Frozen' && (
-              <div className="animate-fade-in" style={{
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fee2e2',
-                padding: '12px 24px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                color: '#991b1b',
-                fontSize: '13px',
-                fontWeight: '600',
-                margin: '20px 20px 0 20px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.05)'
-              }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#fca5a5', color: '#991b1b', fontSize: '14px', fontWeight: 'bold' }}>!</span>
-                <span>Your account is frozen because you have exceeded your plan's AI Response Limit. Please upgrade or renew your plan to restore AI replies.</span>
+              <div className="animate-fade-in flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 sm:px-6 sm:py-3.5 bg-[#fef2f2] border border-[#fee2e2] text-[#991b1b] text-xs sm:text-sm font-semibold rounded-2xl shadow-sm mx-5 mt-5">
+                <div className="flex items-start gap-3 w-full">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#fca5a5] text-[#991b1b] text-xs font-black shrink-0 mt-0.5">!</span>
+                  <span className="leading-relaxed">Your account is frozen because you have exceeded your plan's AI Response Limit. Please upgrade or renew your plan to restore AI replies.</span>
+                </div>
                 <button 
                   onClick={() => setTab('subscription_index')}
-                  style={{
-                    marginLeft: 'auto',
-                    backgroundColor: '#ef4444',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+                  className="w-full sm:w-auto sm:ml-auto bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-2.5 px-5 rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all duration-200 shrink-0 whitespace-nowrap mt-2 sm:mt-0"
                 >
                   Upgrade Now
                 </button>
