@@ -5229,7 +5229,7 @@ app.post('/api/welcome-message', authenticateToken, async (req, res) => {
 
 // Serve static assets from React client build folder in production
 const distPath = path.join(__dirname, '../dist');
-app.use(express.static(distPath));
+app.use(express.static(distPath, { dotfiles: 'allow' }));
 
 // Handle client-side routing, send index.html for all other routes
 app.get('*', (req, res, next) => {
