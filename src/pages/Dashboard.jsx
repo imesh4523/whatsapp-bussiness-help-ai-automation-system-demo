@@ -6018,7 +6018,23 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ padding: '24px', margin: 0 }}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Card Details</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Card Details</label>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <span style={{ background: '#000000', color: '#ffffff', borderRadius: '4px', padding: '2.5px 6px', fontWeight: '600', fontSize: '9px', display: 'inline-flex', alignItems: 'center', height: '18px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', letterSpacing: '0.2px' }}>
+                  Apple Pay
+                </span>
+                <span style={{ background: '#ffffff', color: '#5f6368', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '1.5px 6px', fontWeight: '600', fontSize: '9px', display: 'inline-flex', alignItems: 'center', height: '18px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+                  <span style={{ color: '#4285F4' }}>G</span>
+                  <span style={{ color: '#EA4335' }}>o</span>
+                  <span style={{ color: '#FBBC05' }}>o</span>
+                  <span style={{ color: '#4285F4' }}>g</span>
+                  <span style={{ color: '#34A853' }}>l</span>
+                  <span style={{ color: '#EA4335' }}>e</span>
+                  <span style={{ marginLeft: '2px' }}>Pay</span>
+                </span>
+              </div>
+            </div>
             {isMockInputMode ? (
               <div className="stripe-mock-container" style={{
                 border: '1px solid #cbd5e1',
