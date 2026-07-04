@@ -18,6 +18,10 @@ export default function ExportNumbers() {
   const [txtMode, setTxtMode] = useState('clean'); // 'clean' or 'jid'
   const [error, setError] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState('groups'); // 'groups' or 'copy_paste'
+  const [rawText, setRawText] = useState('');
+  const [extractedNumbers, setExtractedNumbers] = useState([]);
+  const [isExtractingAI, setIsExtractingAI] = useState(false);
 
   // 1. Fetch available WhatsApp sessions
   const fetchSessions = async () => {
@@ -132,6 +136,82 @@ export default function ExportNumbers() {
 
   // Export File Generation & Download
   const handleExport = async () => {
+    if (activeTab === 'copy_paste') {
+      if (extractedNumbers.length === 0) {
+        if (window.notify) window.notify('warning', 'Please extract at least one phone number to export!');
+        return;
+      }
+
+      setIsExporting(true);
+      try {
+        let fileContent = '';
+        let mimeType = 'text/plain';
+        let fileExtension = 'txt';
+        const timestamp = new Date().toISOString().slice(0, 10);
+        let fileName = `extracted_contacts_${timestamp}`;
+
+        switch (exportFormat) {
+          case 'csv':
+            mimeType = 'text/csv;charset=utf-8;';
+            fileExtension = 'csv';
+            fileContent = '\uFEFF'; // UTF-8 BOM
+            fileContent += 'Phone Number\n';
+            extractedNumbers.forEach(num => {
+              fileContent += `"${num}"\n`;
+            });
+            break;
+
+          case 'excel':
+            mimeType = 'application/vnd.ms-excel;charset=utf-8;';
+            fileExtension = 'xls';
+            fileContent = '\uFEFF'; // UTF-8 BOM
+            fileContent += 'Phone Number\n';
+            extractedNumbers.forEach(num => {
+              fileContent += `"${num}"\n`;
+            });
+            break;
+
+          case 'txt':
+            mimeType = 'text/plain;charset=utf-8;';
+            fileExtension = 'txt';
+            extractedNumbers.forEach(num => {
+              fileContent += `${num}\n`;
+            });
+            break;
+
+          case 'json':
+            mimeType = 'application/json;charset=utf-8;';
+            fileExtension = 'json';
+            const exportData = extractedNumbers.map(num => ({
+              phoneNumber: num
+            }));
+            fileContent = JSON.stringify(exportData, null, 2);
+            break;
+
+          default:
+            break;
+        }
+
+        const blob = new Blob([fileContent], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${fileName}.${fileExtension}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        if (window.notify) window.notify('success', 'Extracted numbers exported successfully!');
+      } catch (err) {
+        console.error(err);
+        if (window.notify) window.notify('error', 'Failed to export numbers.');
+      } finally {
+        setIsExporting(false);
+      }
+      return;
+    }
+
     if (selectedGroupIds.length === 0) {
       if (window.notify) window.notify('warning', 'Please select at least one group to export!');
       return;
@@ -293,6 +373,36 @@ export default function ExportNumbers() {
     }
   };
 
+  const handleAIExtract = async () => {
+    if (!rawText.trim()) {
+      if (window.notify) window.notify('warning', 'Please paste some text first!');
+      return;
+    }
+    setIsExtractingAI(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/whatsapp/extract-numbers`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text: rawText })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExtractedNumbers(data.numbers);
+        if (window.notify) window.notify('success', `AI successfully extracted ${data.numbers.length} phone numbers!`);
+      } else {
+        throw new Error('AI extraction request failed.');
+      }
+    } catch (e) {
+      console.error(e);
+      if (window.notify) window.notify('error', 'AI extraction failed. Using regex results.');
+    } finally {
+      setIsExtractingAI(false);
+    }
+  };
+
   const getInitials = (name) => {
     if (!name) return 'GP';
     return name
@@ -376,9 +486,24 @@ export default function ExportNumbers() {
             <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
               <div className="card-header bg-transparent border-0 pt-4 px-4 pb-0">
                 <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
-                  <h6 className="mb-0 fw-bold fs-6 text-dark">WhatsApp Groups</h6>
+                  <div className="d-flex gap-2">
+                    <button
+                      className={`btn btn-sm ${activeTab === 'groups' ? 'btn-success text-white' : 'btn-light text-muted'}`}
+                      onClick={() => setActiveTab('groups')}
+                      style={{ borderRadius: '6px', fontWeight: 'bold' }}
+                    >
+                      <i className="las la-users me-1" /> WhatsApp Groups
+                    </button>
+                    <button
+                      className={`btn btn-sm ${activeTab === 'copy_paste' ? 'btn-success text-white' : 'btn-light text-muted'}`}
+                      onClick={() => setActiveTab('copy_paste')}
+                      style={{ borderRadius: '6px', fontWeight: 'bold' }}
+                    >
+                      <i className="las la-paste me-1" /> Copy-Paste Extractor
+                    </button>
+                  </div>
                   
-                  {groups.length > 0 && (
+                  {activeTab === 'groups' && groups.length > 0 && (
                     <button
                       className="btn btn-sm btn-outline-secondary"
                       onClick={() => handleSelectAll(filteredGroups)}
@@ -389,156 +514,240 @@ export default function ExportNumbers() {
                   )}
                 </div>
 
-                {/* Search Bar */}
-                <div className="mt-3">
-                  <div className="position-relative">
-                    <input
-                      type="text"
-                      className="form--control"
-                      placeholder="Search group by name..."
-                      style={{ paddingLeft: '40px', borderRadius: '8px' }}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      disabled={loadingGroups || groups.length === 0}
-                    />
-                    <i className="las la-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted fs-5" />
+                {/* Search Bar only for groups */}
+                {activeTab === 'groups' && (
+                  <div className="mt-3">
+                    <div className="position-relative">
+                      <input
+                        type="text"
+                        className="form--control"
+                        placeholder="Search group by name..."
+                        style={{ paddingLeft: '40px', borderRadius: '8px' }}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={loadingGroups || groups.length === 0}
+                      />
+                      <i className="las la-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted fs-5" />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="card-body p-4">
-                {loadingGroups ? (
-                  <div className="d-flex flex-column align-items-center justify-content-center py-5">
-                    <div className="spinner-border text-success mb-3" style={{ width: '3rem', height: '3rem' }} />
-                    <p className="text-muted">Fetching WhatsApp groups and profile pictures...</p>
-                  </div>
-                ) : groups.length === 0 ? (
-                  <div className="text-center py-5">
-                    <img
-                      src="https://wpp.raybeamdigital.com/assets/images/no-data.gif"
-                      style={{ width: '120px', opacity: 0.7 }}
-                      alt="No groups"
-                    />
-                    <h6 className="mt-3 fw-semibold">No groups found</h6>
-                    <p className="text-muted small px-3">
-                      {selectedSessionId 
-                        ? 'We couldn\'t find any groups associated with this device, or it is still loading.'
-                        : 'Connect or select an active WhatsApp device above to scan for participating groups.'}
-                    </p>
-                  </div>
-                ) : filteredGroups.length === 0 ? (
-                  <div className="text-center py-5">
-                    <p className="text-muted">No groups matching "{searchQuery}"</p>
+                {activeTab === 'copy_paste' ? (
+                  <div className="d-flex flex-column gap-3">
+                    <div className="alert alert-info py-2 px-3 small border-0 d-flex align-items-center gap-2" style={{ borderRadius: '8px', background: '#eff6ff', color: '#1e40af' }}>
+                      <i className="las la-info-circle fs-5" />
+                      <span>Copy group participant details from WhatsApp Web and paste them below to extract s.whatsapp.net phone numbers instantly.</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label fw-bold text-muted mb-2">Paste raw text here</label>
+                      <textarea
+                        className="form--control w-100 p-3"
+                        style={{ height: '180px', borderRadius: '8px', fontSize: '13px', resize: 'vertical' }}
+                        placeholder="e.g.&#13;+94 76 963 1098&#13;John Doe (+1 234 567 8901)&#13;264789716648143@lid (LIDs will be cleaned out)&#13;You can copy-paste the whole participant list DOM text from WhatsApp Web..."
+                        value={rawText}
+                        onChange={(e) => {
+                          setRawText(e.target.value);
+                          // Auto parse via Regex instantly
+                          const phoneRegex = /\+?[1-9]\d{9,14}/g;
+                          const matches = e.target.value.match(phoneRegex) || [];
+                          const unique = [...new Set(matches.map(num => num.startsWith('+') ? num : '+' + num))];
+                          // Filter out typical LIDs (no plus and length >= 14 digit strings)
+                          const filtered = unique.filter(num => num.replace('+', '').length <= 13);
+                          setExtractedNumbers(filtered);
+                        }}
+                      />
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-success d-flex align-items-center gap-2"
+                        onClick={handleAIExtract}
+                        disabled={isExtractingAI || !rawText.trim()}
+                        style={{ borderRadius: '6px', fontWeight: 'bold' }}
+                      >
+                        {isExtractingAI ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                            <span>AI Extracting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="las la-brain" style={{ fontSize: '16px' }} />
+                            <span>Clean with Gemini AI</span>
+                          </>
+                        )}
+                      </button>
+
+                      {extractedNumbers.length > 0 && (
+                        <button
+                          className="btn btn-sm btn-link text-danger p-0"
+                          onClick={() => { setRawText(''); setExtractedNumbers([]); }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    {extractedNumbers.length > 0 && (
+                      <div className="mt-3">
+                        <label className="form-label fw-bold text-muted mb-2">Parsed Phone Numbers ({extractedNumbers.length})</label>
+                        <div
+                          className="p-3 border"
+                          style={{
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            borderRadius: '8px',
+                            background: '#f8fafc',
+                            fontSize: '13px',
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          {extractedNumbers.map((num, idx) => (
+                            <div key={idx} className="py-1 border-bottom d-flex justify-content-between align-items-center">
+                              <span className="text-success fw-bold">{num}</span>
+                              <span className="text-muted small">#{idx + 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="row g-3">
-                    {filteredGroups.map((g) => {
-                      const isSelected = selectedGroupIds.includes(g.id);
-                      return (
-                        <div className="col-md-6" key={g.id}>
-                          <div
-                            onClick={() => handleToggleGroup(g.id)}
-                            style={{
-                              border: isSelected ? '1px solid #00832e' : '1px solid #e2e8f0',
-                              background: isSelected ? '#f0fdf4' : '#ffffff',
-                              borderRadius: '10px',
-                              padding: '16px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease',
-                              boxShadow: isSelected ? '0 4px 12px rgba(0, 131, 46, 0.08)' : '0 2px 4px rgba(0,0,0,0.01)',
-                              position: 'relative',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '12px'
-                            }}
-                            onMouseOver={(e) => {
-                              if (!isSelected) e.currentTarget.style.borderColor = '#00832e';
-                            }}
-                            onMouseOut={(e) => {
-                              if (!isSelected) e.currentTarget.style.borderColor = '#e2e8f0';
-                            }}
-                          >
-                            {/* Checkbox badge */}
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: '12px',
-                                right: '12px',
-                                width: '18px',
-                                height: '18px',
-                                borderRadius: '50%',
-                                border: isSelected ? 'none' : '2px solid #cbd5e1',
-                                background: isSelected ? '#00832e' : 'transparent',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                            >
-                              {isSelected && <i className="las la-check text-white" style={{ fontSize: '12px' }} />}
-                            </div>
-
-                            {/* Group Avatar */}
-                            <div style={{ flexShrink: 0 }}>
-                              {g.avatar ? (
-                                <img
-                                  src={g.avatar}
-                                  alt={g.name}
-                                  style={{
-                                    width: '48px',
-                                    height: '48px',
-                                    borderRadius: '50%',
-                                    objectFit: 'cover',
-                                    border: '2px solid #fff',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                  }}
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.nextSibling.style.display = 'flex';
-                                  }}
-                                />
-                              ) : null}
+                  <>
+                    {loadingGroups ? (
+                      <div className="d-flex flex-column align-items-center justify-content-center py-5">
+                        <div className="spinner-border text-success mb-3" style={{ width: '3rem', height: '3rem' }} />
+                        <p className="text-muted">Fetching WhatsApp groups and profile pictures...</p>
+                      </div>
+                    ) : groups.length === 0 ? (
+                      <div className="text-center py-5">
+                        <img
+                          src="https://wpp.raybeamdigital.com/assets/images/no-data.gif"
+                          style={{ width: '120px', opacity: 0.7 }}
+                          alt="No groups"
+                        />
+                        <h6 className="mt-3 fw-semibold">No groups found</h6>
+                        <p className="text-muted small px-3">
+                          {selectedSessionId 
+                            ? 'We couldn\'t find any groups associated with this device, or it is still loading.'
+                            : 'Connect or select an active WhatsApp device above to scan for participating groups.'}
+                        </p>
+                      </div>
+                    ) : filteredGroups.length === 0 ? (
+                      <div className="text-center py-5">
+                        <p className="text-muted">No groups matching "{searchQuery}"</p>
+                      </div>
+                    ) : (
+                      <div className="row g-3">
+                        {filteredGroups.map((g) => {
+                          const isSelected = selectedGroupIds.includes(g.id);
+                          return (
+                            <div className="col-md-6" key={g.id}>
                               <div
+                                onClick={() => handleToggleGroup(g.id)}
                                 style={{
-                                  width: '48px',
-                                  height: '48px',
-                                  borderRadius: '50%',
-                                  background: isSelected ? '#00832e' : '#e2e8f0',
-                                  color: isSelected ? '#ffffff' : '#475569',
-                                  display: g.avatar ? 'none' : 'flex',
+                                  border: isSelected ? '1px solid #00832e' : '1px solid #e2e8f0',
+                                  background: isSelected ? '#f0fdf4' : '#ffffff',
+                                  borderRadius: '10px',
+                                  padding: '16px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease',
+                                  boxShadow: isSelected ? '0 4px 12px rgba(0, 131, 46, 0.08)' : '0 2px 4px rgba(0,0,0,0.01)',
+                                  position: 'relative',
+                                  display: 'flex',
                                   alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 'bold',
-                                  fontSize: '15px'
+                                  gap: '16px'
                                 }}
                               >
-                                {getInitials(g.name)}
+                                {/* Selection Checkmark */}
+                                {isSelected && (
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: '12px',
+                                      right: '12px',
+                                      width: '20px',
+                                      height: '20px',
+                                      borderRadius: '50%',
+                                      background: '#00832e',
+                                      color: '#ffffff',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    <i className="las la-check" />
+                                  </div>
+                                )}
+
+                                {/* Group Avatar */}
+                                <div style={{ flexShrink: 0 }}>
+                                  {g.avatar ? (
+                                    <img
+                                      src={g.avatar}
+                                      alt={g.name}
+                                      style={{
+                                        width: '48px',
+                                        height: '48px',
+                                        borderRadius: '50%',
+                                        objectFit: 'cover',
+                                        border: '2px solid #fff',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                      }}
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        e.currentTarget.nextSibling.style.display = 'flex';
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    style={{
+                                      width: '48px',
+                                      height: '48px',
+                                      borderRadius: '50%',
+                                      background: isSelected ? '#00832e' : '#e2e8f0',
+                                      color: isSelected ? '#ffffff' : '#475569',
+                                      display: g.avatar ? 'none' : 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontWeight: 'bold',
+                                      fontSize: '15px'
+                                    }}
+                                  >
+                                    {getInitials(g.name)}
+                                  </div>
+                                </div>
+
+                                {/* Group Info */}
+                                <div style={{ overflow: 'hidden', paddingRight: '20px' }}>
+                                  <h6
+                                    className="mb-1 text-truncate fw-bold fs-6 text-dark"
+                                    style={{ fontSize: '14.5px' }}
+                                  >
+                                    {g.name}
+                                  </h6>
+                                  <span className="text-muted small d-block">
+                                    <i className="las la-users me-1" />
+                                    {g.participants ? g.participants.length : 0} members
+                                  </span>
+                                  <span
+                                    className="text-muted d-block text-truncate mt-1"
+                                    style={{ fontSize: '10px', opacity: 0.7 }}
+                                  >
+                                    {g.id}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-
-                            {/* Group Info */}
-                            <div style={{ overflow: 'hidden', paddingRight: '20px' }}>
-                              <h6
-                                className="mb-1 text-truncate fw-bold fs-6 text-dark"
-                                style={{ fontSize: '14.5px' }}
-                              >
-                                {g.name}
-                              </h6>
-                              <span className="text-muted small d-block">
-                                <i className="las la-users me-1" />
-                                {g.participants ? g.participants.length : 0} members
-                              </span>
-                              <span
-                                className="text-muted d-block text-truncate mt-1"
-                                style={{ fontSize: '10px', opacity: 0.7 }}
-                              >
-                                {g.id}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -564,15 +773,24 @@ export default function ExportNumbers() {
                     Selected Summary
                   </div>
                   <div className="d-flex justify-content-around mt-2">
-                    <div>
-                      <div className="fs-3 fw-bold text-dark">{selectedGroupIds.length}</div>
-                      <div className="small text-muted">Groups</div>
-                    </div>
-                    <div style={{ width: '1px', backgroundColor: '#e2e8f0' }} />
-                    <div>
-                      <div className="fs-3 fw-bold text-success">{selectedParticipants.length}</div>
-                      <div className="small text-muted">Unique Contacts</div>
-                    </div>
+                    {activeTab === 'groups' ? (
+                      <>
+                        <div>
+                          <div className="fs-3 fw-bold text-dark">{selectedGroupIds.length}</div>
+                          <div className="small text-muted">Groups</div>
+                        </div>
+                        <div style={{ width: '1px', backgroundColor: '#e2e8f0' }} />
+                        <div>
+                          <div className="fs-3 fw-bold text-success">{selectedParticipants.length}</div>
+                          <div className="small text-muted">Unique Contacts</div>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <div className="fs-3 fw-bold text-success">{extractedNumbers.length}</div>
+                        <div className="small text-muted">Extracted Contacts</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -632,19 +850,19 @@ export default function ExportNumbers() {
                 <button
                   className="btn btn--base w-100 py-3 mt-2"
                   onClick={handleExport}
-                  disabled={selectedParticipants.length === 0 || isExporting}
+                  disabled={activeTab === 'groups' ? (selectedParticipants.length === 0 || isExporting) : (extractedNumbers.length === 0 || isExporting)}
                   style={{
                     borderRadius: '8px',
                     fontWeight: 'bold',
-                    boxShadow: selectedParticipants.length > 0 ? '0 4px 12px rgba(0, 131, 46, 0.2)' : 'none',
-                    opacity: (selectedParticipants.length === 0 || isExporting) ? 0.6 : 1,
-                    cursor: (selectedParticipants.length === 0 || isExporting) ? 'not-allowed' : 'pointer'
+                    boxShadow: (activeTab === 'groups' ? selectedParticipants.length > 0 : extractedNumbers.length > 0) ? '0 4px 12px rgba(0, 131, 46, 0.2)' : 'none',
+                    opacity: (activeTab === 'groups' ? (selectedParticipants.length === 0 || isExporting) : (extractedNumbers.length === 0 || isExporting)) ? 0.6 : 1,
+                    cursor: (activeTab === 'groups' ? (selectedParticipants.length === 0 || isExporting) : (extractedNumbers.length === 0 || isExporting)) ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {isExporting ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                      Resolving Real Numbers...
+                      {activeTab === 'groups' ? 'Resolving Real Numbers...' : 'Exporting...'}
                     </>
                   ) : (
                     <>

@@ -1009,6 +1009,62 @@ app.post('/api/whatsapp/groups/resolve', authenticateToken, resolveWhatsAppSessi
   }
 });
 
+app.post('/api/whatsapp/extract-numbers', authenticateToken, async (req, res) => {
+  const { text } = req.body;
+  if (!text) {
+    return res.status(400).json({ error: 'No text provided for extraction.' });
+  }
+
+  try {
+    const prompt = `You are a high-accuracy data extraction assistant. Extract all valid WhatsApp phone numbers (with country codes, e.g. +94769631098 or +1234567890) from the following raw text.
+
+Strictly adhere to the following rules:
+1. ONLY return real phone numbers (must contain a country code, e.g. +94769631098).
+2. DO NOT return raw Linked Identifiers (LIDs) which are anonymous 15-digit random numbers starting with 264, 118, etc. (e.g. 264789716648143 or 118305343959229).
+3. Ignore timestamps, dates, names, email addresses, or chat contents.
+4. If no phone numbers are found, return an empty array.
+5. Do not write any explanations, preamble, or code blocks. Return the result STRICTLY as a raw JSON array of strings containing the numbers.
+
+Raw Text:
+${text}`;
+
+    const aiResponse = await callGeminiAPI(prompt);
+    let cleanJson = aiResponse.trim();
+    
+    // Remove markdown code blocks if the AI model accidentally included them
+    if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+    }
+
+    try {
+      const parsedNumbers = JSON.parse(cleanJson);
+      if (Array.isArray(parsedNumbers)) {
+        // Return unique sorted numbers
+        const unique = [...new Set(parsedNumbers.map(num => num.startsWith('+') ? num : '+' + num))];
+        return res.json({ numbers: unique });
+      }
+    } catch (e) {
+      console.warn('[AI Extract] Failed to parse JSON from response, fallback to regex:', cleanJson);
+    }
+
+    // Fallback: Regex extraction
+    const phoneRegex = /\+?[1-9]\d{9,14}/g;
+    const matches = text.match(phoneRegex) || [];
+    const uniqueMatches = [...new Set(matches.map(num => num.startsWith('+') ? num : '+' + num))];
+    const filtered = uniqueMatches.filter(num => num.replace('+', '').length <= 13);
+    res.json({ numbers: filtered });
+
+  } catch (err) {
+    console.error('AI extraction error:', err);
+    // Fallback: Regex extraction
+    const phoneRegex = /\+?[1-9]\d{9,14}/g;
+    const matches = text.match(phoneRegex) || [];
+    const uniqueMatches = [...new Set(matches.map(num => num.startsWith('+') ? num : '+' + num))];
+    const filtered = uniqueMatches.filter(num => num.replace('+', '').length <= 13);
+    res.json({ numbers: filtered, error: 'AI extraction fell back to regex.' });
+  }
+});
+
 app.post('/api/whatsapp/link', authenticateToken, async (req, res) => {
   const { authMethod, phoneNumber, sessionId: inputSessionId } = req.body;
   
