@@ -891,11 +891,33 @@ app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async
         } catch (e) {
           // No avatar or failed
         }
+
+        // Resolve LID identifiers to standard phone number JIDs where mapped
+        const resolvedParticipants = await Promise.all(
+          (g.participants || []).map(async (p) => {
+            let jid = p.id;
+            if (p.id.endsWith('@lid') && sock.signalRepository?.lidMapping) {
+              try {
+                const pn = await sock.signalRepository.lidMapping.getPNForLID(p.id);
+                if (pn) {
+                  jid = pn;
+                }
+              } catch (resolveErr) {
+                // Skip mapping on error
+              }
+            }
+            return {
+              id: jid,
+              admin: p.admin
+            };
+          })
+        );
+
         return {
           id: g.id,
           name: g.subject,
           avatar: avatar,
-          participants: g.participants || []
+          participants: resolvedParticipants
         };
       })
     );
