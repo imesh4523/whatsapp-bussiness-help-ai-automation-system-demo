@@ -24,6 +24,28 @@ if (!fs.existsSync(SESSIONS_DIR)) {
   fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 }
 
+async function saveEntireSessionToDb(sessionId, sessionPath) {
+  try {
+    if (!fs.existsSync(sessionPath)) return;
+    const files = fs.readdirSync(sessionPath);
+    const sessionData = {};
+    for (const file of files) {
+      const filePath = path.join(sessionPath, file);
+      if (fs.statSync(filePath).isFile()) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        sessionData[file] = content;
+      }
+    }
+    const encrypted = encrypt(JSON.stringify(sessionData));
+    await db.query(
+      'UPDATE whatsapp_sessions SET session_data_encrypted = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [encrypted, sessionId]
+    );
+  } catch (err) {
+    console.error(`[WhatsApp Socket] Failed to save entire session ${sessionId} to DB:`, err.message);
+  }
+}
+
 async function generateOrderNo(db) {
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -125,10 +147,22 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     if (dbSession.rows.length > 0 && dbSession.rows[0].session_data_encrypted) {
       const decrypted = decrypt(dbSession.rows[0].session_data_encrypted);
       if (decrypted) {
-        const credsObj = JSON.parse(decrypted);
-        // Write the creds file
-        const credsFilePath = path.join(sessionPath, 'creds.json');
-        fs.writeFileSync(credsFilePath, JSON.stringify(credsObj, null, 2));
+        try {
+          const sessionData = JSON.parse(decrypted);
+          // Check if it is a multi-file dictionary format
+          if (sessionData && typeof sessionData === 'object' && !sessionData.noiseKey) {
+            Object.entries(sessionData).forEach(([file, content]) => {
+              const filePath = path.join(sessionPath, file);
+              fs.writeFileSync(filePath, content, 'utf8');
+            });
+          } else {
+            // Backward compatibility: old single credsObj format
+            const credsFilePath = path.join(sessionPath, 'creds.json');
+            fs.writeFileSync(credsFilePath, JSON.stringify(sessionData, null, 2));
+          }
+        } catch (parseErr) {
+          console.warn('Failed to parse decrypted session data:', parseErr.message);
+        }
       }
     }
   } catch (restoreErr) {
@@ -255,26 +289,16 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       );
       
       delete pendingQrs[sessionId];
+
+      // Save full directory to DB upon connection success
+      await saveEntireSessionToDb(sessionId, sessionPath);
     }
   });
 
   // Handle credentials updates
   sock.ev.on('creds.update', async () => {
     await saveCreds();
-    try {
-      // Read current creds.json and save encrypted value to database
-      const credsFilePath = path.join(sessionPath, 'creds.json');
-      if (fs.existsSync(credsFilePath)) {
-        const credsContent = fs.readFileSync(credsFilePath, 'utf8');
-        const encrypted = encrypt(credsContent);
-        await db.query(
-          'UPDATE whatsapp_sessions SET session_data_encrypted = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          [encrypted, sessionId]
-        );
-      }
-    } catch (saveErr) {
-      console.error('Failed to encrypt/save creds to DB:', saveErr.message);
-    }
+    await saveEntireSessionToDb(sessionId, sessionPath);
   });
 
   // Listen to incoming messages and generate AI replies

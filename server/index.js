@@ -883,6 +883,49 @@ app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async
     const groupsMap = await sock.groupFetchAllParticipating();
     const groupsList = Object.values(groupsMap);
 
+    // Gather all unresolved LIDs across all groups
+    const unresolvedLids = [];
+    groupsList.forEach(g => {
+      (g.participants || []).forEach(p => {
+        if (p.id.endsWith('@lid')) {
+          unresolvedLids.push(p.id);
+        }
+      });
+    });
+
+    const uniqueLids = [...new Set(unresolvedLids)];
+    const lidToPhoneMap = {};
+
+    // 1. First try to resolve using local cache
+    if (sock.signalRepository?.lidMapping) {
+      for (const lid of uniqueLids) {
+        try {
+          const pn = await sock.signalRepository.lidMapping.getPNForLID(lid);
+          if (pn) {
+            lidToPhoneMap[lid] = pn;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Query remaining unresolved LIDs from WhatsApp servers
+    const stillUnresolved = uniqueLids.filter(lid => !lidToPhoneMap[lid]);
+    
+    // Process in sequential chunks to be gentle
+    const queryLimit = stillUnresolved.slice(0, 100); // Limit dynamically queried to 100 to prevent anti-spam block
+    for (const lid of queryLimit) {
+      try {
+        const results = await sock.onWhatsApp(lid);
+        if (results && results.length > 0 && results[0].exists && results[0].jid) {
+          lidToPhoneMap[lid] = results[0].jid;
+        }
+      } catch (e) {
+        console.warn(`[LID Resolve] Failed to resolve ${lid} via WhatsApp:`, e.message);
+      }
+      // Small sleep to prevent rate-limiting
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
     const resolvedGroups = await Promise.all(
       groupsList.map(async (g) => {
         let avatar = null;
@@ -892,26 +935,12 @@ app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async
           // No avatar or failed
         }
 
-        // Resolve LID identifiers to standard phone number JIDs where mapped
-        const resolvedParticipants = await Promise.all(
-          (g.participants || []).map(async (p) => {
-            let jid = p.id;
-            if (p.id.endsWith('@lid') && sock.signalRepository?.lidMapping) {
-              try {
-                const pn = await sock.signalRepository.lidMapping.getPNForLID(p.id);
-                if (pn) {
-                  jid = pn;
-                }
-              } catch (resolveErr) {
-                // Skip mapping on error
-              }
-            }
-            return {
-              id: jid,
-              admin: p.admin
-            };
-          })
-        );
+        const resolvedParticipants = (g.participants || []).map((p) => {
+          return {
+            id: lidToPhoneMap[p.id] || p.id,
+            admin: p.admin
+          };
+        });
 
         return {
           id: g.id,
