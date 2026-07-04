@@ -5864,8 +5864,8 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
 
       // Setup Payment Request for Apple Pay / Google Pay
       const pr = stripe.paymentRequest({
-        country: 'US',
-        currency: 'usd',
+        country: 'LK',
+        currency: 'lkr',
         total: {
           label: 'AgentBunny Account Setup',
           amount: 0,
