@@ -5612,14 +5612,96 @@ function Dashboard({ user, setUser, onLogout }) {
             )}
 
             {(user?.plan === 'Free' || user?.plan === 'Starter' || !user?.plan) && user?.status !== 'Frozen' && (
-              <div className="animate-fade-in flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 sm:px-6 sm:py-3.5 bg-[#f0fdf4] border border-[#dcfce7] text-[#166534] text-xs sm:text-sm font-semibold rounded-2xl shadow-sm mx-5 mt-5">
-                <div className="flex items-start gap-3 w-full">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#bbf7d0] text-[#15803d] text-xs font-black shrink-0 mt-0.5">🎁</span>
-                  <span className="leading-relaxed">Start your 7-Day Free Trial of Premium to unlock advanced AI responses, unlimited templates, and automated WhatsApp workflows.</span>
+              <div 
+                className="animate-fade-in"
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  padding: '14px 18px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                  margin: '16px 20px 0',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Rainbow animated top border line */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #25D366, #3b82f6, #8b5cf6, #ec4899, #25D366)',
+                  backgroundSize: '200% auto',
+                  animation: 'rainbow-flow 3s linear infinite',
+                  borderTopLeftRadius: '16px',
+                  borderTopRightRadius: '16px'
+                }} />
+
+                <style dangerouslySetInnerHTML={{__html: `
+                  @keyframes rainbow-flow {
+                    0% { background-position: 0% center; }
+                    100% { background-position: -200% center; }
+                  }
+                  @keyframes float-icon {
+                    0% { transform: translateY(0px); }
+                    50% { transform: translateY(-3px); }
+                    100% { transform: translateY(0px); }
+                  }
+                `}} />
+
+                {/* Header row: Icon & Text */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Floating SVG Gift box */}
+                  <div style={{
+                    flexShrink: 0,
+                    width: '34px',
+                    height: '34px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#e8fbf0',
+                    borderRadius: '50%',
+                    boxShadow: '0 2px 8px rgba(34,197,94,0.15)',
+                    animation: 'float-icon 3s ease-in-out infinite'
+                  }}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" style={{ fill: 'none', stroke: '#15803d', strokeWidth: '2', strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+                      <path d="M20 12v10H4V12" />
+                      <path d="M2 7h20v5H2z" />
+                      <path d="M12 22V7" />
+                      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+                      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+                    </svg>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569', lineHeight: '1.45', textAlign: 'left' }}>
+                    Start your 7-Day Free Trial of Premium to unlock advanced AI responses, templates, and automations.
+                  </span>
                 </div>
+
+                {/* Compact Start Trial Button */}
                 <button 
                   onClick={() => setTab('subscription_index')}
-                  className="w-full sm:w-auto sm:ml-auto bg-[#15803d] hover:bg-[#166534] text-white font-bold py-2.5 px-5 rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all duration-200 shrink-0 whitespace-nowrap mt-2 sm:mt-0"
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#25D366',
+                    color: '#ffffff',
+                    fontWeight: 'bold',
+                    fontSize: '11px',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    boxShadow: '0 4px 12px rgba(37,211,102,0.15)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#20ba5a'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#25D366'}
                 >
                   Start Free Trial
                 </button>
