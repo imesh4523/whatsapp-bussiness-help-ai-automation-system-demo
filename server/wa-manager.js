@@ -67,6 +67,30 @@ async function generateOrderNo(db) {
 const activeSockets = {};
 const pendingQrs = {};
 
+// Global LID JID to Phone JID mapping store
+const LID_MAP_PATH = path.join(SESSIONS_DIR, 'global_lid_map.json');
+let globalLidMap = {};
+
+try {
+  if (fs.existsSync(LID_MAP_PATH)) {
+    globalLidMap = JSON.parse(fs.readFileSync(LID_MAP_PATH, 'utf8'));
+  }
+} catch (err) {
+  console.warn('[WhatsApp Socket] Failed to load global LID map:', err.message);
+}
+
+export function saveLidMap() {
+  try {
+    fs.writeFileSync(LID_MAP_PATH, JSON.stringify(globalLidMap, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[WhatsApp Socket] Failed to save global LID map:', err.message);
+  }
+}
+
+export function getLidMap() {
+  return globalLidMap;
+}
+
 // In-memory set to track message IDs sent from the server/panel to prevent duplicate DB logging
 export const sentMessageIds = new Set();
 export function trackSentMessage(id) {
@@ -299,6 +323,35 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
   sock.ev.on('creds.update', async () => {
     await saveCreds();
     await saveEntireSessionToDb(sessionId, sessionPath);
+  });
+
+  // Listen to contacts updates to capture LID mappings
+  const handleContacts = (contacts) => {
+    try {
+      let updated = false;
+      contacts.forEach(c => {
+        if (c.id && c.lid && c.id.endsWith('@s.whatsapp.net') && c.lid.endsWith('@lid')) {
+          if (globalLidMap[c.lid] !== c.id) {
+            globalLidMap[c.lid] = c.id;
+            updated = true;
+          }
+        }
+      });
+      if (updated) {
+        saveLidMap();
+      }
+    } catch (e) {
+      console.error('Error processing contact updates for LID mapping:', e.message);
+    }
+  };
+
+  sock.ev.on('contacts.upsert', handleContacts);
+  sock.ev.on('contacts.update', handleContacts);
+  
+  sock.ev.on('messaging-history.set', (set) => {
+    if (set.contacts) {
+      handleContacts(set.contacts);
+    }
   });
 
   // Listen to incoming messages and generate AI replies

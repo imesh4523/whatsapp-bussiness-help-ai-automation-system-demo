@@ -17,7 +17,9 @@ import {
   triggerMockIncomingMessage,
   getActiveSocket,
   trackSentMessage,
-  decrementProductStock
+  decrementProductStock,
+  getLidMap,
+  saveLidMap
 } from './wa-manager.js';
 import { queryCourierAPI } from './couriers.js';
 import { callGeminiAPI } from './gemini-client.js';
@@ -940,21 +942,34 @@ app.post('/api/whatsapp/groups/resolve', authenticateToken, resolveWhatsAppSessi
 
     // Gather unique unresolved LIDs
     const unresolvedLids = [...new Set(participantsList.filter(p => p.id.endsWith('@lid')).map(p => p.id))];
+    const globalLidMap = getLidMap();
     const lidToPhoneMap = {};
 
-    // 1. Try to resolve using signalRepository local cache
+    // 1. Try to resolve using global mapping cache first
+    for (const lid of unresolvedLids) {
+      if (globalLidMap[lid]) {
+        lidToPhoneMap[lid] = globalLidMap[lid];
+      }
+    }
+
+    // 2. Try to resolve using signalRepository local cache
+    const stillLocalUnresolved = unresolvedLids.filter(lid => !lidToPhoneMap[lid]);
+    let globalLidMapUpdated = false;
+    
     if (sock.signalRepository?.lidMapping) {
-      for (const lid of unresolvedLids) {
+      for (const lid of stillLocalUnresolved) {
         try {
           const pn = await sock.signalRepository.lidMapping.getPNForLID(lid);
           if (pn) {
             lidToPhoneMap[lid] = pn;
+            globalLidMap[lid] = pn;
+            globalLidMapUpdated = true;
           }
         } catch (e) {}
       }
     }
 
-    // 2. Query remaining unresolved LIDs sequentially from WhatsApp server (up to 150)
+    // 3. Query remaining unresolved LIDs sequentially from WhatsApp server (up to 150)
     const stillUnresolved = unresolvedLids.filter(lid => !lidToPhoneMap[lid]);
     const queryLimit = stillUnresolved.slice(0, 150);
     
@@ -963,12 +978,18 @@ app.post('/api/whatsapp/groups/resolve', authenticateToken, resolveWhatsAppSessi
         const results = await sock.onWhatsApp(lid);
         if (results && results.length > 0 && results[0].exists && results[0].jid) {
           lidToPhoneMap[lid] = results[0].jid;
+          globalLidMap[lid] = results[0].jid;
+          globalLidMapUpdated = true;
         }
       } catch (e) {
         console.warn(`[LID Export Resolve] Failed to resolve ${lid}:`, e.message);
       }
       // Small delay to prevent anti-spam trigger
       await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    if (globalLidMapUpdated) {
+      saveLidMap();
     }
 
     // Map participants to their resolved phone JIDs
