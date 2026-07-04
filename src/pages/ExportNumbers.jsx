@@ -17,6 +17,7 @@ export default function ExportNumbers() {
   const [exportFormat, setExportFormat] = useState('csv');
   const [txtMode, setTxtMode] = useState('clean'); // 'clean' or 'jid'
   const [error, setError] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   // 1. Fetch available WhatsApp sessions
   const fetchSessions = async () => {
@@ -130,138 +131,165 @@ export default function ExportNumbers() {
   const selectedParticipants = getSelectedParticipants();
 
   // Export File Generation & Download
-  const handleExport = () => {
-    if (selectedParticipants.length === 0) {
+  const handleExport = async () => {
+    if (selectedGroupIds.length === 0) {
       if (window.notify) window.notify('warning', 'Please select at least one group to export!');
       return;
     }
 
-    let fileContent = '';
-    let mimeType = 'text/plain';
-    let fileExtension = 'txt';
-    const timestamp = new Date().toISOString().slice(0,10);
-    let fileName = `whatsapp_contacts_${timestamp}`;
+    setIsExporting(true);
+    try {
+      // 1. Request backend to resolve LIDs for the selected groups
+      const res = await fetch(`${API_BASE_URL}/whatsapp/groups/resolve`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionId: selectedSessionId, // Send selected device session ID
+          groupJids: selectedGroupIds
+        })
+      });
 
-    // If exporting single group, name after it
-    if (selectedGroupIds.length === 1) {
-      const g = groups.find(x => x.id === selectedGroupIds[0]);
-      if (g) {
-        fileName = `${g.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_contacts`;
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to resolve numbers from WhatsApp.');
       }
-    }
 
-    const formatPhone = (jid) => {
-      const raw = jid.split('@')[0];
-      if (/^\d+$/.test(raw)) {
-        return `+${raw}`;
+      // Deduplicated, resolved participants list
+      const resolvedParticipants = await res.json();
+
+      let fileContent = '';
+      let mimeType = 'text/plain';
+      let fileExtension = 'txt';
+      const timestamp = new Date().toISOString().slice(0,10);
+      let fileName = `whatsapp_contacts_${timestamp}`;
+
+      // If exporting single group, name after it
+      if (selectedGroupIds.length === 1) {
+        const g = groups.find(x => x.id === selectedGroupIds[0]);
+        if (g) {
+          fileName = `${g.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_contacts`;
+        }
       }
-      return raw;
-    };
 
-    switch (exportFormat) {
-      case 'csv':
-        mimeType = 'text/csv;charset=utf-8;';
-        fileExtension = 'csv';
-        fileContent = '\uFEFF'; // UTF-8 BOM
-        fileContent += 'Phone Number,Full JID,Role,Source Group\n';
-        selectedParticipants.forEach(p => {
-          const phone = formatPhone(p.id);
-          const role = p.admin ? (p.admin === 'admin' ? 'Admin' : 'Super Admin') : 'Member';
-          fileContent += `"${phone}","${p.id}","${role}","${p.groupName.replace(/"/g, '""')}"\n`;
-        });
-        break;
+      const formatPhone = (jid) => {
+        const raw = jid.split('@')[0];
+        if (/^\d+$/.test(raw)) {
+          return `+${raw}`;
+        }
+        return raw;
+      };
 
-      case 'xlsx': // HTML/XML Excel format
-        mimeType = 'application/vnd.ms-excel';
-        fileExtension = 'xls';
-        fileContent = `
-          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-          <head>
-            <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
-            <!--[if gte mso 9]>
-            <xml>
-              <x:ExcelWorkbook>
-                <x:ExcelWorksheets>
-                  <x:ExcelWorksheet>
-                    <x:Name>Contacts Export</x:Name>
-                    <x:WorksheetOptions>
-                      <x:DisplayGridlines/>
-                    </x:WorksheetOptions>
-                  </x:ExcelWorksheet>
-                </x:ExcelWorksheets>
-              </x:ExcelWorkbook>
-            </xml>
-            <![endif]-->
-            <style>
-              th { background-color: #00832e; color: white; font-weight: bold; }
-              td, th { border: 0.5pt solid #cbd5e1; padding: 4px; font-family: Arial, sans-serif; }
-            </style>
-          </head>
-          <body>
-            <table>
-              <tr>
-                <th>Phone Number</th>
-                <th>Full JID</th>
-                <th>Role</th>
-                <th>Source Group</th>
-              </tr>
-        `;
-        selectedParticipants.forEach(p => {
-          const phone = formatPhone(p.id);
-          const role = p.admin ? (p.admin === 'admin' ? 'Admin' : 'Super Admin') : 'Member';
-          fileContent += `
-              <tr>
-                <td style="mso-number-format:'\\@';">${phone}</td>
-                <td>${p.id}</td>
-                <td>${role}</td>
-                <td>${p.groupName}</td>
-              </tr>
+      switch (exportFormat) {
+        case 'csv':
+          mimeType = 'text/csv;charset=utf-8;';
+          fileExtension = 'csv';
+          fileContent = '\uFEFF'; // UTF-8 BOM
+          fileContent += 'Phone Number,Full JID,Role,Source Group\n';
+          resolvedParticipants.forEach(p => {
+            const phone = formatPhone(p.id);
+            const role = p.admin ? (p.admin === 'admin' ? 'Admin' : 'Super Admin') : 'Member';
+            fileContent += `"${phone}","${p.id}","${role}","${p.groupName.replace(/"/g, '""')}"\n`;
+          });
+          break;
+
+        case 'xlsx': // HTML/XML Excel format
+          mimeType = 'application/vnd.ms-excel';
+          fileExtension = 'xls';
+          fileContent = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+              <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+              <!--[if gte mso 9]>
+              <xml>
+                <x:ExcelWorkbook>
+                  <x:ExcelWorksheets>
+                    <x:ExcelWorksheet>
+                      <x:Name>Contacts Export</x:Name>
+                      <x:WorksheetOptions>
+                        <x:DisplayGridlines/>
+                      </x:WorksheetOptions>
+                    </x:ExcelWorksheet>
+                  </x:ExcelWorksheets>
+                </x:ExcelWorkbook>
+              </xml>
+              <![endif]-->
+              <style>
+                th { background-color: #00832e; color: white; font-weight: bold; }
+                td, th { border: 0.5pt solid #cbd5e1; padding: 4px; font-family: Arial, sans-serif; }
+              </style>
+            </head>
+            <body>
+              <table>
+                <tr>
+                  <th>Phone Number</th>
+                  <th>Full JID</th>
+                  <th>Role</th>
+                  <th>Source Group</th>
+                </tr>
           `;
-        });
-        fileContent += `
-            </table>
-          </body>
-          </html>
-        `;
-        break;
+          resolvedParticipants.forEach(p => {
+            const phone = formatPhone(p.id);
+            const role = p.admin ? (p.admin === 'admin' ? 'Admin' : 'Super Admin') : 'Member';
+            fileContent += `
+                <tr>
+                  <td style="mso-number-format:'\\@';">${phone}</td>
+                  <td>${p.id}</td>
+                  <td>${role}</td>
+                  <td>${p.groupName}</td>
+                </tr>
+            `;
+          });
+          fileContent += `
+              </table>
+            </body>
+            </html>
+          `;
+          break;
 
-      case 'txt':
-        mimeType = 'text/plain;charset=utf-8;';
-        fileExtension = 'txt';
-        selectedParticipants.forEach(p => {
-          const phone = formatPhone(p.id);
-          fileContent += txtMode === 'clean' ? `${phone}\r\n` : `${p.id}\r\n`;
-        });
-        break;
+        case 'txt':
+          mimeType = 'text/plain;charset=utf-8;';
+          fileExtension = 'txt';
+          resolvedParticipants.forEach(p => {
+            const phone = formatPhone(p.id);
+            fileContent += txtMode === 'clean' ? `${phone}\r\n` : `${p.id}\r\n`;
+          });
+          break;
 
-      case 'json':
-        mimeType = 'application/json;charset=utf-8;';
-        fileExtension = 'json';
-        const exportData = selectedParticipants.map(p => ({
-          phoneNumber: formatPhone(p.id),
-          jid: p.id,
-          role: p.admin || 'member',
-          sourceGroup: p.groupName
-        }));
-        fileContent = JSON.stringify(exportData, null, 2);
-        break;
+        case 'json':
+          mimeType = 'application/json;charset=utf-8;';
+          fileExtension = 'json';
+          const exportData = resolvedParticipants.map(p => ({
+            phoneNumber: formatPhone(p.id),
+            jid: p.id,
+            role: p.admin || 'member',
+            sourceGroup: p.groupName
+          }));
+          fileContent = JSON.stringify(exportData, null, 2);
+          break;
 
-      default:
-        break;
-    }
+        default:
+          break;
+      }
 
-    const blob = new Blob([fileContent], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${fileName}.${fileExtension}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      const blob = new Blob([fileContent], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fileName}.${fileExtension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-    if (window.notify) {
-      window.notify('success', `Successfully exported ${selectedParticipants.length} contacts!`);
+      if (window.notify) window.notify('success', 'Numbers exported successfully!');
+    } catch (err) {
+      console.error(err);
+      if (window.notify) window.notify('error', err.message || 'Failed to export numbers.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -604,17 +632,26 @@ export default function ExportNumbers() {
                 <button
                   className="btn btn--base w-100 py-3 mt-2"
                   onClick={handleExport}
-                  disabled={selectedParticipants.length === 0}
+                  disabled={selectedParticipants.length === 0 || isExporting}
                   style={{
                     borderRadius: '8px',
                     fontWeight: 'bold',
                     boxShadow: selectedParticipants.length > 0 ? '0 4px 12px rgba(0, 131, 46, 0.2)' : 'none',
-                    opacity: selectedParticipants.length === 0 ? 0.6 : 1,
-                    cursor: selectedParticipants.length === 0 ? 'not-allowed' : 'pointer'
+                    opacity: (selectedParticipants.length === 0 || isExporting) ? 0.6 : 1,
+                    cursor: (selectedParticipants.length === 0 || isExporting) ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  <i className="las la-download me-2" style={{ fontSize: '18px' }} />
-                  Export Contacts
+                  {isExporting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                      Resolving Real Numbers...
+                    </>
+                  ) : (
+                    <>
+                      <i className="las la-download me-2" style={{ fontSize: '18px' }} />
+                      Export Contacts
+                    </>
+                  )}
                 </button>
 
                 <div className="mt-3 text-center">

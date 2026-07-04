@@ -883,22 +883,68 @@ app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async
     const groupsMap = await sock.groupFetchAllParticipating();
     const groupsList = Object.values(groupsMap);
 
-    // Gather all unresolved LIDs across all groups
-    const unresolvedLids = [];
-    groupsList.forEach(g => {
-      (g.participants || []).forEach(p => {
-        if (p.id.endsWith('@lid')) {
-          unresolvedLids.push(p.id);
+    const resolvedGroups = await Promise.all(
+      groupsList.map(async (g) => {
+        let avatar = null;
+        try {
+          avatar = await sock.profilePictureUrl(g.id, 'image');
+        } catch (e) {
+          // No avatar or failed
         }
-      });
+        return {
+          id: g.id,
+          name: g.subject,
+          avatar: avatar,
+          participants: g.participants || []
+        };
+      })
+    );
+
+    res.json(resolvedGroups);
+  } catch (err) {
+    console.error('Fetch whatsapp groups error:', err);
+    res.status(500).json({ error: 'Failed to fetch WhatsApp groups: ' + err.message });
+  }
+});
+
+// Dynamic batch resolver endpoint for WhatsApp group export contacts
+app.post('/api/whatsapp/groups/resolve', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const sessionId = req.whatsappSessionId;
+  const sock = getActiveSocket(sessionId);
+  if (!sock) {
+    return res.status(400).json({ error: 'WhatsApp is not connected. Please connect it first.' });
+  }
+
+  const { groupJids } = req.body;
+  if (!groupJids || !Array.isArray(groupJids) || groupJids.length === 0) {
+    return res.status(400).json({ error: 'Please select at least one group to resolve.' });
+  }
+
+  try {
+    const groupsMap = await sock.groupFetchAllParticipating();
+    const participantsList = [];
+
+    // Collect all raw participants from selected groups
+    groupJids.forEach(gJid => {
+      const g = groupsMap[gJid];
+      if (g && g.participants) {
+        g.participants.forEach(p => {
+          participantsList.push({
+            id: p.id,
+            admin: p.admin,
+            groupName: g.subject
+          });
+        });
+      }
     });
 
-    const uniqueLids = [...new Set(unresolvedLids)];
+    // Gather unique unresolved LIDs
+    const unresolvedLids = [...new Set(participantsList.filter(p => p.id.endsWith('@lid')).map(p => p.id))];
     const lidToPhoneMap = {};
 
-    // 1. First try to resolve using local cache
+    // 1. Try to resolve using signalRepository local cache
     if (sock.signalRepository?.lidMapping) {
-      for (const lid of uniqueLids) {
+      for (const lid of unresolvedLids) {
         try {
           const pn = await sock.signalRepository.lidMapping.getPNForLID(lid);
           if (pn) {
@@ -908,11 +954,10 @@ app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async
       }
     }
 
-    // 2. Query remaining unresolved LIDs from WhatsApp servers
-    const stillUnresolved = uniqueLids.filter(lid => !lidToPhoneMap[lid]);
+    // 2. Query remaining unresolved LIDs sequentially from WhatsApp server (up to 150)
+    const stillUnresolved = unresolvedLids.filter(lid => !lidToPhoneMap[lid]);
+    const queryLimit = stillUnresolved.slice(0, 150);
     
-    // Process in sequential chunks to be gentle
-    const queryLimit = stillUnresolved.slice(0, 100); // Limit dynamically queried to 100 to prevent anti-spam block
     for (const lid of queryLimit) {
       try {
         const results = await sock.onWhatsApp(lid);
@@ -920,41 +965,26 @@ app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async
           lidToPhoneMap[lid] = results[0].jid;
         }
       } catch (e) {
-        console.warn(`[LID Resolve] Failed to resolve ${lid} via WhatsApp:`, e.message);
+        console.warn(`[LID Export Resolve] Failed to resolve ${lid}:`, e.message);
       }
-      // Small sleep to prevent rate-limiting
+      // Small delay to prevent anti-spam trigger
       await new Promise(resolve => setTimeout(resolve, 50));
     }
 
-    const resolvedGroups = await Promise.all(
-      groupsList.map(async (g) => {
-        let avatar = null;
-        try {
-          avatar = await sock.profilePictureUrl(g.id, 'image');
-        } catch (e) {
-          // No avatar or failed
-        }
+    // Map participants to their resolved phone JIDs
+    const resolvedList = participantsList.map(p => {
+      const finalJid = lidToPhoneMap[p.id] || p.id;
+      return {
+        id: finalJid,
+        admin: p.admin,
+        groupName: p.groupName
+      };
+    });
 
-        const resolvedParticipants = (g.participants || []).map((p) => {
-          return {
-            id: lidToPhoneMap[p.id] || p.id,
-            admin: p.admin
-          };
-        });
-
-        return {
-          id: g.id,
-          name: g.subject,
-          avatar: avatar,
-          participants: resolvedParticipants
-        };
-      })
-    );
-
-    res.json(resolvedGroups);
+    res.json(resolvedList);
   } catch (err) {
-    console.error('Fetch whatsapp groups error:', err);
-    res.status(500).json({ error: 'Failed to fetch WhatsApp groups: ' + err.message });
+    console.error('Resolve groups export error:', err);
+    res.status(500).json({ error: 'Failed to resolve phone numbers: ' + err.message });
   }
 });
 
