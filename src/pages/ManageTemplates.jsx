@@ -302,6 +302,5 @@ function TemplateCreatePage({ setTab, isCarousel = false }) {
 // ── Main Export ─────────────────────────────────────────────────────────────
 export default function ManageTemplates({ tab, setTab }) {
   if (tab === 'template_create') return <TemplateCreatePage setTab={setTab} />;
-  if (tab === 'template_create_carousel') return <TemplateCreatePage setTab={setTab} isCarousel />;
   return <TemplateListPage setTab={setTab} />;
 }

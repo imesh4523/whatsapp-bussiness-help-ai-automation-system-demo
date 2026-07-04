@@ -872,6 +872,41 @@ app.get('/api/whatsapp/status', authenticateToken, resolveWhatsAppSession, async
   res.json(status);
 });
 
+app.get('/api/whatsapp/groups', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const sessionId = req.whatsappSessionId;
+  const sock = getActiveSocket(sessionId);
+  if (!sock) {
+    return res.status(400).json({ error: 'WhatsApp is not connected. Please connect it first.' });
+  }
+
+  try {
+    const groupsMap = await sock.groupFetchAllParticipating();
+    const groupsList = Object.values(groupsMap);
+
+    const resolvedGroups = await Promise.all(
+      groupsList.map(async (g) => {
+        let avatar = null;
+        try {
+          avatar = await sock.profilePictureUrl(g.id, 'image');
+        } catch (e) {
+          // No avatar or failed
+        }
+        return {
+          id: g.id,
+          name: g.subject,
+          avatar: avatar,
+          participants: g.participants || []
+        };
+      })
+    );
+
+    res.json(resolvedGroups);
+  } catch (err) {
+    console.error('Fetch whatsapp groups error:', err);
+    res.status(500).json({ error: 'Failed to fetch WhatsApp groups: ' + err.message });
+  }
+});
+
 app.post('/api/whatsapp/link', authenticateToken, async (req, res) => {
   const { authMethod, phoneNumber, sessionId: inputSessionId } = req.body;
   

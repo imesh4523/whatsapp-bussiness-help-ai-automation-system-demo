@@ -8,6 +8,7 @@ import ManageContacts from './ManageContacts';
 import ManageTemplates from './ManageTemplates';
 import ManageSavedReplies from './ManageSavedReplies';
 import WelcomeMessage from './WelcomeMessage';
+import ExportNumbers from './ExportNumbers';
 
 
 
@@ -195,7 +196,7 @@ const getTabFromPath = (path) => {
     '/user/whatsapp-pricing': 'whatsapp_pricing',
     '/user/referral/index': 'referral_index',
     '/user/template/create': 'template_create',
-    '/user/template/create/carousel': 'template_create_carousel',
+    '/user/export-numbers': 'export_numbers',
     '/user/template/index': 'template_index',
     '/help': 'help',
     '/user-guide': 'user_guide',
@@ -253,7 +254,7 @@ const getPathFromTab = (tabKey) => {
     whatsapp_pricing: '/user/whatsapp-pricing',
     referral_index: '/user/referral/index',
     template_create: '/user/template/create',
-    template_create_carousel: '/user/template/create/carousel',
+    export_numbers: '/user/export-numbers',
     template_index: '/user/template/index',
     help: '/help',
     user_guide: '/user-guide',
@@ -289,7 +290,7 @@ const getMockPage = (tabKey) => {
     whatsapp_pricing: 'WhatsApp Pricing',
     referral_index: 'Manage Referrals',
     template_create: 'New Template',
-    template_create_carousel: 'Carousel Template',
+    export_numbers: 'Export Contacts',
     template_index: 'All Templates',
     help: 'Help Center',
     user_guide: 'User Guide',
@@ -335,14 +336,13 @@ const getMockPage = (tabKey) => {
     };
   }
 
-  if (tabKey.endsWith('_create') || tabKey === 'template_create_carousel' || tabKey.endsWith('_config') || tabKey === 'automation_welcome_message') {
+  if (tabKey.endsWith('_create') || tabKey.endsWith('_config') || tabKey === 'automation_welcome_message') {
     let backRoute = tabKey.replace('_create', '_list').replace('_create', '_index').replace('welcome_message', 'ai_bot');
     if (tabKey === 'shortlink_create') backRoute = 'shortlink_index';
     if (tabKey === 'floater_create') backRoute = 'floater_index';
     if (tabKey === 'cta_url_create') backRoute = 'cta_url_index';
     if (tabKey === 'interactive_list_create') backRoute = 'interactive_list_index';
     if (tabKey === 'ecommerce_woocommerce_config') backRoute = 'ecommerce_woocommerce_products';
-    if (tabKey === 'template_create_carousel') backRoute = 'template_index';
 
     const backPath = getPathFromTab(backRoute);
 
@@ -2998,7 +2998,7 @@ function Dashboard({ user, setUser, onLogout }) {
     'track_orders', 'transactions', 'agentbunny_assistant',
     'campaign_create', 'campaign_index',
     'contact_list', 'contact_tag_list', 'contactlist_list',
-    'template_index', 'template_create', 'template_create_carousel',
+    'template_index', 'template_create', 'export_numbers',
     'saved_reply_index', 'saved_reply_create',
     'automation_welcome_message',
     'whatsapp_account',
@@ -4024,7 +4024,7 @@ function Dashboard({ user, setUser, onLogout }) {
     return [
       'contact_list', 'contact_tag_list', 'contactlist_list',
       'saved_reply_index', 'saved_reply_create',
-      'template_create', 'template_create_carousel', 'template_index',
+      'template_create', 'export_numbers', 'template_index',
       'campaign_create', 'campaign_index',
       'automation_welcome_message', 'flow_builder', 'automation_ai_bot',
       'shortlink_create', 'shortlink_index',
@@ -4544,7 +4544,7 @@ function Dashboard({ user, setUser, onLogout }) {
           const href = anchor.href;
           if (href.includes('/user/dashboard'))            { e.preventDefault(); setTab('dashboard'); setIsSidebarMobileOpen(false); }
           else if (href.includes('/user/inbox'))           { e.preventDefault(); setTab('inbox'); setIsSidebarMobileOpen(false); }
-          else if (href.includes('/user/template/create/carousel')) { e.preventDefault(); setTab('template_create_carousel'); setIsSidebarMobileOpen(false); }
+          else if (href.includes('/user/export-numbers'))           { e.preventDefault(); setTab('export_numbers'); setIsSidebarMobileOpen(false); }
           else if (href.includes('/user/template/create'))          { e.preventDefault(); setTab('template_create'); setIsSidebarMobileOpen(false); }
           else if (href.includes('/user/template/index'))           { e.preventDefault(); setTab('template_index'); setIsSidebarMobileOpen(false); }
           else if (href.includes('/user/campaign/index'))  { e.preventDefault(); setTab('campaign_index'); setIsSidebarMobileOpen(false); }
@@ -4784,8 +4784,7 @@ function Dashboard({ user, setUser, onLogout }) {
         const createTabs = [
           'campaign_create', 'customer_create', 'agent_create', 'saved_reply_create',
           'contact_create', 'contact_tag_create', 'contactlist_create', 'shortlink_create',
-          'floater_create', 'cta_url_create', 'interactive_list_create', 'template_create',
-          'template_create_carousel'
+          'floater_create', 'cta_url_create', 'interactive_list_create', 'template_create'
         ];
 
         if (!createTabs.includes(tab)) {
@@ -4806,7 +4805,6 @@ function Dashboard({ user, setUser, onLogout }) {
         else if (tab === 'cta_url_create')      setTab('cta_url_index');
         else if (tab === 'interactive_list_create') setTab('interactive_list_index');
         else if (tab === 'template_create')     setTab('template_index');
-        else if (tab === 'template_create_carousel') setTab('template_index');
         
         if (window.notify) window.notify('success', 'Operation completed (Demo Mode).');
       }
@@ -4872,7 +4870,7 @@ function Dashboard({ user, setUser, onLogout }) {
     const marketingTools = [
       'contact_list', 'contact_tag_list', 'contactlist_list',
       'saved_reply_index', 'saved_reply_create',
-      'template_create', 'template_create_carousel', 'template_index',
+      'template_create', 'export_numbers', 'template_index',
       'automation_welcome_message', 'flow_builder', 'automation_ai_bot',
       'shortlink_create', 'shortlink_index',
       'floater_create', 'floater_index',
@@ -4905,7 +4903,7 @@ function Dashboard({ user, setUser, onLogout }) {
       saved_reply_index: 'Saved Replies',
       saved_reply_create: 'Create Saved Reply',
       template_create: 'New Template',
-      template_create_carousel: 'Carousel Template',
+      export_numbers: 'Export Contacts',
       template_index: 'All Templates',
       campaign_create: 'New Campaign',
       campaign_index: 'All Campaigns'
@@ -5259,11 +5257,11 @@ function Dashboard({ user, setUser, onLogout }) {
                     </a>
                   </li>
 
-                  {/* Carousel Template */}
-                  <li className={`sidebar-menu-list__item ${tab === 'template_create_carousel' ? 'active' : ''}`}>
-                    <a href="/user/template/create/carousel" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('template_create_carousel'); setIsSidebarMobileOpen(false); }}>
-                      <span className="icon"><i className="las la-images" /></span>
-                      <span className="text">Carousel Template</span>
+                  {/* Export Group Contacts */}
+                  <li className={`sidebar-menu-list__item ${tab === 'export_numbers' ? 'active' : ''}`}>
+                    <a href="/user/export-numbers" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('export_numbers'); setIsSidebarMobileOpen(false); }}>
+                      <span className="icon"><i className="las la-download" /></span>
+                      <span className="text">Export Numbers</span>
                     </a>
                   </li>
 
@@ -5791,8 +5789,10 @@ function Dashboard({ user, setUser, onLogout }) {
                 <WhatsAppBulkCampaign tab={tab} setTab={setTab} />
               ) : (tab === 'contact_list' || tab === 'contact_tag_list' || tab === 'contactlist_list') ? (
                 <ManageContacts tab={tab} />
-              ) : (tab === 'template_index' || tab === 'template_create' || tab === 'template_create_carousel') ? (
+              ) : (tab === 'template_index' || tab === 'template_create') ? (
                 <ManageTemplates tab={tab} setTab={setTab} />
+              ) : tab === 'export_numbers' ? (
+                <ExportNumbers />
               ) : tab === 'saved_reply_index' ? (
                 <ManageSavedReplies />
               ) : tab === 'automation_welcome_message' ? (
