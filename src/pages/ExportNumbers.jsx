@@ -150,6 +150,14 @@ export default function ExportNumbers() {
       }
     }
 
+    const formatPhone = (jid) => {
+      const raw = jid.split('@')[0];
+      if (/^\d+$/.test(raw)) {
+        return `+${raw}`;
+      }
+      return raw;
+    };
+
     switch (exportFormat) {
       case 'csv':
         mimeType = 'text/csv;charset=utf-8;';
@@ -157,7 +165,7 @@ export default function ExportNumbers() {
         fileContent = '\uFEFF'; // UTF-8 BOM
         fileContent += 'Phone Number,Full JID,Role,Source Group\n';
         selectedParticipants.forEach(p => {
-          const phone = p.id.split('@')[0];
+          const phone = formatPhone(p.id);
           const role = p.admin ? (p.admin === 'admin' ? 'Admin' : 'Super Admin') : 'Member';
           fileContent += `"${phone}","${p.id}","${role}","${p.groupName.replace(/"/g, '""')}"\n`;
         });
@@ -199,7 +207,7 @@ export default function ExportNumbers() {
               </tr>
         `;
         selectedParticipants.forEach(p => {
-          const phone = p.id.split('@')[0];
+          const phone = formatPhone(p.id);
           const role = p.admin ? (p.admin === 'admin' ? 'Admin' : 'Super Admin') : 'Member';
           fileContent += `
               <tr>
@@ -221,7 +229,7 @@ export default function ExportNumbers() {
         mimeType = 'text/plain;charset=utf-8;';
         fileExtension = 'txt';
         selectedParticipants.forEach(p => {
-          const phone = p.id.split('@')[0];
+          const phone = formatPhone(p.id);
           fileContent += txtMode === 'clean' ? `${phone}\r\n` : `${p.id}\r\n`;
         });
         break;
@@ -230,7 +238,7 @@ export default function ExportNumbers() {
         mimeType = 'application/json;charset=utf-8;';
         fileExtension = 'json';
         const exportData = selectedParticipants.map(p => ({
-          phoneNumber: p.id.split('@')[0],
+          phoneNumber: formatPhone(p.id),
           jid: p.id,
           role: p.admin || 'member',
           sourceGroup: p.groupName
