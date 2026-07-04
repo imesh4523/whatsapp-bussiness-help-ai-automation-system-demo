@@ -6090,32 +6090,22 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
               <label style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Card Details</label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 {/* Official Apple Pay SVG Card */}
-                <svg viewBox="0 0 50 32" width="38" height="24" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
+                <svg viewBox="0 0 50 32" width="42" height="26" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
                   <rect width="50" height="32" rx="4" fill="#000000"/>
-                  <path d="M17.84 15.68c-.02-2.14 1.75-3.17 1.83-3.22-1-1.45-2.54-1.65-3.08-1.69-1.3-.13-2.53.77-3.19.77-.66 0-1.69-.75-2.78-.73-1.43.02-2.76.83-3.5 2.12-1.49 2.58-.38 6.41 1.06 8.49.7 1.02 1.54 2.16 2.64 2.12 1.06-.04 1.46-.69 2.75-.69 1.28 0 1.65.69 2.75.65 1.13-.02 1.87-1.02 2.56-2.03.8-1.17 1.13-2.3 1.15-2.36-.02-.01-2.22-.85-2.24-3.39zm-2.84-6.27c.58-.7 1-1.69.89-2.67-.84.03-1.87.56-2.48 1.27-.52.6-.97 1.6-.85 2.56.94.07 1.89-.45 2.44-1.16z" fill="#ffffff"/>
-                  <path d="M26.4 12.87h1.74c1.17 0 1.95.77 1.95 1.76s-.78 1.76-1.95 1.76H26.4v-3.52zm0 4.67h1.8c1.78 0 3.03-1.14 3.03-2.91s-1.25-2.91-3.03-2.91H25.2v8.13h1.2v-2.31zM34.8 15.71c0-1.29 1.11-2.13 2.67-2.13 1.55 0 2.63.84 2.63 2.13v2.8h-1.16v-.66c-.34.48-1.03.78-1.78.78-1.43 0-2.36-.88-2.36-2.04c0-1.16.92-1.97 2.39-1.97h1.75v-.31c0-.79-.58-1.23-1.57-1.23-.97 0-1.56.43-1.61 1.05h-1.12zm4.14.93v-.45h-1.69c-.83 0-1.34.39-1.34.99s.5.95 1.25.95c1.02 0 1.78-.63 1.78-1.49zM42.22 21l2.58-6.19h1.22l-3.32 7.74h-1.14l1.08-2.48-2.64-5.26h1.24L42.22 21z" fill="#ffffff"/>
+                  <path d="M15.42 16.5c0-1.84 1.5-2.73 1.57-2.77-.86-1.25-2.18-1.42-2.65-1.45-1.12-.11-2.18.66-2.74.66-.57 0-1.45-.65-2.39-.63-1.23.02-2.37.72-3 1.83-1.28 2.22-.33 5.51.91 7.3.6.88 1.32 1.86 2.27 1.82.91-.03 1.26-.59 2.36-.59s1.42.59 2.36.56c.97-.02 1.61-.88 2.2-1.75.69-1 1-1.98 1.01-2.03-.02-.01-1.9-.73-1.92-2.92zM12.98 11.1c.5-.6 0-.85-1.45-.76.03-2.12-.72-1.61-2.13.03.52.61 1.61-.39 2.1-.82z" fill="#ffffff"/>
+                  <path d="M22.5 12.0h2.1c1.2 0 1.9.6 1.9 1.5s-.7 1.5-1.9 1.5h-2.1v-3.0zm0 4.0h2.1c1.6 0 2.9-.9 2.9-2.5s-1.3-2.5-2.9-2.5H21.5v7.0H22.5v-2.0zm7.1-1.5c0-1.1.9-1.8 2.2-1.8 1.3 0 2.2.7 2.2 1.8v2.5h-1.0v-.6c-.3.4-.8.7-1.4.7-1.2 0-2.0-.8-2.0-1.8c0-1.0.8-1.7 2.0-1.7h1.4v-.3c0-.6-.5-1.0-1.3-1.0-.8 0-1.3.4-1.3.9h-1.0v-.1zm3.4.8v-.4h-1.4c-.7 0-1.1.3-1.1.8s.4.8 1.0.8c.8 0 1.5-.5 1.5-1.2zm2.8 4.7l2.2-5.3h1.0l-2.8 6.6h-1.0l.9-2.1-2.2-4.5h1.0l1.6 4.3z" fill="#ffffff" />
                 </svg>
                 {/* Official Google Pay SVG Card */}
-                <svg viewBox="0 0 50 32" width="38" height="24" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
+                <svg viewBox="0 0 50 32" width="42" height="26" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
                   <rect width="50" height="32" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
-                  <path d="M12.92 15.68c0-.42-.04-.84-.11-1.25H7.79v2.36h2.88c-.12.65-.49 1.21-1.04 1.58v1.31h1.69c.99-.91 1.6-2.25 1.6-3.81z" fill="#4285F4"/>
-                  <path d="M7.79 20.87c1.38 0 2.54-.46 3.39-1.25l-1.69-1.31c-.47.31-1.07.5-1.7.5-1.31 0-2.42-.88-2.81-2.08H3.22v1.36c.86 1.7 2.61 2.78 4.57 2.78z" fill="#34A853"/>
-                  <path d="M4.98 16.73a4.84 4.84 0 0 1 0-3.08v-1.36H3.22a8.03 8.03 0 0 0 0 7.52l1.76-1.36c-.19-.58-.19-1.22 0-1.72z" fill="#FBBC05"/>
-                  <path d="M7.79 12.01c.75 0 1.42.26 1.95.76l1.46-1.46A7.95 7.95 0 0 0 7.79 9.13c-1.96 0-3.71 1.08-4.57 2.78l1.76 1.36c.39-1.2 1.5-2.08 2.81-2.08z" fill="#EA4335"/>
-                  <path d="M18.25 12.87h1.74c1.17 0 1.95.77 1.95 1.76s-.78 1.76-1.95 1.76h-1.74v-3.52zm0 4.67h1.8c1.78 0 3.03-1.14 3.03-2.91s-1.25-2.91-3.03-2.91H17v8.13h1.25v-2.31zm8.4 -1.83c0-1.29 1.11-2.13 2.67-2.13 1.55 0 2.63.84 2.63 2.13v2.8h-1.16v-.66c-.34.48-1.03.78-1.78.78-1.43 0-2.36-.88-2.36-2.04c0-1.16.92-1.97 2.39-1.97h1.75v-.31c0-.79-.58-1.23-1.57-1.23-.97 0-1.56.43-1.61 1.05h-1.12zm4.14.93v-.45h-1.69c-.83 0-1.34.39-1.34.99s.5.95 1.25.95c1.02 0 1.78-.63 1.78-1.49zM35.63 21l2.58-6.19h1.22l-3.32 7.74h-1.14l1.08-2.48-2.64-5.26h1.24l1.26 6.19z" fill="#5f6368"/>
+                  <path d="M12 16.5c0-.4-.04-.8-.1-1.2H7v2.3h2.8c-.1.6-.5 1.2-1 1.5v1.3h1.7c1-.9 1.5-2.2 1.5-3.9z" fill="#4285F4"/>
+                  <path d="M7 21.5c1.3 0 2.5-.4 3.3-1.2l-1.7-1.3c-.5.3-1.1.5-1.6.5-1.3 0-2.4-.9-2.8-2.1H2.4v1.3c.9 1.8 2.6 2.8 4.6 2.8z" fill="#34A853"/>
+                  <path d="M4.2 17.4a4.8 4.8 0 0 1 0-2.8V13.3H2.4a8 8 0 0 0 0 7.5l1.8-1.4z" fill="#FBBC05"/>
+                  <path d="M7 11.5c.7 0 1.4.3 1.9.8l1.4-1.5A7.9 7.9 0 0 0 7 9c-2 0-3.7 1.1-4.6 2.8l1.8 1.4c.4-1.2 1.5-2.1 2.8-2.1z" fill="#EA4335"/>
+                  <path d="M17 12h2.1c1.2 0 1.9.6 1.9 1.5s-.7 1.5-1.9 1.5H17V12zm0 4v3h1v-1.5h1.1c1.6 0 2.9-.9 2.9-2.5S20.7 12.5 19.1 12.5H16v7.0zm7.1-1.5c0-1.1.9-1.8 2.2-1.8 1.3 0 2.2.7 2.2 1.8v2.5h-1v-.6c-.3.4-.8.7-1.4.7-1.2 0-2-.8-2-1.8c0-1.0.8-1.7 2-1.7h1.4v-.3c0-.6-.5-1-1.3-1s-1.3.4-1.3.9h-1v-.1zm3.4.8v-.4h-1.4c-.7 0-1.1.3-1.1.8s.4.8 1 .8c.8 0 1.5-.5 1.5-1.2zm2.8 4.7l2.2-5.3h1l-2.8 6.6H31l.9-2.1-2.2-4.5h1l1.6 4.3z" fill="#5f6368" />
                 </svg>
               </div>
             </div>
-            {canPayWithWallet && !isMockInputMode && (
-              <div style={{ marginBottom: '16px' }}>
-                <div id="payment-request-button" />
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '14px 0', gap: '10px' }}>
-                  <span style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
-                  <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Or Pay With Credit Card</span>
-                  <span style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
-                </div>
-              </div>
-            )}
             {isMockInputMode ? (
               <div className="stripe-mock-container" style={{
                 border: '1px solid #cbd5e1',
@@ -6244,6 +6234,17 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
               <img src="/verified-badge.svg" style={{ width: '14px', height: '14px', display: 'inline-block', verticalAlign: 'middle', margin: '0 6px', position: 'relative', top: '-1px' }} alt="Verified Badge" />
               We do not collect your data on our servers.
             </small>
+
+            {canPayWithWallet && !isMockInputMode && (
+              <div style={{ marginTop: '20px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', gap: '10px' }}>
+                  <span style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+                  <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Or Pay With Express Wallet</span>
+                  <span style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+                </div>
+                <div id="payment-request-button" />
+              </div>
+            )}
           </div>
 
           {error && (
