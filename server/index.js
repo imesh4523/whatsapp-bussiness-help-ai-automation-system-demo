@@ -5306,6 +5306,7 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
     return next();
   }
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
