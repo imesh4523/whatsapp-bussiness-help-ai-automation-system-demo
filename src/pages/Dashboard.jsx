@@ -3374,9 +3374,14 @@ function Dashboard({ user, setUser, onLogout }) {
         hour: '2-digit', minute: '2-digit', hour12: true
       });
 
-      // Calculate expiration date (30 days later)
+      // Calculate expiration date (7 days for trial, 30 days for others)
       const expiry = new Date(tx.created_at);
-      expiry.setDate(expiry.getDate() + 30);
+      const isTrialTx = tx.stripe_session_id && tx.stripe_session_id.startsWith('trial_');
+      if (isTrialTx) {
+        expiry.setDate(expiry.getDate() + 7);
+      } else {
+        expiry.setDate(expiry.getDate() + 30);
+      }
       const expiryStr = expiry.toLocaleDateString('en-US', {
         year: 'numeric', month: '2-digit', day: '2-digit'
       }) + ' ' + expiry.toLocaleTimeString('en-US', {
@@ -3443,12 +3448,30 @@ function Dashboard({ user, setUser, onLogout }) {
     const activatedOnStr = displayPlan === 'Free' ? 'N/A' : formatDate(purchaseAtDate);
     
     const nextBillingDate = new Date(purchaseAtDate);
-    if (isYearlyUser) {
+    if (user?.status === 'Trial') {
+      nextBillingDate.setDate(nextBillingDate.getDate() + 7);   // 7 days for free trial
+    } else if (isYearlyUser) {
       nextBillingDate.setDate(nextBillingDate.getDate() + 365); // 1 year for yearly subscriptions
     } else {
       nextBillingDate.setDate(nextBillingDate.getDate() + 30);  // 30 days for monthly
     }
     const nextBillingStr = displayPlan === 'Free' ? 'N/A' : formatDate(nextBillingDate);
+
+    let remainingText = '';
+    if (displayPlan === 'Free') {
+      remainingText = 'No active renewal';
+    } else {
+      const diffMs = nextBillingDate - Date.now();
+      const diffDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+      if (user?.status === 'Trial') {
+        remainingText = `${diffDays} days left in your free trial`;
+      } else if (diffDays <= 7) {
+        remainingText = `${diffDays} days remaining until renewal`;
+      } else {
+        const diffWeeks = Math.ceil(diffDays / 7);
+        remainingText = `${diffWeeks} weeks from now until renewal`;
+      }
+    }
 
     // Replace Plan Title and Card details dynamically
     body = body
@@ -3456,7 +3479,8 @@ function Dashboard({ user, setUser, onLogout }) {
       .replace(/<p class="active-card__desc">[^]*?<\/p>/, `<p class="active-card__desc">${displayDesc}</p>`)
       .replace(/රු0\.00/g, displayPrice)
       .replace(/26-06-2026 01:04 PM/g, purchaseAtStr)
-      .replace(/26-07-2026 01:04 PM/g, nextBillingStr);
+      .replace(/26-07-2026 01:04 PM/g, nextBillingStr)
+      .replace(/4 weeks from now\s*until renewal\./gi, remainingText);
 
     // Inject yearly savings badges on the correct new yearly prices
     body = body
@@ -3531,10 +3555,10 @@ function Dashboard({ user, setUser, onLogout }) {
     body = body.replace(/<button class="btn btn--base btn-shadow purchaseBtn"[^>]*>[^]*?<\/button>/, activeCardBtnHtml);
 
     // 2. Hide trial buttons if already claimed a trial, and always remove from Elite/Enterprise
-    body = body.replace(/<button type="button" class="btn btn-outline--base w-100 mt-2 claim-trial-btn" data-plan-id="Elite"[^>]*>Start 14-Day Free Trial<\/button>/g, '');
+    body = body.replace(/<button type="button" class="btn btn-outline--base w-100 mt-2 claim-trial-btn" data-plan-id="Elite"[^>]*>Start (?:7|14)-Day Free Trial<\/button>/g, '');
     const showTrialButtons = user?.status !== 'Trial' && displayPlan === 'Free';
     if (!showTrialButtons) {
-      body = body.replace(/<button type="button" class="btn btn-outline--base w-100 mt-2 claim-trial-btn"[^>]*>Start 14-Day Free Trial<\/button>/g, '');
+      body = body.replace(/<button type="button" class="btn btn-outline--base w-100 mt-2 claim-trial-btn"[^>]*>Start (?:7|14)-Day Free Trial<\/button>/g, '');
     }
 
     // 3. Hide or replace the Free pricing column button ("Renew Now") depending on the active plan
@@ -3593,8 +3617,8 @@ function Dashboard({ user, setUser, onLogout }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        if (window.notify) window.notify('success', `Congratulations! Your 14-day trial of ${planId} has been successfully activated.`);
-        else alert(`Congratulations! Your 14-day trial of ${planId} has been successfully activated.`);
+        if (window.notify) window.notify('success', `Congratulations! Your 7-day trial of ${planId} has been successfully activated.`);
+        else alert(`Congratulations! Your 7-day trial of ${planId} has been successfully activated.`);
         
         // Update user state in localStorage and app context
         const savedUser = JSON.parse(localStorage.getItem('aura_user') || '{}');
@@ -4272,7 +4296,7 @@ function Dashboard({ user, setUser, onLogout }) {
           setPendingClaimTrial(true);
           setIsStripeModalOpen(true);
           if (window.notify) {
-            window.notify('info', 'Please add a payment card to claim your 14-day free trial.');
+            window.notify('info', 'Please add a payment card to claim your 7-day free trial.');
           }
         }
         return;
@@ -4891,7 +4915,7 @@ function Dashboard({ user, setUser, onLogout }) {
               \${(user?.plan === 'Free' || user?.plan === 'Starter' || !user?.plan) ? \`
                 <button id="claim-free-trial-btn" class="btn py-3 px-5 d-inline-flex align-items-center gap-2 font-semibold"
                         style="background: linear-gradient(135deg, #00832e 0%, #006020 100%); border: none; color: #ffffff; border-radius: 12px; font-size: 14px; padding: 12px 32px; text-transform: uppercase; letter-spacing: 0.8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(0, 131, 46, 0.3); font-family: 'Outfit', sans-serif; font-weight: 700; outline: none; border-style: none; margin: 0;">
-                  <i class="las la-gift" style="font-size: 18px; margin: 0; padding: 0; line-height: 1;"></i> Start 14-Day Free Trial
+                  <i class="las la-gift" style="font-size: 18px; margin: 0; padding: 0; line-height: 1;"></i> Start 7-Day Free Trial
                 </button>
               \` : ''}
               <a href="/ticket" class="btn btn--base py-2.5 px-4 d-inline-flex align-items-center gap-2 font-semibold" 
@@ -5832,8 +5856,30 @@ function Dashboard({ user, setUser, onLogout }) {
                       );
                     }
                     
+                    let nextRenewalDaysWeeks = '';
+                    if (!user || user.plan === 'Free' || !user.plan) {
+                      nextRenewalDaysWeeks = 'No active renewal';
+                    } else {
+                      const expiryDate = user.plan_expires_at ? new Date(user.plan_expires_at) : null;
+                      if (!expiryDate) {
+                        nextRenewalDaysWeeks = '4 weeks from now';
+                      } else {
+                        const diffMs = expiryDate - Date.now();
+                        const diffDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                        if (user.status === 'Trial') {
+                          nextRenewalDaysWeeks = `${diffDays} days left`;
+                        } else if (diffDays <= 7) {
+                          nextRenewalDaysWeeks = `${diffDays} days from now`;
+                        } else {
+                          const diffWeeks = Math.ceil(diffDays / 7);
+                          nextRenewalDaysWeeks = `${diffWeeks} weeks from now`;
+                        }
+                      }
+                    }
+
                     return bodyHtml
                       .replaceAll('__USER_PLAN__', user?.plan || 'Free')
+                      .replaceAll('4 weeks from now', nextRenewalDaysWeeks)
                       .replaceAll('__TRIAL_BUTTON__', (user?.plan === 'Free' || user?.plan === 'Starter' || !user?.plan) ? `
                         <button id="claim-free-trial-btn" class="btn btn-sm" style="
                           background: linear-gradient(135deg, #00832e 0%, #006020 100%);
@@ -6356,19 +6402,21 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                 {/* Centered accepted wallet badges directly above button */}
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center', marginBottom: '12px' }}>
                   {/* Official Apple Pay SVG Card */}
-                  <svg viewBox="0 0 50 32" width="42" height="26" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
+                  <svg viewBox="0 0 50 32" width="44" height="28" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
                     <rect width="50" height="32" rx="4" fill="#000000"/>
                     <path d="M15.42 16.5c0-1.84 1.5-2.73 1.57-2.77-.86-1.25-2.18-1.42-2.65-1.45-1.12-.11-2.18.66-2.74.66-.57 0-1.45-.65-2.39-.63-1.23.02-2.37.72-3 1.83-1.28 2.22-.33 5.51.91 7.3.6.88 1.32 1.86 2.27 1.82.91-.03 1.26-.59 2.36-.59s1.42.59 2.36.56c.97-.02 1.61-.88 2.2-1.75.69-1 1-1.98 1.01-2.03-.02-.01-1.9-.73-1.92-2.92zM12.98 11.1c.5-.6 0-.85-1.45-.76.03-2.12-.72-1.61-2.13.03.52.61 1.61-.39 2.1-.82z" fill="#ffffff"/>
-                    <path d="M22.5 12.0h2.1c1.2 0 1.9.6 1.9 1.5s-.7 1.5-1.9 1.5h-2.1v-3.0zm0 4.0h2.1c1.6 0 2.9-.9 2.9-2.5s-1.3-2.5-2.9-2.5H21.5v7.0H22.5v-2.0zm7.1-1.5c0-1.1.9-1.8 2.2-1.8 1.3 0 2.2.7 2.2 1.8v2.5h-1.0v-.6c-.3.4-.8.7-1.4.7-1.2 0-2.0-.8-2.0-1.8c0-1.0.8-1.7 2.0-1.7h1.4v-.3c0-.6-.5-1.0-1.3-1.0-.8 0-1.3.4-1.3.9h-1.0v-.1zm3.4.8v-.4h-1.4c-.7 0-1.1.3-1.1.8s.4.8 1.0.8c.8 0 1.5-.5 1.5-1.2zm2.8 4.7l2.2-5.3h1.0l-2.8 6.6h-1.0l.9-2.1-2.2-4.5h1.0l1.6 4.3z" fill="#ffffff" />
+                    <text x="20.5" y="20.5" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fontSize="11" fontWeight="bold" fill="#ffffff" letterSpacing="0">Pay</text>
                   </svg>
                   {/* Official Google Pay SVG Card */}
-                  <svg viewBox="0 0 50 32" width="42" height="26" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
-                    <rect width="50" height="32" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
-                    <path d="M12 16.5c0-.4-.04-.8-.1-1.2H7v2.3h2.8c-.1.6-.5 1.2-1 1.5v1.3h1.7c1-.9 1.5-2.2 1.5-3.9z" fill="#4285F4"/>
-                    <path d="M7 21.5c1.3 0 2.5-.4 3.3-1.2l-1.7-1.3c-.5.3-1.1.5-1.6.5-1.3 0-2.4-.9-2.8-2.1H2.4v1.3c.9 1.8 2.6 2.8 4.6 2.8z" fill="#34A853"/>
-                    <path d="M4.2 17.4a4.8 4.8 0 0 1 0-2.8V13.3H2.4a8 8 0 0 0 0 7.5l1.8-1.4z" fill="#FBBC05"/>
-                    <path d="M7 11.5c.7 0 1.4.3 1.9.8l1.4-1.5A7.9 7.9 0 0 0 7 9c-2 0-3.7 1.1-4.6 2.8l1.8 1.4c.4-1.2 1.5-2.1 2.8-2.1z" fill="#EA4335"/>
-                    <path d="M17 12h2.1c1.2 0 1.9.6 1.9 1.5s-.7 1.5-1.9 1.5H17V12zm0 4v3h1v-1.5h1.1c1.6 0 2.9-.9 2.9-2.5S20.7 12.5 19.1 12.5H16v7.0zm7.1-1.5c0-1.1.9-1.8 2.2-1.8 1.3 0 2.2.7 2.2 1.8v2.5h-1v-.6c-.3.4-.8.7-1.4.7-1.2 0-2-.8-2-1.8c0-1.0.8-1.7 2-1.7h1.4v-.3c0-.6-.5-1-1.3-1s-1.3.4-1.3.9h-1v-.1zm3.4.8v-.4h-1.4c-.7 0-1.1.3-1.1.8s.4.8 1 .8c.8 0 1.5-.5 1.5-1.2zm2.8 4.7l2.2-5.3h1l-2.8 6.6H31l.9-2.1-2.2-4.5h1l1.6 4.3z" fill="#5f6368" />
+                  <svg viewBox="0 0 50 32" width="44" height="28" style={{ display: 'block', borderRadius: '4px', overflow: 'hidden' }}>
+                    <rect width="50" height="32" rx="4" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1"/>
+                    <g transform="translate(1.5, 0)">
+                      <path d="M12 16.5c0-.4-.04-.8-.1-1.2H7v2.3h2.8c-.1.6-.5 1.2-1 1.5v1.3h1.7c1-.9 1.5-2.2 1.5-3.9z" fill="#4285F4"/>
+                      <path d="M7 21.5c1.3 0 2.5-.4 3.3-1.2l-1.7-1.3c-.5.3-1.1.5-1.6.5-1.3 0-2.4-.9-2.8-2.1H2.4v1.3c.9 1.8 2.6 2.8 4.6 2.8z" fill="#34A853"/>
+                      <path d="M4.2 17.4a4.8 4.8 0 0 1 0-2.8V13.3H2.4a8 8 0 0 0 0 7.5l1.8-1.4z" fill="#FBBC05"/>
+                      <path d="M7 11.5c.7 0 1.4.3 1.9.8l1.4-1.5A7.9 7.9 0 0 0 7 9c-2 0-3.7 1.1-4.6 2.8l1.8 1.4c.4-1.2 1.5-2.1 2.8-2.1z" fill="#EA4335"/>
+                    </g>
+                    <text x="18.5" y="20.5" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fontSize="10.5" fontWeight="bold" fill="#5f6368" letterSpacing="0">Pay</text>
                   </svg>
                 </div>
                 <div id="payment-request-button" />

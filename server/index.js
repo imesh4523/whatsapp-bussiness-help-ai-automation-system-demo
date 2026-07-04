@@ -4080,7 +4080,7 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
     else if (planId === 'Elite') dbPlanId = 'Enterprise';
 
     await db.query(
-      "UPDATE users SET plan = $1, status = 'Trial' WHERE id = $2", 
+      "UPDATE users SET plan = $1, status = 'Trial', plan_expires_at = NOW() + INTERVAL '7 days' WHERE id = $2", 
       [dbPlanId, req.user.id]
     );
 
@@ -4092,9 +4092,9 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
       [req.user.id, mockStripeId, dbPlanId]
     );
 
-    await logAuditEvent('Trial Claimed', `User ID ${req.user.id} claimed 14-day trial of plan ${dbPlanId}`);
+    await logAuditEvent('Trial Claimed', `User ID ${req.user.id} claimed 7-day trial of plan ${dbPlanId}`);
 
-    const userRes = await db.query('SELECT id, email, full_name, plan, status FROM users WHERE id = $1', [req.user.id]);
+    const userRes = await db.query('SELECT id, email, full_name, plan, status, plan_expires_at FROM users WHERE id = $1', [req.user.id]);
     
     res.json({ success: true, plan: dbPlanId, user: userRes.rows[0] });
   } catch (err) {
