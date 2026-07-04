@@ -5868,13 +5868,15 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         currency: 'lkr',
         total: {
           label: 'AgentBunny Account Setup',
-          amount: 0,
+          amount: 100,
         },
       });
 
       let prButtonInstance = null;
 
+      console.log("[Stripe Debug] Initializing payment request:", { country: 'GB', currency: 'lkr' });
       pr.canMakePayment().then((result) => {
+        console.log("[Stripe Debug] canMakePayment result:", result);
         if (result) {
           setCanPayWithWallet(true);
           const prButton = elements.create('paymentRequestButton', {
