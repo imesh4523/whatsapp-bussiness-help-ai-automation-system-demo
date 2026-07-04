@@ -5684,7 +5684,14 @@ function Dashboard({ user, setUser, onLogout }) {
 
                 {/* Compact Start Trial Button */}
                 <button 
-                  onClick={() => setTab('subscription_index')}
+                  onClick={() => {
+                    if (savedCards && savedCards.length > 0) {
+                      handleClaimTrial('Premium');
+                    } else {
+                      setPendingClaimTrial(true);
+                      setIsStripeModalOpen(true);
+                    }
+                  }}
                   style={{
                     width: '100%',
                     backgroundColor: '#25D366',
@@ -5703,7 +5710,7 @@ function Dashboard({ user, setUser, onLogout }) {
                   onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#20ba5a'}
                   onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#25D366'}
                 >
-                  Start Free Trial
+                  {savedCards && savedCards.length > 0 ? 'Claim Offer' : 'Start Free Trial'}
                 </button>
               </div>
             )}
@@ -6419,7 +6426,7 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
                   <i className="las la-spinner la-spin"></i> {isTrialMode ? 'Claiming...' : 'Saving...'}
                 </>
               ) : (
-                isTrialMode ? 'Claim Now' : 'Save Card'
+                isTrialMode ? 'Add Card & Claim Free Trial' : 'Save Card'
               )}
             </button>
           </div>

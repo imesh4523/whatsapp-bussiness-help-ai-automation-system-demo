@@ -4005,6 +4005,15 @@ app.post('/api/payments/methods/save', authenticateToken, async (req, res) => {
       }
     }
 
+    // Check if card fingerprint is already saved for this user to prevent duplicate cards
+    const dupRes = await db.query(
+      'SELECT id FROM user_payment_methods WHERE user_id = $1 AND card_fingerprint = $2 LIMIT 1',
+      [req.user.id, cardFingerprint]
+    );
+    if (dupRes.rows.length > 0) {
+      return res.status(400).json({ error: 'This card is already saved on your account.' });
+    }
+
     // Reset default status of old payment methods first
     await db.query('UPDATE user_payment_methods SET is_default = FALSE WHERE user_id = $1', [req.user.id]);
 
@@ -4056,7 +4065,7 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
       [fingerprint]
     );
     if (claimRes.rows.length > 0) {
-      return res.status(400).json({ error: 'This payment card has already been used to claim a trial subscription. Trial limits are restricted to one per credit card.' });
+      return res.status(400).json({ error: 'You are not eligible for this offer.' });
     }
 
     // 3. Log the trial claim and upgrade user plan
