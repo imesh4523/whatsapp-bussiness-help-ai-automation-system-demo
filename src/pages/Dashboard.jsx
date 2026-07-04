@@ -3666,7 +3666,7 @@ function Dashboard({ user, setUser, onLogout }) {
     if (tab === 'dashboard' || tab === 'subscription_index' || tab === 'subscription_monthly' || tab === 'subscription_yearly') {
       fetchSavedCards();
     }
-    if (tab === 'subscription_index' || tab === 'subscription_monthly' || tab === 'subscription_yearly') {
+    if (tab === 'dashboard' || tab === 'subscription_index' || tab === 'subscription_monthly' || tab === 'subscription_yearly') {
       fetchStripeKey();
       
       // Load Stripe script
