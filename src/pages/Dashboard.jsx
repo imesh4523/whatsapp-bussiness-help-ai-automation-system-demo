@@ -5892,7 +5892,7 @@ function StripeCardModal({ stripePublicKey, isScriptLoaded, onClose, onSaveSucce
         currency: detectedCurrency,
         total: {
           label: 'AgentBunny Account Setup',
-          amount: 100, // 1 unit of currency (e.g. 1.00 USD, 1.00 LKR) for auth check
+          amount: 1, // Minimum unit (e.g. 0.01 USD, 0.01 LKR) for auth check
         },
       });
 
