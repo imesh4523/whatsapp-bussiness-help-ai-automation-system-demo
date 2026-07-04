@@ -5611,6 +5611,21 @@ function Dashboard({ user, setUser, onLogout }) {
               </div>
             )}
 
+            {(user?.plan === 'Free' || !user?.plan) && user?.status !== 'Frozen' && (
+              <div className="animate-fade-in flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 sm:px-6 sm:py-3.5 bg-[#f0fdf4] border border-[#dcfce7] text-[#166534] text-xs sm:text-sm font-semibold rounded-2xl shadow-sm mx-5 mt-5">
+                <div className="flex items-start gap-3 w-full">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#bbf7d0] text-[#15803d] text-xs font-black shrink-0 mt-0.5">🎁</span>
+                  <span className="leading-relaxed">Start your 7-Day Free Trial of Premium to unlock advanced AI responses, unlimited templates, and automated WhatsApp workflows.</span>
+                </div>
+                <button 
+                  onClick={() => setTab('subscription_index')}
+                  className="w-full sm:w-auto sm:ml-auto bg-[#15803d] hover:bg-[#166534] text-white font-bold py-2.5 px-5 rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all duration-200 shrink-0 whitespace-nowrap mt-2 sm:mt-0"
+                >
+                  Start Free Trial
+                </button>
+              </div>
+            )}
+
             {/* Page content injected from scraped HTML / mockups */}
             <div className="dashboard-body">
               {tab === 'whatsapp_account' ? (
