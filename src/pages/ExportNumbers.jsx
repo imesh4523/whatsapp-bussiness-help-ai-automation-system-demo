@@ -536,9 +536,29 @@ export default function ExportNumbers() {
               <div className="card-body p-4">
                 {activeTab === 'copy_paste' ? (
                   <div className="d-flex flex-column gap-3">
-                    <div className="alert alert-info py-2 px-3 small border-0 d-flex align-items-center gap-2" style={{ borderRadius: '8px', background: '#eff6ff', color: '#1e40af' }}>
-                      <i className="las la-info-circle fs-5" />
-                      <span>Copy group participant details from WhatsApp Web and paste them below to extract s.whatsapp.net phone numbers instantly.</span>
+                    <div className="alert alert-info py-3 px-3 small border-0 d-flex flex-column gap-2" style={{ borderRadius: '8px', background: '#eff6ff', color: '#1e40af' }}>
+                      <div className="d-flex align-items-center gap-2">
+                        <i className="las la-info-circle fs-5" />
+                        <span className="fw-bold">WhatsApp Web Extractor (Bookmarklet)</span>
+                      </div>
+                      <p className="mb-2" style={{ fontSize: '12px' }}>
+                        Drag this button to your bookmarks bar. While on a WhatsApp Web group page, open the group members list, scroll down, and click the bookmark. It will automatically extract and copy all phone numbers to your clipboard!
+                      </p>
+                      <div>
+                        <a
+                          href="javascript:(function(){const matches=new Set();document.querySelectorAll('span,div').forEach(el=>{const text=(el.textContent||'').trim();const clean=text.replace(/[\s-()]/g,'');if(/^\+?[1-9]\d{8,14}$/.test(clean)){matches.add(clean.startsWith('+')?clean:'+'+clean)}const title=(el.getAttribute('title')||'').trim();const cleanTitle=title.replace(/[\s-()]/g,'');if(/^\+?[1-9]\d{8,14}$/.test(cleanTitle)){matches.add(cleanTitle.startsWith('+')?cleanTitle:'+'+cleanTitle)}});const list=[...matches];if(list.length===0){alert('No phone numbers found. Make sure the Group Info sidebar is open and scroll down the members list first!');return}navigator.clipboard.writeText(list.join('\n')).then(()=>alert('Successfully copied '+list.length+' real phone numbers to your clipboard! Paste them in the system\'s text area now.')).catch(err=>alert('Failed to copy: '+err.message));})();"
+                          className="btn btn-xs btn-primary text-white px-3 py-1 fw-bold"
+                          style={{ borderRadius: '6px', fontSize: '11px', textDecoration: 'none', background: '#1e40af', border: 'none', display: 'inline-block' }}
+                          onClick={(e) => {
+                            // Prevent navigate
+                            if (e.target.tagName === 'A') {
+                              return;
+                            }
+                          }}
+                        >
+                          <i className="las la-bookmark me-1" /> Drag to Bookmark Bar
+                        </a>
+                      </div>
                     </div>
 
                     <div className="form-group">
