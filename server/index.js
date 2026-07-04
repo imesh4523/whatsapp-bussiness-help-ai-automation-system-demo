@@ -4049,15 +4049,17 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'You have already claimed a free trial subscription on this account.' });
     }
 
-    // 1. Check if user has linked card
+    // 1. Check if user has linked card and fetch card details for email
     const pmRes = await db.query(
-      'SELECT card_fingerprint FROM user_payment_methods WHERE user_id = $1 LIMIT 1', 
+      'SELECT card_fingerprint, card_brand, card_last4 FROM user_payment_methods WHERE user_id = $1 LIMIT 1', 
       [req.user.id]
     );
     if (pmRes.rows.length === 0) {
       return res.status(400).json({ error: 'Please add a payment card under the Payment Method tab first to claim your trial.' });
     }
     const fingerprint = pmRes.rows[0].card_fingerprint;
+    const cardBrand = pmRes.rows[0].card_brand || 'visa';
+    const cardLast4 = pmRes.rows[0].card_last4 || '4242';
 
     // 2. Check for trial abuse via card fingerprint
     const claimRes = await db.query(
@@ -4096,10 +4098,69 @@ app.post('/api/payments/claim-trial', authenticateToken, async (req, res) => {
 
     const userRes = await db.query('SELECT id, email, full_name, plan, status, plan_expires_at FROM users WHERE id = $1', [req.user.id]);
     
+    // Trigger invoice email asynchronously (non-blocking)
+    import('./email-service.js').then(({ sendTemplatedEmail }) => {
+      sendTemplatedEmail(userRes.rows[0].email, 'invoice', {
+        fullName: userRes.rows[0].full_name,
+        planName: dbPlanId,
+        amount: 'Free Trial',
+        billingCycle: '7 Days',
+        cardBrand: cardBrand,
+        cardLast4: cardLast4
+      }).catch(err => {
+        console.error('[Trial Email Error]:', err.message);
+      });
+    }).catch(err => {
+      console.error('[Trial Email Service Import Error]:', err.message);
+    });
+
     res.json({ success: true, plan: dbPlanId, user: userRes.rows[0] });
   } catch (err) {
     console.error('Claim trial error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/payments/invoice/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // 1. Fetch transaction
+    const txRes = await db.query(
+      'SELECT t.*, u.full_name, u.email FROM transactions t JOIN users u ON t.user_id = u.id WHERE t.id = $1',
+      [id]
+    );
+    if (txRes.rows.length === 0) {
+      return res.status(404).send('Invoice not found.');
+    }
+    const tx = txRes.rows[0];
+
+    // Ensure users can only access their own invoices
+    if (tx.user_id !== req.user.id) {
+      return res.status(403).send('Access denied.');
+    }
+
+    // 2. Load PDF generator
+    const { generateInvoicePdf } = await import('./invoice-generator.js');
+
+    const formattedAmount = tx.amount === 0 || parseFloat(tx.amount) === 0
+      ? 'Free Trial'
+      : `LKR ${parseFloat(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const pdfBuffer = await generateInvoicePdf({
+      fullName: tx.full_name,
+      email: tx.email,
+      planName: tx.plan,
+      amount: formattedAmount,
+      billingCycle: tx.stripe_session_id?.startsWith('trial_') ? '7 Days' : 'Monthly',
+      invoiceNo: `INV-${tx.id}-${Math.floor(1000 + Math.random() * 9000)}`
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="invoice-${tx.id}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Generate invoice endpoint error:', err.message);
+    res.status(500).send('Error generating invoice PDF.');
   }
 });
 

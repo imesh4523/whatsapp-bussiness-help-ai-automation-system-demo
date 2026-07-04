@@ -4460,11 +4460,8 @@ function Dashboard({ user, setUser, onLogout }) {
       const viewInvoiceBtn = e.target.closest('.view-invoice-btn');
       if (viewInvoiceBtn) {
         e.preventDefault();
-        const txId = parseInt(viewInvoiceBtn.getAttribute('data-tx-id'), 10);
-        const tx = userTransactions.find(t => t.id === txId);
-        if (tx) {
-          openInvoice(tx);
-        }
+        const txId = viewInvoiceBtn.getAttribute('data-tx-id');
+        window.open(`${API_BASE_URL}/payments/invoice/${txId}`, '_blank');
         return;
       }
 
@@ -4567,7 +4564,7 @@ function Dashboard({ user, setUser, onLogout }) {
           else if (href.includes('/user/logout')) { e.preventDefault(); onLogout(); }
           else if (href.includes('#') && (anchor.classList.contains('sidebar-menu-list__link') || anchor.closest('.has-dropdown'))) {
             // Let sidebar dropdowns pass through
-          } else if (href.startsWith('http') && !href.includes(window.location.hostname)) {
+          } else if (href.startsWith('http') && !href.includes(window.location.hostname) && !href.includes('/api/')) {
             e.preventDefault();
             if (window.notify) window.notify('info', 'This feature is running in demo mode.');
           }
