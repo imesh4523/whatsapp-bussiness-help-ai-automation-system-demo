@@ -150,6 +150,9 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
   if (existingSock) {
     console.log(`[WhatsApp Socket] Cleaning up existing active socket for session ${sessionId} to prevent duplicates.`);
     try {
+      if (existingSock.syncInterval) {
+        clearInterval(existingSock.syncInterval);
+      }
       if (existingSock.reconnectTimer) {
         clearTimeout(existingSock.reconnectTimer);
       }
@@ -217,6 +220,17 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
   const sock = makeWASocket(sockConfig);
   activeSockets[sessionId] = sock;
 
+  // Set up periodic session sync to database (every 30 seconds) to ensure keys/creds are always persisted
+  sock.syncInterval = setInterval(async () => {
+    try {
+      if (sock.user || sock.authState?.creds?.me) {
+        await saveEntireSessionToDb(sessionId, sessionPath);
+      }
+    } catch (err) {
+      console.warn(`[WhatsApp Socket] Periodic sync error for ${sessionId}:`, err.message);
+    }
+  }, 30000);
+
   // Track session details in DB
   await db.query(
     `INSERT INTO whatsapp_sessions (id, user_id, phone, library, status, uptime, memory)
@@ -267,6 +281,9 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     }
 
     if (connection === 'close') {
+      if (sock.syncInterval) {
+        clearInterval(sock.syncInterval);
+      }
       const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
       
       // ONLY treat it as logged out if code is explicitly DisconnectReason.loggedOut (401)
