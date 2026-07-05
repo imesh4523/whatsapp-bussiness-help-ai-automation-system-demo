@@ -170,7 +170,11 @@ function App() {
       if (isDashboardRoute(path)) {
         setView('dashboard');
       } else {
-        if (path === '/collections') setView('collections');
+        if (path === '/login' || path === '/register') {
+          window.history.replaceState(null, '', '/user/dashboard');
+          setView('dashboard');
+        }
+        else if (path === '/collections') setView('collections');
         else if (path === '/about') setView('about');
         else if (path === '/terms') setView('terms');
         else if (path === '/privacy') setView('privacy');
@@ -212,7 +216,13 @@ function App() {
         setView('home');
         setAuthModal({ isOpen: true, type: 'login' });
       } else {
-        if (path === '/collections') setView('collections');
+        if (path === '/login') {
+          setView('home');
+          setAuthModal({ isOpen: true, type: 'login' });
+        } else if (path === '/register') {
+          setView('home');
+          setAuthModal({ isOpen: true, type: 'register' });
+        } else if (path === '/collections') setView('collections');
         else if (path === '/about') setView('about');
         else if (path === '/terms') setView('terms');
         else if (path === '/privacy') setView('privacy');
@@ -223,6 +233,21 @@ function App() {
       }
     }
   }, []);
+
+  // Sync URL path with Auth Modal open/close state
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (authModal.isOpen) {
+      const targetPath = authModal.type === 'login' ? '/login' : authModal.type === 'register' ? '/register' : path;
+      if (path !== targetPath && !isDashboardRoute(path) && !isAdminRoute(path)) {
+        window.history.pushState(null, '', targetPath);
+      }
+    } else {
+      if ((path === '/login' || path === '/register') && !user) {
+        window.history.pushState(null, '', '/');
+      }
+    }
+  }, [authModal, user]);
 
   // Listen to browser Back/Forward navigation popstate events
   useEffect(() => {
@@ -250,7 +275,13 @@ function App() {
           setView('home');
           setAuthModal({ isOpen: true, type: 'login' });
         } else {
-          if (path === '/collections') setView('collections');
+          if (path === '/login') {
+            setView('home');
+            setAuthModal({ isOpen: true, type: 'login' });
+          } else if (path === '/register') {
+            setView('home');
+            setAuthModal({ isOpen: true, type: 'register' });
+          } else if (path === '/collections') setView('collections');
           else if (path === '/about') setView('about');
           else if (path === '/terms') setView('terms');
           else if (path === '/privacy') setView('privacy');
