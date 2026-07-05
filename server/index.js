@@ -2142,12 +2142,17 @@ Do not include any introductory, explanatory, or markdown block wrapping (like \
     const payload = {
       contents: [
         {
+          role: 'user',
           parts: [
-            { text: systemInstruction },
             { text: `User Business Description: ${businessDescription}\nGenerated Prompt:` }
           ]
         }
-      ]
+      ],
+      systemInstruction: {
+        parts: [
+          { text: systemInstruction }
+        ]
+      }
     };
 
     const data = await callGeminiAPI('gemini-2.5-flash', payload);
@@ -2182,12 +2187,17 @@ Do not include any introductory, explanatory, or markdown block wrapping (like \
     const payload = {
       contents: [
         {
+          role: 'user',
           parts: [
-            { text: systemInstruction },
             { text: `Existing Prompt:\n${existingPrompt}\n\nNew Instructions/Changes to Add:\n${newInstructions}\n\nMerged Prompt:` }
           ]
         }
-      ]
+      ],
+      systemInstruction: {
+        parts: [
+          { text: systemInstruction }
+        ]
+      }
     };
 
     const data = await callGeminiAPI('gemini-2.5-flash', payload);
