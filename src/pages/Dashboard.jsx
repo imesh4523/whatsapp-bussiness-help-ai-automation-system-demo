@@ -6868,19 +6868,28 @@ function BusinessProfile() {
               <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569', margin: 0 }}>
                 About / Description (Instructs the AI's Tone & Identity)
               </label>
-              <button 
-                type="button"
-                onClick={() => {
-                  setAiModalMode('generate');
-                  setAiInputText(profile.description || '');
-                  setAiPreviewText('');
-                  setIsAiModalOpen(true);
-                }}
-                className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-all flex items-center gap-1"
-                style={{ border: '1.5px solid #a7f3d0', color: '#059669', background: '#ecfdf5', cursor: 'pointer', borderRadius: '8px', fontSize: '10px', padding: '4px 10px', fontWeight: 'bold' }}
-              >
-                ✨ Generate Description (AI)
-              </button>
+              <div style={{
+                display: 'inline-block',
+                padding: '1.5px',
+                borderRadius: '9px',
+                background: 'linear-gradient(90deg, #25D366, #3b82f6, #8b5cf6, #ec4899, #25D366)',
+                backgroundSize: '200% auto',
+                animation: 'rainbow-flow 3s linear infinite'
+              }}>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setAiModalMode('generate');
+                    setAiInputText(profile.description || '');
+                    setAiPreviewText('');
+                    setIsAiModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1"
+                  style={{ border: 'none', color: '#059669', background: '#ecfdf5', cursor: 'pointer', borderRadius: '8px', fontSize: '10px', padding: '4px 10px', fontWeight: 'bold' }}
+                >
+                  ✨ Generate Description (AI)
+                </button>
+              </div>
             </div>
             <textarea
               value={profile.description || ''}
@@ -6895,20 +6904,31 @@ function BusinessProfile() {
               <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
                 <i className="las la-plus-circle" style={{ fontSize: '18px' }}></i> Add More Details (Quick Append Helper)
               </label>
-              <button 
-                type="button"
-                disabled={!addMoreText.trim()}
-                onClick={() => {
-                  setAiModalMode('refine');
-                  setAiInputText(addMoreText);
-                  setAiPreviewText('');
-                  setIsAiModalOpen(true);
-                }}
-                className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg bg-sky-50 hover:bg-sky-100 transition-all flex items-center gap-1"
-                style={{ border: '1.5px solid #bae6fd', color: '#0284c7', background: '#f0f9ff', cursor: addMoreText.trim() ? 'pointer' : 'not-allowed', borderRadius: '8px', fontSize: '10px', padding: '4px 10px', fontWeight: 'bold', opacity: addMoreText.trim() ? 1 : 0.6 }}
-              >
-                ✨ AI Powered Merge
-              </button>
+              <div style={{
+                display: 'inline-block',
+                padding: '1.5px',
+                borderRadius: '9px',
+                background: addMoreText.trim() 
+                  ? 'linear-gradient(90deg, #25D366, #3b82f6, #8b5cf6, #ec4899, #25D366)'
+                  : '#cbd5e1',
+                backgroundSize: addMoreText.trim() ? '200% auto' : 'auto',
+                animation: addMoreText.trim() ? 'rainbow-flow 3s linear infinite' : 'none'
+              }}>
+                <button 
+                  type="button"
+                  disabled={!addMoreText.trim()}
+                  onClick={() => {
+                    setAiModalMode('refine');
+                    setAiInputText(addMoreText);
+                    setAiPreviewText('');
+                    setIsAiModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1"
+                  style={{ border: 'none', color: addMoreText.trim() ? '#0284c7' : '#94a3b8', background: addMoreText.trim() ? '#f0f9ff' : '#f1f5f9', cursor: addMoreText.trim() ? 'pointer' : 'not-allowed', borderRadius: '8px', fontSize: '10px', padding: '4px 10px', fontWeight: 'bold' }}
+                >
+                  ✨ AI Powered Merge
+                </button>
+              </div>
             </div>
             <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Type new business rules, details or catalog changes here. AI Powered Merge will analyze your current description and merge these new details intelligently.</p>
             <textarea
