@@ -2099,6 +2099,107 @@ app.post('/api/ai-config', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/ai-config/generate-prompt', authenticateToken, async (req, res) => {
+  const { businessDescription } = req.body;
+  if (!businessDescription) {
+    return res.status(400).json({ error: 'Business description is required.' });
+  }
+
+  try {
+    const systemInstruction = `You are a professional system prompt engineer for WhatsApp conversational e-commerce bots.
+Your goal is to parse the user's business description/instructions (written in any language, e.g., English, Sinhala, or Singlish) and generate a highly optimized, structured WhatsApp ordering agent system prompt.
+
+The generated system prompt MUST follow this exact structure and formatting:
+"""
+You are a WhatsApp order agent. Language: [detected language constraints or Sinhala/English mixed based on user input. Default to Sinhala only if user uses Sinhala or Singlish].
+
+COURIER FEE: [Courier fee details, e.g., Rs.400 (COD only, paid at delivery) or Free/No courier fee]
+
+PRODUCTS:
+{{PRODUCT_LIST}}
+
+ORDER FLOW:
+1. Greet customer
+2. If customer asks for product → show available products with prices
+3. Customer picks product → confirm size/variant availability
+4. Ask size/variant
+5. Ask payment (COD / Bank Transfer)
+  → If COD: inform total = product price + courier fee
+6. Collect delivery address details (Name, Phone, Address, Province)
+7. Show ONE order summary → ask confirm
+8. If confirmed → say order placed, stop
+
+RULES:
+- Never assume product/size/color not mentioned by customer
+- Price always from product list only
+- Never repeat order summary more than once
+- Max 2-3 lines per message
+- "ov / mm / ok / ow" = yes, move to next step
+- [Additional custom rules deduced from user description, e.g. handling COD, Bank transfer, courier fee, language restrictions]
+"""
+
+Do not include any introductory, explanatory, or markdown block wrapping (like \`\`\`). Return ONLY the raw generated prompt text.`;
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            { text: systemInstruction },
+            { text: `User Business Description: ${businessDescription}\nGenerated Prompt:` }
+          ]
+        }
+      ]
+    };
+
+    const data = await callGeminiAPI('gemini-2.5-flash', payload);
+    const generatedPrompt = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    res.json({ success: true, generatedPrompt: generatedPrompt.trim() });
+  } catch (err) {
+    console.error('Error generating prompt:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ai-config/merge-prompt', authenticateToken, async (req, res) => {
+  const { existingPrompt, newInstructions } = req.body;
+  if (!existingPrompt) {
+    return res.status(400).json({ error: 'Existing prompt is required.' });
+  }
+  if (!newInstructions) {
+    return res.status(400).json({ error: 'New instructions are required.' });
+  }
+
+  try {
+    const systemInstruction = `You are a professional system prompt engineer. Your task is to merge the user's new instructions or changes into their existing WhatsApp ordering agent system prompt.
+
+Rules:
+1. Preserve the structure (Language, COURIER FEE, PRODUCTS, ORDER FLOW, RULES) of the existing prompt.
+2. Intelligently integrate the new instructions into the correct section (e.g. updating the courier fee, adding a new rule under RULES, or altering a step in ORDER FLOW).
+3. Eliminate any contradictory rules or flow items.
+4. Keep the output clean, structured, and concise.
+
+Do not include any introductory, explanatory, or markdown block wrapping (like \`\`\`). Return ONLY the raw merged system prompt text.`;
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            { text: systemInstruction },
+            { text: `Existing Prompt:\n${existingPrompt}\n\nNew Instructions/Changes to Add:\n${newInstructions}\n\nMerged Prompt:` }
+          ]
+        }
+      ]
+    };
+
+    const data = await callGeminiAPI('gemini-2.5-flash', payload);
+    const mergedPrompt = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    res.json({ success: true, mergedPrompt: mergedPrompt.trim() });
+  } catch (err) {
+    console.error('Error merging prompts:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plans Configuration Endpoints ──────────────────────────────────────────
 app.get('/api/plans', async (req, res) => {
   try {
