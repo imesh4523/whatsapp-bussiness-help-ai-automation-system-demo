@@ -6742,6 +6742,13 @@ function BusinessProfile() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
 
+  // AI Prompt/Description Assistant States
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiModalMode, setAiModalMode] = useState('generate'); // 'generate' | 'refine'
+  const [aiInputText, setAiInputText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPreviewText, setAiPreviewText] = useState('');
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -6857,20 +6864,53 @@ function BusinessProfile() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>About / Description (Instructs the AI's Tone & Identity)</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569', margin: 0 }}>
+                About / Description (Instructs the AI's Tone & Identity)
+              </label>
+              <button 
+                type="button"
+                onClick={() => {
+                  setAiModalMode('generate');
+                  setAiInputText(profile.description || '');
+                  setAiPreviewText('');
+                  setIsAiModalOpen(true);
+                }}
+                className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-all flex items-center gap-1"
+                style={{ border: '1.5px solid #a7f3d0', color: '#059669', background: '#ecfdf5', cursor: 'pointer', borderRadius: '8px', fontSize: '10px', padding: '4px 10px', fontWeight: 'bold' }}
+              >
+                ✨ Generate Description (AI)
+              </button>
+            </div>
             <textarea
               value={profile.description || ''}
               onChange={(e) => setProfile({ ...profile, description: e.target.value })}
-              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '100px', resize: 'vertical' }}
+              style={{ padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '100%', fontSize: '14px', height: '180px', resize: 'vertical', fontFamily: 'monospace' }}
               placeholder="Describe your brand products, specialties, store policies, etc."
             />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', padding: '15px', border: '1px dashed #cbd5e1', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <i className="las la-plus-circle" style={{ fontSize: '18px' }}></i> Add More Details (Quick Append Helper)
-            </label>
-            <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Type new business rules, details or catalog changes here. Saving will automatically append it to the main About/Description text box above.</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                <i className="las la-plus-circle" style={{ fontSize: '18px' }}></i> Add More Details (Quick Append Helper)
+              </label>
+              <button 
+                type="button"
+                disabled={!addMoreText.trim()}
+                onClick={() => {
+                  setAiModalMode('refine');
+                  setAiInputText(addMoreText);
+                  setAiPreviewText('');
+                  setIsAiModalOpen(true);
+                }}
+                className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg bg-sky-50 hover:bg-sky-100 transition-all flex items-center gap-1"
+                style={{ border: '1.5px solid #bae6fd', color: '#0284c7', background: '#f0f9ff', cursor: addMoreText.trim() ? 'pointer' : 'not-allowed', borderRadius: '8px', fontSize: '10px', padding: '4px 10px', fontWeight: 'bold', opacity: addMoreText.trim() ? 1 : 0.6 }}
+              >
+                ✨ AI Powered Merge
+              </button>
+            </div>
+            <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Type new business rules, details or catalog changes here. AI Powered Merge will analyze your current description and merge these new details intelligently.</p>
             <textarea
               value={addMoreText}
               onChange={(e) => setAddMoreText(e.target.value)}
@@ -6878,6 +6918,181 @@ function BusinessProfile() {
               placeholder="e.g. Added details about islandwide courier tracking rules."
             />
           </div>
+
+          {/* AI Assistant Modal for Business Profile */}
+          {isAiModalOpen && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050, padding: '16px' }}>
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', maxWidth: '650px', width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '90vh', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                
+                {/* Modal Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', padding: '20px', backgroundColor: '#f8fafc' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '20px' }}>✨</span>
+                    <div>
+                      <h6 style={{ fontWeight: 'bold', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1e293b', margin: 0 }}>
+                        {aiModalMode === 'generate' ? 'AgentBunny Description Generator' : 'Merge New Details & Instructions'}
+                      </h6>
+                      <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>
+                        {aiModalMode === 'generate' ? 'Craft a structured AI system description from business details' : 'Add and refine description instructions using AI'}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setIsAiModalOpen(false)}
+                    style={{ fontSize: '22px', border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div style={{ padding: '20px', overflowY: 'auto', flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  
+                  {!aiPreviewText ? (
+                    // Input State
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b' }}>
+                        {aiModalMode === 'generate' 
+                          ? 'Tell us about your business:' 
+                          : 'What would you like to add or change?'}
+                      </label>
+                      <textarea
+                        rows="6"
+                        className="form--control"
+                        style={{ width: '100%', padding: '12px 16px', border: '1.5px solid #e2e8f0', borderRadius: '12px', outline: 'none', fontSize: '13px', lineHeight: '1.5' }}
+                        value={aiInputText}
+                        onChange={(e) => setAiInputText(e.target.value)}
+                        placeholder={
+                          aiModalMode === 'generate'
+                            ? 'Example: "I run a clothing business. COD is Rs.400, free shipping for bank transfer. Talk to customers only in Sinhala language. Max message length 2 lines."'
+                            : 'Example: "Also add: We do not accept returns. Delivery time is 2-4 business days."'
+                        }
+                      />
+                      <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>
+                        💡 Feel free to type in English, Sinhala, or Singlish! The AI will automatically analyze and structure it correctly.
+                      </p>
+                    </div>
+                  ) : (
+                    // Preview State
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #d1fae5', padding: '12px 16px', borderRadius: '12px' }}>
+                        <p style={{ fontSize: '11px', color: '#065f46', fontWeight: '600', margin: 0 }}>
+                          ✅ AI response generated! Please review the business description below:
+                        </p>
+                      </div>
+                      <div style={{ border: '1.5px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#f8fafc' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '8px 16px', borderBottom: '1.5px solid #e2e8f0' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b' }}>AI Description Preview</span>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(aiPreviewText);
+                              if (window.notify) window.notify('success', 'Copied to clipboard!');
+                            }}
+                            style={{ fontSize: '10px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#64748b' }}
+                          >
+                            Copy
+                          </button>
+                        </div>
+                        <textarea
+                          readOnly
+                          rows="10"
+                          style={{ width: '100%', padding: '16px', background: 'transparent', border: 'none', fontSize: '12px', fontFamily: 'monospace', lineHeight: '1.6', resize: 'none', outline: 'none' }}
+                          value={aiPreviewText}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Modal Footer */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '16px 20px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                  
+                  {!aiPreviewText ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsAiModalOpen(false)}
+                        style={{ border: '1px solid #cbd5e1', padding: '8px 16px', borderRadius: '10px', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', cursor: 'pointer', backgroundColor: '#ffffff' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={aiLoading || !aiInputText.trim()}
+                        onClick={async () => {
+                          setAiLoading(true);
+                          try {
+                            const endpoint = aiModalMode === 'generate' ? 'generate-prompt' : 'merge-prompt';
+                            const bodyPayload = aiModalMode === 'generate' 
+                              ? { businessDescription: aiInputText }
+                              : { existingPrompt: profile.description || '', newInstructions: aiInputText };
+
+                            const res = await fetch(`${API_BASE_URL}/ai-config/${endpoint}`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('aura_token')}`
+                              },
+                              body: JSON.stringify(bodyPayload)
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                              setAiPreviewText(aiModalMode === 'generate' ? data.generatedPrompt : data.mergedPrompt);
+                            } else {
+                              if (window.notify) window.notify('error', data.error || 'Failed to process request.');
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            if (window.notify) window.notify('error', 'Network error.');
+                          } finally {
+                            setAiLoading(false);
+                          }
+                        }}
+                        style={{ background: '#0a938a', color: '#ffffff', border: 'none', padding: '8px 20px', borderRadius: '10px', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {aiLoading ? (
+                          <>
+                            <i className="las la-spinner la-spin" style={{ fontSize: '14px' }}></i> Generating...
+                          </>
+                        ) : (
+                          '✨ Generate Description'
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setAiPreviewText('')}
+                        style={{ border: '1px solid #cbd5e1', padding: '8px 16px', borderRadius: '10px', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', cursor: 'pointer', backgroundColor: '#ffffff' }}
+                      >
+                        ← Back / Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfile(prev => ({ ...prev, description: aiPreviewText }));
+                          if (aiModalMode === 'refine') {
+                            setAddMoreText('');
+                          }
+                          setIsAiModalOpen(false);
+                          if (window.notify) window.notify('success', 'New business description loaded! Make sure to save the form.');
+                        }}
+                        style={{ background: '#00832e', color: '#ffffff', border: 'none', padding: '8px 20px', borderRadius: '10px', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer' }}
+                      >
+                        Apply & Close
+                      </button>
+                    </>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Physical Store / Shipping Address</label>
