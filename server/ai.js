@@ -294,9 +294,9 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
             ...imageParts,
             {
               text: imageBuffer 
-                ? `The customer uploaded this screenshot/image. Compare this image against our [AVAILABLE INVENTORY] products. If the image matches one of our inventory products (either by visually matching one of our knowledge base photos or matching the product name/description), confirm it is in stock and state its details. 
+                ? `Here is the conversation history:\n${historyContext}\n\nThe customer uploaded this screenshot/image. Compare this image against our [AVAILABLE INVENTORY] products. If the image matches one of our inventory products (either by visually matching one of our knowledge base photos or matching the product name/description), confirm it is in stock and state its details. 
                    CRITICAL: If the image does NOT match any of our inventory products, politely tell the customer that we do not have this exact item, but show what products we DO have in our inventory, and ask if they are interested in those instead. Do NOT lie or falsely claim a match if the customer's image does not correspond to a product in our inventory.
-                   Additional message/caption from customer (if any): "${messageText || ''}"`
+                   Additional message/caption from customer (if any): "${messageText || ''}"\nAssistant:`
                 : `Here is the conversation history:\n${historyContext}\n\nCustomer: ${messageText}\nAssistant:`
             }
           ]
@@ -311,7 +311,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
       },
       generationConfig: {
         temperature: config.temperature,
-        maxOutputTokens: 500
+        maxOutputTokens: 2048
       }
     };
 
@@ -393,7 +393,7 @@ export async function generateAIReply(sessionPhone, senderPhone, messageText, im
 
       const orResult = await callOpenRouterAPI(orModel, orMessages, {
         temperature: config.temperature,
-        max_tokens: 500
+        max_tokens: 2048
       });
       replyText = orResult.text;
 
