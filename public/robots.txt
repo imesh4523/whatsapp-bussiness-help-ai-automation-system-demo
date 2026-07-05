@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin/
+Disallow: /user/
 
 Sitemap: https://www.agent-bunny.com/sitemap.xml
