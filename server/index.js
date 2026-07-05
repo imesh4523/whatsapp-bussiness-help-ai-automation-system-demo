@@ -31,6 +31,12 @@ import { getBackupConfig, runBackup, scheduleBackups } from './backup-manager.js
 
 dotenv.config();
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('CRITICAL ERROR: JWT_SECRET environment variable is not defined in .env! Cannot start production server without JWT_SECRET.');
+  process.exit(1);
+}
+
 // Run dynamic schema migrations for password reset columns and marketing campaign tables
 db.query(`
   ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255) DEFAULT NULL;
@@ -118,8 +124,52 @@ async function isStripeConfigured() {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+const allowedOrigins = [
+  'https://agent-bunny.com',
+  'https://www.agent-bunny.com',
+  'http://localhost:5173',
+  'http://localhost:5000'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(express.json());
+
+// Lightweight sliding-window rate limiter to prevent Brute Force and DoS attacks
+const ipRequestCounts = new Map();
+
+function rateLimiter(maxRequests, windowMs) {
+  return (req, res, next) => {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const now = Date.now();
+
+    if (!ipRequestCounts.has(ip)) {
+      ipRequestCounts.set(ip, []);
+    }
+
+    const timestamps = ipRequestCounts.get(ip);
+    const validTimestamps = timestamps.filter(timestamp => now - timestamp < windowMs);
+    validTimestamps.push(now);
+    ipRequestCounts.set(ip, validTimestamps);
+
+    if (validTimestamps.length > maxRequests) {
+      return res.status(429).json({
+        error: 'Too many requests from this IP. Please try again later.'
+      });
+    }
+
+    next();
+  };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -137,7 +187,7 @@ const checkMaintenance = async (req, res, next) => {
       const token = authHeader && authHeader.split(' ')[1];
       if (token) {
         try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key');
+          const decoded = jwt.verify(token, JWT_SECRET);
           const adminCheck = await db.query('SELECT plan FROM users WHERE id = $1', [decoded.id]);
           if (adminCheck.rows.length > 0 && adminCheck.rows[0].plan === 'Enterprise') {
             return next();
@@ -169,7 +219,7 @@ function authenticateToken(req, res, next) {
   
   if (!token) return res.status(401).json({ error: 'Access token missing' });
 
-  jwt.verify(token, process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key', (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid or expired token' });
     req.user = user;
     next();
@@ -194,7 +244,7 @@ async function generateOrderNo(db) {
 }
 
 // ── Auth Endpoints ───────────────────────────────────────────────────────────
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', rateLimiter(60, 15 * 60 * 1000), async (req, res) => {
   const { email, password, fullName } = req.body;
   if (!email || !password || !fullName) {
     return res.status(400).json({ error: 'Please provide email, password and fullName' });
@@ -232,7 +282,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email, role: 'user' },
-      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -252,7 +302,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', rateLimiter(60, 15 * 60 * 1000), async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Please provide email and password' });
@@ -276,7 +326,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: 'user' },
-      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -297,7 +347,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ── Forgot Password Route ──────────────────────────────────────────────────
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', rateLimiter(15, 15 * 60 * 1000), async (req, res) => {
   const { email } = req.body;
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Please enter a valid email address.' });
@@ -345,7 +395,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // ── Reset Password Route ────────────────────────────────────────────────────
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', rateLimiter(15, 15 * 60 * 1000), async (req, res) => {
   const { email, token, password } = req.body;
   if (!email || !token || !password) {
     return res.status(400).json({ error: 'Missing email, token or password.' });
@@ -518,10 +568,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
       await logAuditEvent('New User Social Registration', `User ${email} registered via Google OAuth`);
     }
 
-    // Create JWT
     const token = jwt.sign(
       { id: user.id, email: user.email, role: 'user' },
-      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -4615,7 +4664,7 @@ app.post('/api/admin/users/:id/impersonate', authenticateToken, async (req, res)
     const targetUser = targetUserRes.rows[0];
     const token = jwt.sign(
       { id: targetUser.id, email: targetUser.email, fullName: targetUser.full_name },
-      process.env.JWT_SECRET || 'super_military_grade_agentbunny_jwt_secret_key',
+      JWT_SECRET,
       { expiresIn: '2h' }
     );
     await logAuditEvent('User Impersonated', `Admin impersonated Merchant User ${targetUser.email} (ID ${targetUser.id})`);

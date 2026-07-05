@@ -4,7 +4,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Ensure we have a valid 32-byte key derived from ENCRYPTION_KEY
-const encSecret = process.env.ENCRYPTION_KEY || 'default_super_secret_agentbunny_key_2026';
+const encSecret = process.env.ENCRYPTION_KEY;
+if (!encSecret) {
+  console.error('CRITICAL ERROR: ENCRYPTION_KEY environment variable is not defined in .env! Cannot start production server without ENCRYPTION_KEY.');
+  process.exit(1);
+}
 const key = crypto.createHash('sha256').update(encSecret).digest();
 
 const ALGORITHM = 'aes-256-gcm';
