@@ -361,8 +361,17 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     for (const msg of m.messages) {
       if (!msg.message) continue;
       
-      // Skip group chats — only process individual/personal conversations
-      if (msg.key.remoteJid.endsWith('@g.us')) continue;
+      // Skip group chats, broadcasts, status stories, and newsletters
+      const remoteJid = msg.key.remoteJid;
+      if (
+        !remoteJid ||
+        remoteJid.endsWith('@g.us') ||
+        remoteJid.endsWith('@broadcast') ||
+        remoteJid.endsWith('@newsletter') ||
+        remoteJid === 'status@broadcast'
+      ) {
+        continue;
+      }
 
       let text = msg.message.conversation || msg.message.extendedTextMessage?.text;
       const imageMessage = msg.message.imageMessage;
