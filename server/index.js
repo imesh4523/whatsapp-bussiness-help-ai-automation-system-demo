@@ -31,10 +31,9 @@ import { getBackupConfig, runBackup, scheduleBackups } from './backup-manager.js
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error('CRITICAL ERROR: JWT_SECRET environment variable is not defined in .env! Cannot start production server without JWT_SECRET.');
-  process.exit(1);
+const JWT_SECRET = process.env.JWT_SECRET || 'super_military_grade_whatsray_jwt_secret_key';
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET environment variable is not defined! Using fallback secret. Consider configuring it in production.');
 }
 
 // Run dynamic schema migrations for password reset columns and marketing campaign tables
