@@ -5665,7 +5665,15 @@ app.get('*', (req, res, next) => {
 // Start Express Server & initialize sessions
 app.listen(PORT, () => {
   console.log(`AgentBunny Server is running on port ${PORT}`);
-  initWhatsAppSessions();
+  
+  // Only restore active sessions automatically in production or when explicitly configured
+  if (process.env.NODE_ENV === 'production' || process.env.AUTO_RESTORE_SESSIONS === 'true') {
+    console.log('Restoring saved WhatsApp sessions...');
+    initWhatsAppSessions();
+  } else {
+    console.log('Local development environment: Skipping automatic WhatsApp session restoration to prevent conflicts with the production server.');
+  }
+
   // Trigger subscription check on server start
   processSubscriptionRenewals();
   // Initialize campaign processor
