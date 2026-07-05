@@ -79,7 +79,7 @@ CRITICAL CONVERSATION RULES:
 
 export async function generateAIReply(sessionPhone, senderPhone, messageText, imageBuffer = null, imageMimeType = null) {
   let config = {
-    defaultModel: 'Gemini 1.5 Pro',
+    defaultModel: 'Gemini 2.5 Flash',
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     temperature: 0.6,
     typingDelay: 150,

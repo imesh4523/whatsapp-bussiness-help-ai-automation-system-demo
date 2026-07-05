@@ -277,7 +277,7 @@ app.post('/api/auth/register', rateLimiter(60, 15 * 60 * 1000), async (req, res)
     // Seed default AI config
     await db.query(
       'INSERT INTO ai_configs (user_id, default_model, temperature, typing_delay, global_ai_active) VALUES ($1, $2, $3, $4, $5)',
-      [newUser.id, 'Gemini 1.5 Pro', 0.6, 150, true]
+      [newUser.id, 'Gemini 2.5 Flash', 0.6, 150, true]
     );
 
     const token = jwt.sign(
@@ -555,7 +555,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
       // Seed default AI config for new user
       await db.query(
         'INSERT INTO ai_configs (user_id, default_model, temperature, typing_delay, global_ai_active) VALUES ($1, $2, $3, $4, $5)',
-        [user.id, 'Gemini 1.5 Pro', 0.6, 150, true]
+        [user.id, 'Gemini 2.5 Flash', 0.6, 150, true]
       );
 
       // Trigger welcome email asynchronously (non-blocking)
@@ -1914,7 +1914,7 @@ app.get('/api/ai-config', authenticateToken, async (req, res) => {
     if (configRes.rows.length === 0) {
       // Return default
       return res.json({
-        defaultModel: 'Gemini 1.5 Pro',
+        defaultModel: 'Gemini 2.5 Flash',
         systemPrompt: 'You are an helpful, human-like virtual assistant...',
         temperature: 0.6,
         typingDelay: 150,
@@ -3024,7 +3024,7 @@ app.post('/api/admin/user-profile/:userId', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (user_id) DO UPDATE 
       SET default_model = $2, system_prompt = $3, temperature = $4, typing_delay = $5
-    `, [userId, defaultModel || 'Gemini 1.5 Pro', systemPrompt, temperature || 0.6, typingDelay || 150]);
+    `, [userId, defaultModel || 'Gemini 2.5 Flash', systemPrompt, temperature || 0.6, typingDelay || 150]);
 
     await logAuditEvent('Admin Edit User Profile', `Admin updated user profile and AI settings for user ID ${userId}`);
     res.json({ success: true, message: 'User profile updated successfully.' });
