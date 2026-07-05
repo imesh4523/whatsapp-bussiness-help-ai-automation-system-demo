@@ -6830,6 +6830,12 @@ function BusinessProfile() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes rainbow-flow {
+          0% { background-position: 0% center; }
+          100% { background-position: -200% center; }
+        }
+      `}} />
       <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
         <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Business Profile & AI Knowledge Base</h3>
         <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>
