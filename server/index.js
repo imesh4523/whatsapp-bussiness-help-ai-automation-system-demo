@@ -5158,7 +5158,7 @@ async function checkUserInactivity() {
       FROM users u
       LEFT JOIN whatsapp_sessions w ON u.id = w.user_id
       WHERE u.inactivity_email_sent = FALSE 
-        AND u.joined < NOW() - INTERVAL '3 hours'
+        AND u.joined_at < NOW() - INTERVAL '3 hours'
         AND w.id IS NULL
     `);
 
