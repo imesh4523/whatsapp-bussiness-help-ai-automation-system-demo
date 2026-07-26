@@ -66,19 +66,21 @@ function Header({ cartCount, onOpenCart, user, onLogout, onOpenAuth, currentView
           </button>
 
           {/* Cart Button */}
-          <button 
-            className="navbar-cart-btn flex items-center gap-2 hover:opacity-70 transition-opacity relative group" 
-            onClick={onOpenCart} 
-            aria-label="Open cart"
-          >
-            <span className="text-sm font-bold tracking-widest uppercase hidden md:inline-block">CART</span>
-            <svg className="w-5 h-5 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-            <div className="bg-black text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md group-hover:scale-110 transition-transform">
-              {cartCount}
-            </div>
-          </button>
+          {currentView === 'collections' && (
+            <button 
+              className="navbar-cart-btn flex items-center gap-2 hover:opacity-70 transition-opacity relative group" 
+              onClick={onOpenCart} 
+              aria-label="Open cart"
+            >
+              <span className="text-sm font-bold tracking-widest uppercase hidden md:inline-block">CART</span>
+              <svg className="w-5 h-5 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <div className="bg-black text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md group-hover:scale-110 transition-transform">
+                {cartCount}
+              </div>
+            </button>
+          )}
 
           {/* Mobile Profile Icon */}
           <button 
