@@ -453,9 +453,9 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     }
   });
 
-  // Listen to incoming messages and generate AI replies
+  // Listen to incoming & historic messages and generate AI replies
   sock.ev.on('messages.upsert', async (m) => {
-    if (m.type !== 'notify' && m.type !== 'append') return;
+    const isHistoryBatch = m.type === 'history';
     
     for (const msg of m.messages) {
       if (!msg.message) continue;
@@ -512,6 +512,28 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
         // Auto-extract tracking info if present in outgoing message from mobile phone
         await checkAndExtractTracking(userId, sessionId, senderPhone, text);
 
+        continue;
+      }
+
+      if (isHistoryBatch) {
+        // Log historical message to DB without incrementing unread count or triggering AI
+        await db.query(
+          `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
+           VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, $6)
+           ON CONFLICT (id) DO UPDATE SET 
+             last_message = EXCLUDED.last_message, 
+             updated_at = GREATEST(chats.updated_at, EXCLUDED.updated_at)`,
+          [chatId, sessionId, senderPhone, senderName, text, msg.key.remoteJid]
+        );
+
+        await db.query(
+          `INSERT INTO messages (chat_id, text, sender)
+           SELECT $1, $2, $3
+           WHERE NOT EXISTS (
+             SELECT 1 FROM messages WHERE chat_id = $1 AND text = $2
+           )`,
+          [chatId, text, msg.key.fromMe ? 'agent' : 'customer']
+        );
         continue;
       }
 

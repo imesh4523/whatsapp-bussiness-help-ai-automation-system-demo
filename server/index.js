@@ -1602,6 +1602,26 @@ app.get('/api/crm/reminders', authenticateToken, resolveWhatsAppSession, async (
   }
 });
 
+app.post('/api/crm/reminders/sync-history', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const sessionId = req.whatsappSessionId;
+  try {
+    const chatsRes = await db.query('SELECT COUNT(*) FROM chats WHERE session_id = $1', [sessionId]);
+    const msgRes = await db.query(
+      'SELECT COUNT(*) FROM messages m JOIN chats c ON m.chat_id = c.id WHERE c.session_id = $1', 
+      [sessionId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Deep WhatsApp history sync status verified successfully!',
+      chatsCount: Number(chatsRes.rows[0].count),
+      messagesCount: Number(msgRes.rows[0].count)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/crm/reminders/analyze', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const { chatIds, maxLimit, hoursFilter, forceRescan, filterType } = req.body;
   const sessionId = req.whatsappSessionId;

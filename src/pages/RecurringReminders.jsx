@@ -176,6 +176,30 @@ export default function RecurringReminders({ user }) {
   const [customHours, setCustomHours] = useState('');
   const [filterType, setFilterType] = useState('active'); // 'active' (last active) or 'start' (conversation start time)
   const [tokenSaver, setTokenSaver] = useState(true);
+  const [syncingHistory, setSyncingHistory] = useState(false);
+
+  // Deep WhatsApp History Sync
+  const handleDeepHistorySync = async () => {
+    setSyncingHistory(true);
+    if (window.notify) window.notify('info', 'Deep WhatsApp History Sync requested. Verifying historic conversations...');
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/reminders/sync-history`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('aura_token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (window.notify) window.notify('success', `Deep Sync Complete! Verified ${data.chatsCount} chats & ${data.messagesCount} historic messages.`);
+        fetchReminders();
+      } else {
+        if (window.notify) window.notify('error', 'Failed to perform deep history sync.');
+      }
+    } catch (err) {
+      if (window.notify) window.notify('error', 'Network error during history sync.');
+    } finally {
+      setSyncingHistory(false);
+    }
+  };
 
   // Run AI analysis for up to 5,000 chats
   const handleAIAnalyze = async (chatIds = null) => {
@@ -404,6 +428,15 @@ export default function RecurringReminders({ user }) {
             />
             <span>Token Saver</span>
           </label>
+
+          <button
+            onClick={handleDeepHistorySync}
+            disabled={syncingHistory}
+            className="btn btn-sm px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 shadow-xs"
+          >
+            <i className={`las la-sync text-sm ${syncingHistory ? 'la-spin text-emerald-500' : 'text-blue-500'}`}></i>
+            {syncingHistory ? 'Syncing...' : 'Sync History'}
+          </button>
 
           <button
             onClick={() => handleAIAnalyze()}
