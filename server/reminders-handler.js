@@ -172,9 +172,6 @@ export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxL
             aiScanQueue.processed++;
             return;
           }
-            aiScanQueue.processed++;
-            return;
-          }
           
           // Reverse to chronological order
           const messages = msgRes.rows.reverse();
