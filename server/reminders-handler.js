@@ -390,7 +390,14 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
       }
     }
 
-    logMsg(`Bulk reminders completed. Total Sent: ${bulkQueue.sent}, Failed: ${bulkQueue.failed}.`);
+    const successRate = bulkQueue.total > 0 ? ((bulkQueue.sent / bulkQueue.total) * 100).toFixed(1) : 0;
+    logMsg(`----------------------------------------`);
+    logMsg(`📊 BATCH DISPATCH CAMPAIGN REPORT:`);
+    logMsg(`• Total Target Recipients: ${bulkQueue.total}`);
+    logMsg(`• Successfully Reminded: ${bulkQueue.sent} (${successRate}%)`);
+    logMsg(`• Rejected / Failed: ${bulkQueue.failed}`);
+    logMsg(`• Remaining / Unsent: ${bulkQueue.total - (bulkQueue.sent + bulkQueue.failed)}`);
+    logMsg(`----------------------------------------`);
   } catch (err) {
     logMsg(`Fatal error in bulk reminder queue: ${err.message}`);
   } finally {

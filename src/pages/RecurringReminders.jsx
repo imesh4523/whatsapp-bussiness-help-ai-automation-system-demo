@@ -516,6 +516,30 @@ export default function RecurringReminders({ user }) {
               Spam Shield Active Queue
             </h4>
             
+            {/* Live Batch Dispatch Metric Cards */}
+            {(queueStatus.active || queueStatus.logs.length > 0) && (
+              <div className="grid grid-cols-4 gap-1.5 mb-3 text-center">
+                <div className="bg-slate-800/80 p-1.5 rounded-xl border border-slate-700">
+                  <span className="text-[8px] uppercase font-bold text-slate-400 d-block">Target</span>
+                  <span className="text-xs font-extrabold text-white">{queueStatus.total}</span>
+                </div>
+                <div className="bg-emerald-950/60 p-1.5 rounded-xl border border-emerald-800/50">
+                  <span className="text-[8px] uppercase font-bold text-emerald-400 d-block">Sent</span>
+                  <span className="text-xs font-extrabold text-emerald-400">{queueStatus.sent}</span>
+                </div>
+                <div className="bg-rose-950/60 p-1.5 rounded-xl border border-rose-800/50">
+                  <span className="text-[8px] uppercase font-bold text-rose-400 d-block">Failed</span>
+                  <span className="text-xs font-extrabold text-rose-400">{queueStatus.failed}</span>
+                </div>
+                <div className="bg-amber-950/60 p-1.5 rounded-xl border border-amber-800/50">
+                  <span className="text-[8px] uppercase font-bold text-amber-400 d-block">Success %</span>
+                  <span className="text-xs font-extrabold text-amber-400">
+                    {queueStatus.total > 0 ? Math.round((queueStatus.sent / queueStatus.total) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+            )}
+
             {queueStatus.active ? (
               <div className="mb-3">
                 <p className="text-xs text-gray-400 mb-1">Sending to: <span className="font-bold text-[#f8fafc]">{queueStatus.currentName}</span></p>
@@ -524,15 +548,26 @@ export default function RecurringReminders({ user }) {
                     <div 
                       className="progress-bar bg-success" 
                       role="progressbar" 
-                      style={{ width: `${(queueStatus.sent / queueStatus.total) * 100}%` }}
+                      style={{ width: `${(queueStatus.sent / (queueStatus.total || 1)) * 100}%` }}
                     ></div>
                   </div>
                   <span className="text-xs font-bold text-[#f8fafc]">{queueStatus.sent}/{queueStatus.total}</span>
                 </div>
               </div>
             ) : (
-              <div className="py-2.5 px-3 rounded-xl bg-slate-800 text-xs mb-3 text-slate-400">
-                🚀 Queue idle. Select chats below and send reminders.
+              <div className="py-2 px-3 rounded-xl bg-slate-800 text-xs mb-3 text-slate-400 flex justify-between items-center">
+                <span>🚀 Queue idle. Select chats below and click send.</span>
+                {queueStatus.logs.length > 0 && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(queueStatus.logs.join('\n'));
+                      if (window.notify) window.notify('success', 'Execution report copied to clipboard!');
+                    }}
+                    className="text-[10px] text-emerald-400 font-bold bg-transparent border-none cursor-pointer hover:underline"
+                  >
+                    Copy Report
+                  </button>
+                )}
               </div>
             )}
 
