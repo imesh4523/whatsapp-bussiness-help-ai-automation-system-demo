@@ -49,21 +49,24 @@ export async function handleIncomingReminderMessage(chatId, text, userId) {
   
   const cancelKeywords = [
     'no need', 'already bought', 'epa', 'cancel', 'ganna epa', 
-    'no thanks', 'mepara epa', 'mepa epa', 'gannepa', 'benda epa'
+    'no thanks', 'mepara epa', 'mepa epa', 'gannepa', 'benda epa',
+    'avashya na', 'awashya na', 'awashya ne', 'avashya ne', 'onedha', 
+    'epa epa', 'dont send', "don't send", 'stop', 'unsubscribe',
+    'වෙන්නෙ නෑ', 'එපා', 'අවශ්‍ය නැහැ', 'අවශ්‍ය නෑ', 'ඕන නෑ', 'එපා තෑන්ක්ස්'
   ];
   
   const lowerText = text.toLowerCase().trim();
   const shouldCancel = cancelKeywords.some(keyword => lowerText.includes(keyword));
   
   if (shouldCancel) {
-    console.log(`[REMINDER AUTO-CANCEL] Cancellation keyword matched in chat: ${chatId}. Cancelling reminders & orders...`);
+    console.log(`[REMINDER AUTO-CANCEL] Cancellation keyword matched in chat: ${chatId} ("${text}"). Permanently blocking reminders & cancelling orders...`);
     
-    // 1. Update chat reminder status
+    // 1. Update chat reminder status to Cancelled
     await db.query(
       `INSERT INTO chat_reminders (chat_id, status, ai_analysis, updated_at)
        VALUES ($1, 'Cancelled', $2, CURRENT_TIMESTAMP)
        ON CONFLICT (chat_id) DO UPDATE SET status = 'Cancelled', ai_analysis = $2, updated_at = CURRENT_TIMESTAMP`,
-      [chatId, `Customer replied cancellation keyword: "${text}"`]
+      [chatId, `Customer explicitly rejected: "${text}"`]
     );
 
     // 2. Extract phone number from chatId (format: 'sessionid_customerphone')
@@ -305,9 +308,12 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
       const chatId = chatIds[index];
       
       try {
-        // Fetch contact details
+        // Fetch contact details and reminder status
         const chatRes = await db.query(
-          'SELECT sender_phone, sender_name, remote_jid, ephemeral_expiration FROM chats WHERE id = $1',
+          `SELECT c.sender_phone, c.sender_name, c.remote_jid, c.ephemeral_expiration, cr.status as reminder_status
+           FROM chats c
+           LEFT JOIN chat_reminders cr ON c.id = cr.chat_id
+           WHERE c.id = $1`,
           [chatId]
         );
 
@@ -318,6 +324,19 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
         }
 
         const chat = chatRes.rows[0];
+
+        // Critical Rejection Guard: Skip customer if they have already cancelled or confirmed!
+        if (chat.reminder_status === 'Cancelled') {
+          logMsg(`⛔ [BLOCKED] ${chat.sender_name} (+${chat.sender_phone}) previously replied "No Need / Cancel". Reminders permanently blocked.`);
+          bulkQueue.failed++;
+          continue;
+        }
+
+        if (chat.reminder_status === 'Confirmed') {
+          logMsg(`✅ [SKIPPED] ${chat.sender_name} (+${chat.sender_phone}) already confirmed order. No reminder needed.`);
+          continue;
+        }
+
         const recipientJid = chat.remote_jid || `${chat.sender_phone}@s.whatsapp.net`;
         const customerName = chat.sender_name || 'WhatsApp Contact';
         
