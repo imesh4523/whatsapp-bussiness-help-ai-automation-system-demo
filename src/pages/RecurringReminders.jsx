@@ -135,10 +135,13 @@ export default function RecurringReminders({ user }) {
     }
   }, [queueStatus.logs]);
 
+  const [timeWindow, setTimeWindow] = useState('0'); // '0', '24', '48', '168'
+  const [tokenSaver, setTokenSaver] = useState(true);
+
   // Run AI analysis for up to 5,000 chats
   const handleAIAnalyze = async (chatIds = null) => {
     setAnalyzing(true);
-    if (window.notify) window.notify('info', 'Started AI Chat Analysis for up to 5,000 chats in background!');
+    if (window.notify) window.notify('info', `Started AI Chat Analysis (${timeWindow === '0' ? 'All Time' : 'Last ' + timeWindow + ' Hours'}, Token Saver: ${tokenSaver ? 'ON' : 'OFF'})...`);
     
     try {
       const res = await fetch(`${API_BASE_URL}/crm/reminders/analyze`, {
@@ -147,7 +150,12 @@ export default function RecurringReminders({ user }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('aura_token')}`
         },
-        body: JSON.stringify({ chatIds, maxLimit: 5000 })
+        body: JSON.stringify({
+          chatIds,
+          maxLimit: 5000,
+          hoursFilter: Number(timeWindow),
+          forceRescan: !tokenSaver
+        })
       });
       
       if (res.ok) {
@@ -300,23 +308,51 @@ export default function RecurringReminders({ user }) {
           <h2 className="text-2xl font-bold text-neutral-800">Recurring Customer Reminders</h2>
           <p className="text-sm text-gray-500">Scan customer messages, run AI intent analysis, and recover postponed sales safely.</p>
         </div>
-        <button
-          onClick={() => handleAIAnalyze()}
-          disabled={analyzing}
-          className={`btn btn--primary px-4 py-2.5 dash-v2-cta-btn flex items-center gap-2 border-none active:scale-[0.98] rounded-xl font-bold text-xs cursor-pointer ${analyzing ? 'opacity-65' : ''}`}
-        >
-          {analyzing ? (
-            <>
-              <i className="las la-spinner la-spin mr-1"></i>
-              Analyzing...
-            </>
-          ) : (
-            <>
-              <i className="las la-robot mr-1"></i>
-              AI Scan & Analyze Chats
-            </>
-          )}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Time Window Filter Selector */}
+          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-xs">
+            <i className="las la-calendar text-gray-400 text-sm"></i>
+            <select
+              value={timeWindow}
+              onChange={(e) => setTimeWindow(e.target.value)}
+              className="text-xs font-bold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
+            >
+              <option value="0">All Time History</option>
+              <option value="24">Active Last 24 Hours</option>
+              <option value="48">Active Last 48 Hours</option>
+              <option value="168">Active Last 7 Days</option>
+            </select>
+          </div>
+
+          {/* Token Saver Mode Toggle */}
+          <label className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={tokenSaver}
+              onChange={(e) => setTokenSaver(e.target.checked)}
+              className="cursor-pointer"
+            />
+            <span>Token Saver</span>
+          </label>
+
+          <button
+            onClick={() => handleAIAnalyze()}
+            disabled={analyzing}
+            className={`btn btn--primary px-4 py-2.5 dash-v2-cta-btn flex items-center gap-2 border-none active:scale-[0.98] rounded-xl font-bold text-xs cursor-pointer ${analyzing ? 'opacity-65' : ''}`}
+          >
+            {analyzing ? (
+              <>
+                <i className="las la-spinner la-spin mr-1"></i>
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <i className="las la-robot mr-1"></i>
+                AI Scan Chats ({timeWindow === '0' ? '5000 Max' : timeWindow + 'h'})
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* AI Scan Progress Banner */}
@@ -534,6 +570,16 @@ export default function RecurringReminders({ user }) {
           </div>
 
           <div className="flex items-center gap-2 w-100 md:w-auto">
+            <button
+              onClick={() => {
+                const pendingIds = filtered.filter(f => (f.status || 'Pending') === 'Pending').map(f => f.id);
+                setSelectedChats(pendingIds);
+                if (window.notify) window.notify('info', `Selected ${pendingIds.length} pending chats.`);
+              }}
+              className="btn btn-sm btn-outline-success text-xs py-1.5 px-3 rounded-xl font-bold cursor-pointer shrink-0"
+            >
+              <i className="las la-check-circle mr-1"></i> Select Pending ({filtered.filter(f => (f.status || 'Pending') === 'Pending').length})
+            </button>
             {/* Search Input */}
             <input
               type="text"

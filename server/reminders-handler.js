@@ -85,8 +85,8 @@ export async function handleIncomingReminderMessage(chatId, text, userId) {
   }
 }
 
-// Analyze up to 5,000 chats with Gemini AI (Asynchronous Background Task)
-export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxLimit = 5000) {
+// Analyze up to 5,000 chats with Gemini AI (Token Saver & Time Window Optimized)
+export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxLimit = 5000, hoursFilter = 0, forceRescan = false) {
   aiScanQueue.active = true;
   aiScanQueue.processed = 0;
   aiScanQueue.failed = 0;
@@ -102,22 +102,50 @@ export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxL
   try {
     let chatsToAnalyze = chatIds && Array.isArray(chatIds) && chatIds.length > 0 ? chatIds : [];
     
-    // Fetch up to 5,000 active chats if no specific list was provided
     if (chatsToAnalyze.length === 0) {
-      logScan(`Querying up to ${maxLimit} active chats from database...`);
-      const chatsRes = await db.query(
-        'SELECT id FROM chats WHERE session_id = $1 ORDER BY updated_at DESC LIMIT $2',
-        [sessionId, maxLimit]
-      );
-      chatsToAnalyze = chatsRes.rows.map(r => r.id);
+      logScan(`Querying active chats (Time Window: ${hoursFilter > 0 ? hoursFilter + 'h' : 'All Time'}, Token Saver: ${!forceRescan})...`);
+      
+      let sql = `
+        SELECT c.id, c.updated_at as chat_updated, cr.updated_at as reminder_updated, cr.status as rem_status
+        FROM chats c
+        LEFT JOIN chat_reminders cr ON c.id = cr.chat_id
+        WHERE c.session_id = $1
+      `;
+      const queryParams = [sessionId];
+
+      // 1. Time Window Filter (e.g. last 24h, 48h)
+      if (hoursFilter && Number(hoursFilter) > 0) {
+        queryParams.push(Number(hoursFilter));
+        sql += ` AND c.updated_at >= NOW() - ($${queryParams.length} || ' hours')::INTERVAL`;
+      }
+
+      // 2. Token Saver Mode: Skip already Confirmed or Cancelled chats unless forced
+      if (!forceRescan) {
+        sql += ` AND (cr.status IS NULL OR cr.status NOT IN ('Confirmed', 'Cancelled'))`;
+      }
+
+      sql += ` ORDER BY c.updated_at DESC LIMIT $${queryParams.length + 1}`;
+      queryParams.push(maxLimit);
+
+      const chatsRes = await db.query(sql, queryParams);
+      
+      // 3. Additional Token Saver: Skip chats where no new messages arrived since last AI analysis
+      chatsToAnalyze = [];
+      chatsRes.rows.forEach(r => {
+        if (!forceRescan && r.reminder_updated && new Date(r.reminder_updated) >= new Date(r.chat_updated)) {
+          // No new messages logged since last scan, skip calling AI to save Gemini API tokens!
+          aiScanQueue.processed++;
+          return;
+        }
+        chatsToAnalyze.push(r.id);
+      });
     }
 
-    aiScanQueue.total = chatsToAnalyze.length;
-    logScan(`Starting AI Chat Analysis on ${chatsToAnalyze.length} WhatsApp chats...`);
+    aiScanQueue.total = chatsToAnalyze.length + aiScanQueue.processed;
+    logScan(`Queued ${chatsToAnalyze.length} chats for Gemini AI analysis (Saved tokens on ${aiScanQueue.processed} unchanged/finalized chats).`);
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    // Process in batches of 10 parallel requests for optimal performance and rate compliance
     const batchSize = 10;
     for (let i = 0; i < chatsToAnalyze.length; i += batchSize) {
       if (!aiScanQueue.active) {
@@ -131,13 +159,15 @@ export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxL
         if (!aiScanQueue.active) return;
 
         try {
-          // Fetch last 15 messages for context
           const msgRes = await db.query(
             'SELECT text, sender, timestamp FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 15',
             [chatId]
           );
           
           if (msgRes.rows.length === 0) {
+            aiScanQueue.processed++;
+            return;
+          }
             aiScanQueue.processed++;
             return;
           }

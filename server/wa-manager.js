@@ -212,8 +212,8 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
     keepAliveIntervalMs: 30000,          // Send keepalive ping every 30 seconds
     connectTimeoutMs: 60000,             // Wait 60s for connection
     defaultQueryTimeoutMs: 60000,        // Wait 60s for queries to prevent timeouts
-    shouldSyncHistoryDevices: () => false, // Do not sync historic messages to save memory & prevent lag disconnects
-    syncFullHistory: false,               // Bypasses sync history
+    shouldSyncHistoryDevices: () => true,  // Sync historic messages on pairing so full WhatsApp history appears
+    syncFullHistory: true,                 // Sync full history from WhatsApp phone
     markOnlineOnConnect: false,           // Prevents showing online status and reduces sync notification spam
     browser: ['Ubuntu', 'Chrome', '20.0.04'] // Standard user agent to allow pairing code verification
   };
@@ -366,9 +366,90 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
   sock.ev.on('contacts.upsert', handleContacts);
   sock.ev.on('contacts.update', handleContacts);
   
-  sock.ev.on('messaging-history.set', (set) => {
+  sock.ev.on('messaging-history.set', async (set) => {
     if (set.contacts) {
       handleContacts(set.contacts);
+    }
+
+    try {
+      const { chats, messages } = set;
+      console.log(`[WA SYNC] Historical sync event triggered for session ${sessionId} (${chats?.length || 0} chats, ${messages?.length || 0} messages).`);
+
+      if (chats && chats.length > 0) {
+        for (const chat of chats) {
+          if (!chat.id || chat.id.endsWith('@g.us') || chat.id.endsWith('@broadcast') || chat.id.endsWith('@newsletter')) continue;
+          const senderPhone = chat.id.split('@')[0].split(':')[0];
+          const senderName = chat.name || chat.notify || 'WhatsApp Contact';
+          const chatId = `${sessionId}_${senderPhone}`;
+
+          await db.query(
+            `INSERT INTO chats (id, session_id, sender_phone, sender_name, unread_count, updated_at, remote_jid)
+             VALUES ($1, $2, $3, $4, COALESCE($5, 0), CURRENT_TIMESTAMP, $6)
+             ON CONFLICT (id) DO UPDATE SET
+               sender_name = COALESCE(EXCLUDED.sender_name, chats.sender_name),
+               updated_at = CURRENT_TIMESTAMP`,
+            [chatId, sessionId, senderPhone, senderName, chat.unreadCount || 0, chat.id]
+          );
+        }
+      }
+
+      if (messages && messages.length > 0) {
+        for (const msg of messages) {
+          if (!msg.message || !msg.key?.remoteJid) continue;
+          const remoteJid = msg.key.remoteJid;
+          if (remoteJid.endsWith('@g.us') || remoteJid.endsWith('@broadcast') || remoteJid.endsWith('@newsletter')) continue;
+
+          let text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+          if (msg.message.imageMessage) text = msg.message.imageMessage.caption || '[Image]';
+          if (msg.message.videoMessage) text = msg.message.videoMessage.caption || '[Video]';
+          if (msg.message.documentMessage) text = msg.message.documentMessage.fileName || '[Document]';
+          if (!text) continue;
+
+          const senderPhone = remoteJid.split('@')[0].split(':')[0];
+          const chatId = `${sessionId}_${senderPhone}`;
+          const sender = msg.key.fromMe ? 'agent' : 'customer';
+          const tsNum = Number(msg.messageTimestamp || 0);
+          const msgTime = tsNum > 0 ? new Date(tsNum * 1000) : new Date();
+
+          await db.query(
+            `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
+             VALUES ($1, $2, $3, 'WhatsApp Contact', $4, 0, $5, $6)
+             ON CONFLICT (id) DO NOTHING`,
+            [chatId, sessionId, senderPhone, text, msgTime, remoteJid]
+          );
+
+          await db.query(
+            `INSERT INTO messages (chat_id, text, sender, timestamp)
+             VALUES ($1, $2, $3, $4)`,
+            [chatId, text, sender, msgTime]
+          );
+
+          await db.query(
+            `UPDATE chats SET last_message = $1, updated_at = $2 WHERE id = $3 AND updated_at <= $2`,
+            [text, msgTime, chatId]
+          );
+        }
+      }
+      console.log(`[WA SYNC] Historical chat & message sync complete for session ${sessionId}.`);
+    } catch (err) {
+      console.error(`[WA SYNC] Historical sync error for session ${sessionId}:`, err.message);
+    }
+  });
+
+  sock.ev.on('chats.upsert', async (chats) => {
+    for (const chat of chats) {
+      if (!chat.id || chat.id.endsWith('@g.us') || chat.id.endsWith('@broadcast') || chat.id.endsWith('@newsletter')) continue;
+      const senderPhone = chat.id.split('@')[0].split(':')[0];
+      const senderName = chat.name || chat.notify || 'WhatsApp Contact';
+      const chatId = `${sessionId}_${senderPhone}`;
+      await db.query(
+        `INSERT INTO chats (id, session_id, sender_phone, sender_name, unread_count, updated_at, remote_jid)
+         VALUES ($1, $2, $3, $4, COALESCE($5, 0), CURRENT_TIMESTAMP, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           sender_name = COALESCE(EXCLUDED.sender_name, chats.sender_name),
+           updated_at = CURRENT_TIMESTAMP`,
+        [chatId, sessionId, senderPhone, senderName, chat.unreadCount || 0, chat.id]
+      );
     }
   });
 
