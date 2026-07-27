@@ -128,12 +128,40 @@ export default function RecurringReminders({ user }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Scroll queue logs to bottom
+  const logContainerRef = useRef(null);
+
+  // Scroll log container internally to bottom (Fixes page jumping/auto-scrolling bug)
   useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [queueStatus.logs]);
+
+  // Pause Bulk Queue
+  const handlePauseQueue = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/crm/reminders/queue-pause`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      if (window.notify) window.notify('info', 'Bulk reminders paused.');
+    } catch (err) {}
+  };
+
+  // Resume Bulk Queue
+  const handleResumeQueue = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/crm/reminders/queue-resume`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      if (window.notify) window.notify('success', 'Bulk reminders resumed!');
+    } catch (err) {}
+  };
 
   const [timeWindow, setTimeWindow] = useState('0'); // '0', '24', '48', '168'
   const [tokenSaver, setTokenSaver] = useState(true);
@@ -510,6 +538,7 @@ export default function RecurringReminders({ user }) {
 
             {/* Log Output Display Console */}
             <div 
+              ref={logContainerRef}
               style={{
                 height: '190px',
                 overflowY: 'auto',
@@ -528,17 +557,33 @@ export default function RecurringReminders({ user }) {
                   <div key={index} className="mb-1 leading-normal">{log}</div>
                 ))
               )}
-              <div ref={logsEndRef} />
             </div>
           </div>
 
           {queueStatus.active && (
-            <button
-              onClick={handleStopQueue}
-              className="btn btn-sm btn-danger w-100 py-2.5 border-none rounded-xl mt-3 font-bold cursor-pointer active:scale-95 transition-transform"
-            >
-              <i className="las la-stop-circle mr-1"></i> Stop Bulk Dispatch
-            </button>
+            <div className="flex gap-2 mt-3">
+              {queueStatus.paused ? (
+                <button
+                  onClick={handleResumeQueue}
+                  className="btn btn-sm btn-success flex-1 py-2 border-none rounded-xl font-bold cursor-pointer active:scale-95 transition-transform"
+                >
+                  <i className="las la-play-circle mr-1"></i> Resume Queue
+                </button>
+              ) : (
+                <button
+                  onClick={handlePauseQueue}
+                  className="btn btn-sm btn-warning flex-1 py-2 border-none rounded-xl text-dark font-bold cursor-pointer active:scale-95 transition-transform"
+                >
+                  <i className="las la-pause-circle mr-1"></i> Pause Queue
+                </button>
+              )}
+              <button
+                onClick={handleStopQueue}
+                className="btn btn-sm btn-danger flex-1 py-2 border-none rounded-xl font-bold cursor-pointer active:scale-95 transition-transform"
+              >
+                <i className="las la-stop-circle mr-1"></i> Stop Queue
+              </button>
+            </div>
           )}
         </div>
       </div>

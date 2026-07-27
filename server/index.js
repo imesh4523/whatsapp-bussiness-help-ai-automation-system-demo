@@ -1659,7 +1659,18 @@ app.get('/api/crm/reminders/queue-status', authenticateToken, async (req, res) =
 
 app.post('/api/crm/reminders/queue-stop', authenticateToken, async (req, res) => {
   bulkQueue.active = false;
+  bulkQueue.paused = false;
   res.json({ success: true, message: 'Bulk sending queue stopped.' });
+});
+
+app.post('/api/crm/reminders/queue-pause', authenticateToken, async (req, res) => {
+  bulkQueue.paused = true;
+  res.json({ success: true, message: 'Bulk sending queue paused.' });
+});
+
+app.post('/api/crm/reminders/queue-resume', authenticateToken, async (req, res) => {
+  bulkQueue.paused = false;
+  res.json({ success: true, message: 'Bulk sending queue resumed.' });
 });
 
 app.get('/api/crm/reminders/settings', authenticateToken, async (req, res) => {

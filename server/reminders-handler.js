@@ -5,6 +5,7 @@ import { getActiveSocket } from './wa-manager.js';
 // Initialize queue status for bulk message sending
 export const bulkQueue = {
   active: false,
+  paused: false,
   total: 0,
   sent: 0,
   failed: 0,
@@ -289,6 +290,15 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
     for (let index = 0; index < chatIds.length; index++) {
       if (!bulkQueue.active) {
         logMsg('Bulk queue stopped by user.');
+        break;
+      }
+
+      while (bulkQueue.paused && bulkQueue.active) {
+        await new Promise(r => setTimeout(r, 800));
+      }
+
+      if (!bulkQueue.active) {
+        logMsg('Bulk queue stopped while paused.');
         break;
       }
 
