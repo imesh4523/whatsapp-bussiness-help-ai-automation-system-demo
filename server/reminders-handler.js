@@ -89,8 +89,8 @@ export async function handleIncomingReminderMessage(chatId, text, userId) {
   }
 }
 
-// Analyze up to 5,000 chats with Gemini AI (Token Saver & Time Window Optimized)
-export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxLimit = 5000, hoursFilter = 0, forceRescan = false) {
+// Analyze up to 5,000 chats with Gemini AI (Supports Chat Start Time & Last Active Filtering + Custom Hours)
+export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxLimit = 5000, hoursFilter = 0, forceRescan = false, filterType = 'active') {
   aiScanQueue.active = true;
   aiScanQueue.processed = 0;
   aiScanQueue.failed = 0;
@@ -107,7 +107,8 @@ export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxL
     let chatsToAnalyze = chatIds && Array.isArray(chatIds) && chatIds.length > 0 ? chatIds : [];
     
     if (chatsToAnalyze.length === 0) {
-      logScan(`Querying active chats (Time Window: ${hoursFilter > 0 ? hoursFilter + 'h' : 'All Time'}, Token Saver: ${!forceRescan})...`);
+      const filterModeLabel = filterType === 'start' ? 'Chat Start Time (First Message)' : 'Last Active Message Time';
+      logScan(`Querying active chats (Filter Mode: ${filterModeLabel}, Time Window: ${hoursFilter > 0 ? hoursFilter + 'h' : 'All Time'}, Token Saver: ${!forceRescan})...`);
       
       let sql = `
         SELECT c.id, c.updated_at as chat_updated, cr.updated_at as reminder_updated, cr.status as rem_status
@@ -117,10 +118,19 @@ export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxL
       `;
       const queryParams = [sessionId];
 
-      // 1. Time Window Filter (e.g. last 24h, 48h)
+      // 1. Filter by Conversation Start Time vs Last Active Time
       if (hoursFilter && Number(hoursFilter) > 0) {
         queryParams.push(Number(hoursFilter));
-        sql += ` AND c.updated_at >= NOW() - ($${queryParams.length} || ' hours')::INTERVAL`;
+        if (filterType === 'start') {
+          sql += ` AND EXISTS (
+            SELECT 1 FROM messages m 
+            WHERE m.chat_id = c.id 
+            GROUP BY m.chat_id 
+            HAVING MIN(m.timestamp) >= NOW() - ($${queryParams.length} || ' hours')::INTERVAL
+          )`;
+        } else {
+          sql += ` AND c.updated_at >= NOW() - ($${queryParams.length} || ' hours')::INTERVAL`;
+        }
       }
 
       // 2. Token Saver Mode: Skip already Confirmed or Cancelled chats unless forced
@@ -172,8 +182,7 @@ export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxL
             aiScanQueue.processed++;
             return;
           }
-          
-          // Reverse to chronological order
+
           const messages = msgRes.rows.reverse();
           const formattedText = messages.map(m => `[${m.sender === 'customer' ? 'Customer' : 'Agent/Bot'}]: ${m.text}`).join('\n');
           
@@ -213,7 +222,6 @@ Response format: ONLY return valid JSON (no markdown formatting, no backticks, n
               defDate = null;
             }
 
-            // Insert or update reminder info
             await db.query(
               `INSERT INTO chat_reminders (chat_id, status, deferred_date, ai_analysis, updated_at)
                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
@@ -230,7 +238,6 @@ Response format: ONLY return valid JSON (no markdown formatting, no backticks, n
         }
       }));
 
-      // Small 200ms delay between parallel batches to prevent rate limits
       await new Promise(r => setTimeout(r, 200));
     }
 
@@ -245,6 +252,7 @@ Response format: ONLY return valid JSON (no markdown formatting, no backticks, n
 // Background bulk reminder sending queue loop
 export async function runBulkReminderQueue(userId, sessionId, chatIds, messageStep, minDelay, maxDelay) {
   bulkQueue.active = true;
+  bulkQueue.paused = false;
   bulkQueue.total = chatIds.length;
   bulkQueue.sent = 0;
   bulkQueue.failed = 0;
@@ -260,7 +268,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
   logMsg(`Started bulk reminders queue. Total recipients: ${chatIds.length}. Step: ${messageStep}`);
 
   try {
-    // 1. Fetch template settings from database
     const settingsRes = await db.query(
       "SELECT key, value FROM system_settings WHERE key IN ('reminder_msg_1', 'reminder_msg_2', 'reminder_msg_3')"
     );
@@ -278,7 +285,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
 
     const template = settingsMap[`reminder_msg_${messageStep}`] || defaultTemplates[`reminder_msg_${messageStep}`];
 
-    // 2. Fetch socket connection
     const sock = getActiveSocket(sessionId);
     if (!sock) {
       logMsg('Failed to find an active WhatsApp socket session. Aborting queue.');
@@ -286,7 +292,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
       return;
     }
 
-    // 3. Process each chat
     for (let index = 0; index < chatIds.length; index++) {
       if (!bulkQueue.active) {
         logMsg('Bulk queue stopped by user.');
@@ -305,7 +310,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
       const chatId = chatIds[index];
       
       try {
-        // Fetch contact details and reminder status
         const chatRes = await db.query(
           `SELECT c.sender_phone, c.sender_name, c.remote_jid, c.ephemeral_expiration, cr.status as reminder_status
            FROM chats c
@@ -322,7 +326,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
 
         const chat = chatRes.rows[0];
 
-        // Critical Rejection Guard: Skip customer if they have already cancelled or confirmed!
         if (chat.reminder_status === 'Cancelled') {
           logMsg(`⛔ [BLOCKED] ${chat.sender_name} (+${chat.sender_phone}) previously replied "No Need / Cancel". Reminders permanently blocked.`);
           bulkQueue.failed++;
@@ -340,7 +343,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
         bulkQueue.currentName = customerName;
         logMsg(`Sending follow-up #${messageStep} to ${customerName} (+${chat.sender_phone})...`);
 
-        // Compile template variables
         let compiledMessage = template
           .replace(/\{\{\s*contactName\s*\}\}/g, customerName)
           .replace(/\{\{\s*contactMobile\s*\}\}/g, chat.sender_phone)
@@ -351,10 +353,8 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
           sendOpts.ephemeralExpiration = chat.ephemeral_expiration;
         }
 
-        // Send WhatsApp Message
         await sock.sendMessage(recipientJid, { text: compiledMessage }, sendOpts);
 
-        // Update database logs & counts
         await db.query(
           `INSERT INTO messages (chat_id, text, sender) 
            VALUES ($1, $2, 'agent')`,
@@ -381,12 +381,10 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
         logMsg(`Success: Message sent to ${customerName}.`);
         bulkQueue.sent++;
 
-        // Apply delay if there are more chats in queue
         if (index < chatIds.length - 1 && bulkQueue.active) {
           const delaySec = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
           logMsg(`Anti-Spam Delay: Waiting ${delaySec} seconds before the next message...`);
           
-          // Wait
           await new Promise((resolve) => {
             const timer = setInterval(() => {
               if (!bulkQueue.active) {
@@ -418,5 +416,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
     logMsg(`Fatal error in bulk reminder queue: ${err.message}`);
   } finally {
     bulkQueue.active = false;
+    bulkQueue.paused = false;
   }
 }

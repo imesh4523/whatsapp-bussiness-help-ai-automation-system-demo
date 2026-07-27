@@ -172,13 +172,19 @@ export default function RecurringReminders({ user }) {
     } catch (err) {}
   };
 
-  const [timeWindow, setTimeWindow] = useState('0'); // '0', '24', '48', '168'
+  const [timeWindow, setTimeWindow] = useState('0'); // '0', '24', '48', '168', 'custom'
+  const [customHours, setCustomHours] = useState('');
+  const [filterType, setFilterType] = useState('active'); // 'active' (last active) or 'start' (conversation start time)
   const [tokenSaver, setTokenSaver] = useState(true);
 
   // Run AI analysis for up to 5,000 chats
   const handleAIAnalyze = async (chatIds = null) => {
     setAnalyzing(true);
-    if (window.notify) window.notify('info', `Started AI Chat Analysis (${timeWindow === '0' ? 'All Time' : 'Last ' + timeWindow + ' Hours'}, Token Saver: ${tokenSaver ? 'ON' : 'OFF'})...`);
+    const effectiveHours = timeWindow === 'custom' ? (Number(customHours) || 0) : Number(timeWindow);
+    const filterLabel = filterType === 'start' ? 'Start Time' : 'Last Active';
+    const hoursLabel = effectiveHours > 0 ? `${effectiveHours} Hours` : 'All Time';
+
+    if (window.notify) window.notify('info', `Started AI Chat Analysis (${filterLabel}: ${hoursLabel}, Token Saver: ${tokenSaver ? 'ON' : 'OFF'})...`);
     
     try {
       const res = await fetch(`${API_BASE_URL}/crm/reminders/analyze`, {
@@ -190,8 +196,9 @@ export default function RecurringReminders({ user }) {
         body: JSON.stringify({
           chatIds,
           maxLimit: 5000,
-          hoursFilter: Number(timeWindow),
-          forceRescan: !tokenSaver
+          hoursFilter: effectiveHours,
+          forceRescan: !tokenSaver,
+          filterType
         })
       });
       
@@ -346,6 +353,19 @@ export default function RecurringReminders({ user }) {
           <p className="text-sm text-gray-500">Scan customer messages, run AI intent analysis, and recover postponed sales safely.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {/* Filter Mode Selector (Start Time vs Last Active) */}
+          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-xs">
+            <i className="las la-clock text-gray-400 text-sm"></i>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="text-xs font-bold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
+            >
+              <option value="active">Filter: Last Active Message</option>
+              <option value="start">Filter: Conversation Start Time</option>
+            </select>
+          </div>
+
           {/* Time Window Filter Selector */}
           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-xs">
             <i className="las la-calendar text-gray-400 text-sm"></i>
@@ -355,11 +375,24 @@ export default function RecurringReminders({ user }) {
               className="text-xs font-bold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
             >
               <option value="0">All Time History</option>
-              <option value="24">Active Last 24 Hours</option>
-              <option value="48">Active Last 48 Hours</option>
-              <option value="168">Active Last 7 Days</option>
+              <option value="24">Last 24 Hours</option>
+              <option value="48">Last 48 Hours</option>
+              <option value="168">Last 7 Days</option>
+              <option value="custom">Custom Hours...</option>
             </select>
           </div>
+
+          {/* Custom Hours Input */}
+          {timeWindow === 'custom' && (
+            <input
+              type="number"
+              min="1"
+              placeholder="e.g. 12 or 36"
+              value={customHours}
+              onChange={(e) => setCustomHours(e.target.value)}
+              className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs w-28 font-bold"
+            />
+          )}
 
           {/* Token Saver Mode Toggle */}
           <label className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer select-none">
@@ -385,7 +418,7 @@ export default function RecurringReminders({ user }) {
             ) : (
               <>
                 <i className="las la-robot mr-1"></i>
-                AI Scan Chats ({timeWindow === '0' ? '5000 Max' : timeWindow + 'h'})
+                AI Scan Chats
               </>
             )}
           </button>

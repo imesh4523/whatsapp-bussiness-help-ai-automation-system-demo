@@ -1603,7 +1603,7 @@ app.get('/api/crm/reminders', authenticateToken, resolveWhatsAppSession, async (
 });
 
 app.post('/api/crm/reminders/analyze', authenticateToken, resolveWhatsAppSession, async (req, res) => {
-  const { chatIds, maxLimit, hoursFilter, forceRescan } = req.body;
+  const { chatIds, maxLimit, hoursFilter, forceRescan, filterType } = req.body;
   const sessionId = req.whatsappSessionId;
   
   if (aiScanQueue.active) {
@@ -1611,7 +1611,7 @@ app.post('/api/crm/reminders/analyze', authenticateToken, resolveWhatsAppSession
   }
 
   try {
-    analyzeChatsWithAI(req.user.id, sessionId, chatIds, maxLimit || 5000, hoursFilter || 0, forceRescan || false);
+    analyzeChatsWithAI(req.user.id, sessionId, chatIds, maxLimit || 5000, hoursFilter || 0, forceRescan || false, filterType || 'active');
     res.json({ success: true, message: 'AI Chat Analysis started in background.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
