@@ -2,13 +2,23 @@ import db from './db.js';
 import { callGeminiAPI } from './gemini-client.js';
 import { getActiveSocket } from './wa-manager.js';
 
-// Initialize queue status
+// Initialize queue status for bulk message sending
 export const bulkQueue = {
   active: false,
   total: 0,
   sent: 0,
   failed: 0,
   currentName: '',
+  logs: []
+};
+
+// Initialize queue status for AI chat scanning (scaled for 5,000+ chats)
+export const aiScanQueue = {
+  active: false,
+  total: 0,
+  processed: 0,
+  failed: 0,
+  currentChat: '',
   logs: []
 };
 
@@ -55,8 +65,7 @@ export async function handleIncomingReminderMessage(chatId, text, userId) {
       [chatId, `Customer replied cancellation keyword: "${text}"`]
     );
 
-    // 2. Extract phone number from chatId (format: 'session_phone')
-    // chatId looks like: 'sessionid_customerphone'
+    // 2. Extract phone number from chatId (format: 'sessionid_customerphone')
     const parts = chatId.split('_');
     if (parts.length >= 2) {
       const customerPhone = parts[1];
@@ -76,41 +85,68 @@ export async function handleIncomingReminderMessage(chatId, text, userId) {
   }
 }
 
-// Analyze chats with Gemini AI to extract intent and promised dates
-export async function analyzeChatsWithAI(userId, sessionId, chatIds) {
-  const chatsToAnalyze = chatIds && chatIds.length > 0 ? chatIds : [];
-  
-  // If no specific chats passed, fetch last 40 active chats
-  if (chatsToAnalyze.length === 0) {
-    const chatsRes = await db.query(
-      'SELECT id FROM chats WHERE session_id = $1 ORDER BY updated_at DESC LIMIT 40',
-      [sessionId]
-    );
-    chatsRes.rows.forEach(r => chatsToAnalyze.push(r.id));
-  }
+// Analyze up to 5,000 chats with Gemini AI (Asynchronous Background Task)
+export async function analyzeChatsWithAI(userId, sessionId, chatIds = null, maxLimit = 5000) {
+  aiScanQueue.active = true;
+  aiScanQueue.processed = 0;
+  aiScanQueue.failed = 0;
+  aiScanQueue.logs = [];
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const logScan = (str) => {
+    const time = new Date().toLocaleTimeString();
+    const formatted = `[${time}] ${str}`;
+    console.log(`[AI SCAN QUEUE] ${str}`);
+    aiScanQueue.logs.push(formatted);
+  };
 
-  // Process in parallel batches of 5 to respect rate limits
-  const batchSize = 5;
-  for (let i = 0; i < chatsToAnalyze.length; i += batchSize) {
-    const batch = chatsToAnalyze.slice(i, i + batchSize);
+  try {
+    let chatsToAnalyze = chatIds && Array.isArray(chatIds) && chatIds.length > 0 ? chatIds : [];
     
-    await Promise.all(batch.map(async (chatId) => {
-      try {
-        // Fetch last 15 messages for context
-        const msgRes = await db.query(
-          'SELECT text, sender, timestamp FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 15',
-          [chatId]
-        );
-        
-        if (msgRes.rows.length === 0) return;
-        
-        // Reverse to chronological order
-        const messages = msgRes.rows.reverse();
-        const formattedText = messages.map(m => `[${m.sender === 'customer' ? 'Customer' : 'Agent/Bot'}]: ${m.text}`).join('\n');
-        
-        const systemPrompt = `You are an expert CRM assistant. Analyze the following WhatsApp chat messages between our Business Agent/Bot and a Customer. 
+    // Fetch up to 5,000 active chats if no specific list was provided
+    if (chatsToAnalyze.length === 0) {
+      logScan(`Querying up to ${maxLimit} active chats from database...`);
+      const chatsRes = await db.query(
+        'SELECT id FROM chats WHERE session_id = $1 ORDER BY updated_at DESC LIMIT $2',
+        [sessionId, maxLimit]
+      );
+      chatsToAnalyze = chatsRes.rows.map(r => r.id);
+    }
+
+    aiScanQueue.total = chatsToAnalyze.length;
+    logScan(`Starting AI Chat Analysis on ${chatsToAnalyze.length} WhatsApp chats...`);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Process in batches of 10 parallel requests for optimal performance and rate compliance
+    const batchSize = 10;
+    for (let i = 0; i < chatsToAnalyze.length; i += batchSize) {
+      if (!aiScanQueue.active) {
+        logScan('AI Chat Analysis scan stopped by user.');
+        break;
+      }
+
+      const batch = chatsToAnalyze.slice(i, i + batchSize);
+      
+      await Promise.all(batch.map(async (chatId) => {
+        if (!aiScanQueue.active) return;
+
+        try {
+          // Fetch last 15 messages for context
+          const msgRes = await db.query(
+            'SELECT text, sender, timestamp FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 15',
+            [chatId]
+          );
+          
+          if (msgRes.rows.length === 0) {
+            aiScanQueue.processed++;
+            return;
+          }
+          
+          // Reverse to chronological order
+          const messages = msgRes.rows.reverse();
+          const formattedText = messages.map(m => `[${m.sender === 'customer' ? 'Customer' : 'Agent/Bot'}]: ${m.text}`).join('\n');
+          
+          const systemPrompt = `You are an expert CRM assistant. Analyze the following WhatsApp chat messages between our Business Agent/Bot and a Customer. 
 Determine the purchase/order completion status and output a JSON object with the following fields:
 1. "status": Must be one of:
    - "Confirmed": Customer has paid, sent bank slip/receipt, completed checkout, or explicitly confirmed they want to buy.
@@ -125,40 +161,53 @@ ${formattedText}
 
 Response format: ONLY return valid JSON (no markdown formatting, no backticks, no wrap).`;
 
-        const payload = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: systemPrompt }]
-            }
-          ]
-        };
+          const payload = {
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: systemPrompt }]
+              }
+            ]
+          };
 
-        const aiRes = await callGeminiAPI('gemini-2.5-flash', payload);
-        const textResponse = aiRes.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (textResponse) {
-          const cleanJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-          const result = JSON.parse(cleanJson);
+          const aiRes = await callGeminiAPI('gemini-2.5-flash', payload);
+          const textResponse = aiRes.candidates?.[0]?.content?.parts?.[0]?.text;
           
-          let defDate = result.deferred_date || null;
-          if (defDate && isNaN(Date.parse(defDate))) {
-            defDate = null;
-          }
+          if (textResponse) {
+            const cleanJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            const result = JSON.parse(cleanJson);
+            
+            let defDate = result.deferred_date || null;
+            if (defDate && isNaN(Date.parse(defDate))) {
+              defDate = null;
+            }
 
-          // Insert or update reminder info
-          await db.query(
-            `INSERT INTO chat_reminders (chat_id, status, deferred_date, ai_analysis, updated_at)
-             VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-             ON CONFLICT (chat_id) 
-             DO UPDATE SET status = $2, deferred_date = $3, ai_analysis = $4, updated_at = CURRENT_TIMESTAMP`,
-            [chatId, result.status || 'Pending', defDate, result.summary || '']
-          );
+            // Insert or update reminder info
+            await db.query(
+              `INSERT INTO chat_reminders (chat_id, status, deferred_date, ai_analysis, updated_at)
+               VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+               ON CONFLICT (chat_id) 
+               DO UPDATE SET status = $2, deferred_date = $3, ai_analysis = $4, updated_at = CURRENT_TIMESTAMP`,
+              [chatId, result.status || 'Pending', defDate, result.summary || '']
+            );
+          }
+          aiScanQueue.processed++;
+        } catch (err) {
+          aiScanQueue.failed++;
+          aiScanQueue.processed++;
+          console.error(`Error analyzing chat ${chatId} with AI:`, err.message);
         }
-      } catch (err) {
-        console.error(`Error analyzing chat ${chatId} with AI:`, err.message);
-      }
-    }));
+      }));
+
+      // Small 200ms delay between parallel batches to prevent rate limits
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    logScan(`AI Chat Analysis completed! Processed: ${aiScanQueue.processed}, Failed: ${aiScanQueue.failed}.`);
+  } catch (err) {
+    logScan(`Fatal error in AI Chat Analysis: ${err.message}`);
+  } finally {
+    aiScanQueue.active = false;
   }
 }
 
@@ -181,7 +230,6 @@ export async function runBulkReminderQueue(userId, sessionId, chatIds, messageSt
 
   try {
     // 1. Fetch template settings from database
-    const settingsKeys = ['reminder_msg_1', 'reminder_msg_2', 'reminder_msg_3'];
     const settingsRes = await db.query(
       "SELECT key, value FROM system_settings WHERE key IN ('reminder_msg_1', 'reminder_msg_2', 'reminder_msg_3')"
     );

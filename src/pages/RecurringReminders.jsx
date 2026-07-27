@@ -29,6 +29,15 @@ export default function RecurringReminders({ user }) {
     logs: []
   });
 
+  // AI Scan status states (5,000 chats capacity)
+  const [aiScanStatus, setAiScanStatus] = useState({
+    active: false,
+    total: 0,
+    processed: 0,
+    failed: 0,
+    logs: []
+  });
+
   const logsEndRef = useRef(null);
 
   // Fetch reminder status lists
@@ -90,14 +99,29 @@ export default function RecurringReminders({ user }) {
     }
   };
 
+  // Fetch AI scan status in background
+  const fetchAiScanStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/crm/reminders/ai-scan-status`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiScanStatus(data);
+      }
+    } catch (err) {}
+  };
+
   useEffect(() => {
     fetchReminders();
     fetchSettings();
 
-    // Poll queue status every 1.5 seconds if active
+    // Poll queue status and AI scan status every 1.5 seconds
     const timer = setInterval(() => {
       fetchQueueStatus();
-      // Keep fetching list to see counts incrementing in real-time
+      fetchAiScanStatus();
       fetchReminders();
     }, 1500);
 
@@ -111,10 +135,10 @@ export default function RecurringReminders({ user }) {
     }
   }, [queueStatus.logs]);
 
-  // Run AI analysis
+  // Run AI analysis for up to 5,000 chats
   const handleAIAnalyze = async (chatIds = null) => {
     setAnalyzing(true);
-    if (window.notify) window.notify('info', 'Analyzing chats using Gemini AI... This may take a minute.');
+    if (window.notify) window.notify('info', 'Started AI Chat Analysis for up to 5,000 chats in background!');
     
     try {
       const res = await fetch(`${API_BASE_URL}/crm/reminders/analyze`, {
@@ -123,14 +147,14 @@ export default function RecurringReminders({ user }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('aura_token')}`
         },
-        body: JSON.stringify({ chatIds })
+        body: JSON.stringify({ chatIds, maxLimit: 5000 })
       });
       
       if (res.ok) {
-        await fetchReminders();
-        if (window.notify) window.notify('success', 'Chats analyzed and intents classified successfully!');
+        if (window.notify) window.notify('success', 'AI scan job started. You can track progress live on screen!');
       } else {
-        if (window.notify) window.notify('error', 'AI analysis failed.');
+        const err = await res.json();
+        if (window.notify) window.notify('error', err.error || 'AI analysis failed.');
       }
     } catch (err) {
       console.error(err);
@@ -138,6 +162,18 @@ export default function RecurringReminders({ user }) {
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleStopAiScan = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/crm/reminders/ai-scan-stop`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('aura_token')}`
+        }
+      });
+      if (window.notify) window.notify('info', 'Stopping AI chat scan...');
+    } catch (err) {}
   };
 
   // Save Settings
@@ -282,6 +318,34 @@ export default function RecurringReminders({ user }) {
           )}
         </button>
       </div>
+
+      {/* AI Scan Progress Banner */}
+      {aiScanStatus.active && (
+        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-lg border border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex-1 w-full">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">AI Scan Active (Scanning up to 5,000 Chats)</span>
+            </div>
+            <div className="flex justify-between items-center text-xs mb-2">
+              <span className="text-slate-300">Progress: <strong className="text-white">{aiScanStatus.processed} / {aiScanStatus.total}</strong> chats</span>
+              <span className="text-slate-400">{Math.round((aiScanStatus.processed / (aiScanStatus.total || 1)) * 100)}%</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-300" 
+                style={{ width: `${(aiScanStatus.processed / (aiScanStatus.total || 1)) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+          <button
+            onClick={handleStopAiScan}
+            className="btn btn-sm btn-danger text-xs px-4 py-2 border-none rounded-xl font-bold cursor-pointer shrink-0"
+          >
+            <i className="las la-stop-circle mr-1"></i> Stop Scan
+          </button>
+        </div>
+      )}
 
       {/* Analytics Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

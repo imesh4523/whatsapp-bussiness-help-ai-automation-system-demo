@@ -26,7 +26,7 @@ import { callGeminiAPI } from './gemini-client.js';
 import { callOpenRouterAPI, getAIProvider, getOpenRouterModel } from './openrouter-client.js';
 import { manuallyActivateKey } from './resend-rotator.js';
 import { getBackupConfig, runBackup, scheduleBackups } from './backup-manager.js';
-import { initRemindersTable, bulkQueue, analyzeChatsWithAI, runBulkReminderQueue } from './reminders-handler.js';
+import { initRemindersTable, bulkQueue, aiScanQueue, analyzeChatsWithAI, runBulkReminderQueue } from './reminders-handler.js';
 
 
 
@@ -1603,14 +1603,28 @@ app.get('/api/crm/reminders', authenticateToken, resolveWhatsAppSession, async (
 });
 
 app.post('/api/crm/reminders/analyze', authenticateToken, resolveWhatsAppSession, async (req, res) => {
-  const { chatIds } = req.body;
+  const { chatIds, maxLimit } = req.body;
   const sessionId = req.whatsappSessionId;
+  
+  if (aiScanQueue.active) {
+    return res.status(400).json({ error: 'AI Chat Analysis scan is already running.' });
+  }
+
   try {
-    await analyzeChatsWithAI(req.user.id, sessionId, chatIds);
-    res.json({ success: true, message: 'Chats analyzed successfully.' });
+    analyzeChatsWithAI(req.user.id, sessionId, chatIds, maxLimit || 5000);
+    res.json({ success: true, message: 'AI Chat Analysis started in background.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.get('/api/crm/reminders/ai-scan-status', authenticateToken, async (req, res) => {
+  res.json(aiScanQueue);
+});
+
+app.post('/api/crm/reminders/ai-scan-stop', authenticateToken, async (req, res) => {
+  aiScanQueue.active = false;
+  res.json({ success: true, message: 'AI Chat Analysis scan stopped.' });
 });
 
 app.post('/api/crm/reminders/send-bulk', authenticateToken, resolveWhatsAppSession, async (req, res) => {
