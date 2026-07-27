@@ -13,6 +13,7 @@ import db from './db.js';
 import { encrypt, decrypt } from './crypto.js';
 import { generateAIReply, callActiveAI } from './ai.js';
 import { callGeminiAPI } from './gemini-client.js';
+import { handleIncomingReminderMessage } from './reminders-handler.js';
 import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -471,6 +472,11 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
         'INSERT INTO messages (chat_id, text, sender) VALUES ($1, $2, $3)',
         [chatId, text, 'customer']
       );
+
+      // Save / Auto-cancel reminder if cancellation keyword is sent
+      handleIncomingReminderMessage(chatId, text, userId).catch(err => {
+        console.error('[REMINDER AUTO-CANCEL] Failed to handle incoming message:', err.message);
+      });
 
       // Async update customer shipping memory details from incoming message
       updateShippingMemoryOnTheFly(chatId, text).catch(err => {

@@ -26,6 +26,7 @@ import { callGeminiAPI } from './gemini-client.js';
 import { callOpenRouterAPI, getAIProvider, getOpenRouterModel } from './openrouter-client.js';
 import { manuallyActivateKey } from './resend-rotator.js';
 import { getBackupConfig, runBackup, scheduleBackups } from './backup-manager.js';
+import { initRemindersTable, bulkQueue, analyzeChatsWithAI, runBulkReminderQueue } from './reminders-handler.js';
 
 
 
@@ -1577,6 +1578,118 @@ app.get('/api/user/dashboard-stats', authenticateToken, async (req, res) => {
       campaign_success_rate,
       campaign_total
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CRM Reminders API Endpoints ───────────────────────────────────────────
+app.get('/api/crm/reminders', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  try {
+    const sessionId = req.whatsappSessionId;
+    const remindersRes = await db.query(
+      `SELECT c.id, c.sender_phone, c.sender_name, c.last_message, c.updated_at,
+              cr.status, cr.deferred_date, cr.reminder_count, cr.last_reminder_sent_at, cr.ai_analysis
+       FROM chats c
+       LEFT JOIN chat_reminders cr ON c.id = cr.chat_id
+       WHERE c.session_id = $1
+       ORDER BY c.updated_at DESC`,
+      [sessionId]
+    );
+    res.json(remindersRes.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/crm/reminders/analyze', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const { chatIds } = req.body;
+  const sessionId = req.whatsappSessionId;
+  try {
+    await analyzeChatsWithAI(req.user.id, sessionId, chatIds);
+    res.json({ success: true, message: 'Chats analyzed successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/crm/reminders/send-bulk', authenticateToken, resolveWhatsAppSession, async (req, res) => {
+  const { chatIds, messageStep, minDelay, maxDelay } = req.body;
+  const sessionId = req.whatsappSessionId;
+  
+  if (bulkQueue.active) {
+    return res.status(400).json({ error: 'Another bulk reminder job is already active.' });
+  }
+  if (!chatIds || chatIds.length === 0) {
+    return res.status(400).json({ error: 'No chats selected.' });
+  }
+
+  try {
+    runBulkReminderQueue(
+      req.user.id,
+      sessionId,
+      chatIds,
+      messageStep || 1,
+      minDelay || 5,
+      maxDelay || 15
+    );
+    res.json({ success: true, message: 'Bulk sending job queued successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/crm/reminders/queue-status', authenticateToken, async (req, res) => {
+  res.json(bulkQueue);
+});
+
+app.post('/api/crm/reminders/queue-stop', authenticateToken, async (req, res) => {
+  bulkQueue.active = false;
+  res.json({ success: true, message: 'Bulk sending queue stopped.' });
+});
+
+app.get('/api/crm/reminders/settings', authenticateToken, async (req, res) => {
+  try {
+    const r = await db.query(
+      "SELECT key, value FROM system_settings WHERE key IN ('reminder_msg_1', 'reminder_msg_2', 'reminder_msg_3', 'reminder_delay_min', 'reminder_delay_max')"
+    );
+    const settings = {
+      reminder_msg_1: "Hi {{ contactName }}, just checking if you'd like to proceed with your order? Let us know if you have any questions! 😊",
+      reminder_msg_2: "Hey {{ contactName }}, we have reserved your items but stocks are running low. Reply 'YES' to confirm your order and get free delivery! 🚚",
+      reminder_msg_3: "Hi {{ contactName }}, this is our final follow-up. If you still want the items, please let us know within today, otherwise we will cancel the order. Thank you! 🙏",
+      reminder_delay_min: "5",
+      reminder_delay_max: "15"
+    };
+    r.rows.forEach(row => {
+      settings[row.key] = row.value;
+    });
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/crm/reminders/settings', authenticateToken, async (req, res) => {
+  const { reminder_msg_1, reminder_msg_2, reminder_msg_3, reminder_delay_min, reminder_delay_max } = req.body;
+  try {
+    const entries = {
+      reminder_msg_1,
+      reminder_msg_2,
+      reminder_msg_3,
+      reminder_delay_min: String(reminder_delay_min || '5'),
+      reminder_delay_max: String(reminder_delay_max || '15')
+    };
+
+    for (const [key, val] of Object.entries(entries)) {
+      if (val !== undefined) {
+        await db.query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = $2`,
+          [key, val]
+        );
+      }
+    }
+    res.json({ success: true, message: 'Settings saved successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -5684,6 +5797,8 @@ app.listen(PORT, () => {
   processCampaignQueue();
   // Initialize automatic database backup scheduler
   scheduleBackups();
+  // Initialize CRM reminders table
+  initRemindersTable();
 });
 
 

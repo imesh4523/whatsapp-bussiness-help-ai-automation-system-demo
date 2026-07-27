@@ -9,6 +9,7 @@ import ManageTemplates from './ManageTemplates';
 import ManageSavedReplies from './ManageSavedReplies';
 import WelcomeMessage from './WelcomeMessage';
 import ExportNumbers from './ExportNumbers';
+import RecurringReminders from './RecurringReminders';
 
 
 
@@ -161,6 +162,7 @@ const getTabFromPath = (path) => {
     '/user/customer/create': 'customer_create',
     '/user/orders/list': 'orders_list',
     '/user/inventory': 'manage_inventory',
+    '/user/recurring-reminders': 'recurring_reminders',
     '/user/agent/list': 'agent_list',
     '/user/agent/create': 'agent_create',
     '/user/saved-reply/index': 'saved_reply_index',
@@ -219,6 +221,7 @@ const getPathFromTab = (tabKey) => {
     customer_create: '/user/customer/create',
     orders_list: '/user/orders/list',
     manage_inventory: '/user/inventory',
+    recurring_reminders: '/user/recurring-reminders',
     agent_list: '/user/agent/list',
     agent_create: '/user/agent/create',
     saved_reply_index: '/user/saved-reply/index',
@@ -5390,6 +5393,14 @@ function Dashboard({ user, setUser, onLogout }) {
                 </a>
               </li>
 
+              {/* Recurring Reminders */}
+              <li className={`sidebar-menu-list__item ${tab === 'recurring_reminders' ? 'active' : ''}`}>
+                <a href="/user/recurring-reminders" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('recurring_reminders'); setIsSidebarMobileOpen(false); }}>
+                  <span className="icon"><i className="las la-clock" /></span>
+                  <span className="text">Recurring Reminders</span>
+                </a>
+              </li>
+
               {/* Track Customer Orders */}
               <li className={`sidebar-menu-list__item ${tab === 'track_orders' ? 'active' : ''}`}>
                 <a href="/user/tracking" className="sidebar-menu-list__link" onClick={(e) => { e.preventDefault(); setTab('track_orders'); setIsSidebarMobileOpen(false); }}>
@@ -5979,6 +5990,8 @@ function Dashboard({ user, setUser, onLogout }) {
                 <WhatsAppAccountManager activeSessionId={activeSessionId} onSessionsUpdated={fetchSessions} user={user} />
               ) : tab === 'manage_inventory' ? (
                 <ManageInventory user={user} />
+              ) : tab === 'recurring_reminders' ? (
+                <RecurringReminders user={user} />
               ) : tab === 'inbox' ? (
                 <WhatsAppInbox activeSessionId={activeSessionId} />
               ) : tab === 'orders_list' ? (
