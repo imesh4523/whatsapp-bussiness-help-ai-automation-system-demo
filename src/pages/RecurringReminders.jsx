@@ -114,28 +114,37 @@ export default function RecurringReminders({ user }) {
     } catch (err) {}
   };
 
+  const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
+
   useEffect(() => {
     fetchReminders();
     fetchSettings();
 
-    // Poll queue status and AI scan status every 1.5 seconds
+    // Poll queue status & AI scan status (2s when active, 5s when idle to prevent unnecessary re-renders)
     const timer = setInterval(() => {
       fetchQueueStatus();
       fetchAiScanStatus();
       fetchReminders();
-    }, 1500);
+    }, queueStatus.active || aiScanStatus.active ? 2000 : 5000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [queueStatus.active, aiScanStatus.active]);
 
   const logContainerRef = useRef(null);
 
-  // Scroll log container internally to bottom (Fixes page jumping/auto-scrolling bug)
+  const handleLogScroll = () => {
+    if (!logContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 40;
+    setUserHasScrolledUp(!isAtBottom);
+  };
+
+  // Only scroll log container internally if queue is active AND user has NOT scrolled up
   useEffect(() => {
-    if (logContainerRef.current) {
+    if (logContainerRef.current && queueStatus.active && !userHasScrolledUp) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-  }, [queueStatus.logs]);
+  }, [queueStatus.logs, queueStatus.active, userHasScrolledUp]);
 
   // Pause Bulk Queue
   const handlePauseQueue = async () => {
@@ -574,6 +583,7 @@ export default function RecurringReminders({ user }) {
             {/* Log Output Display Console */}
             <div 
               ref={logContainerRef}
+              onScroll={handleLogScroll}
               style={{
                 height: '190px',
                 overflowY: 'auto',
