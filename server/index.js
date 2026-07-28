@@ -853,10 +853,13 @@ app.delete('/api/orders/:id', authenticateToken, async (req, res) => {
 async function resolveWhatsAppSession(req, res, next) {
   let sessionId = req.headers['x-session-id'] || req.query.sessionId || req.body.sessionId;
   
-  if (!sessionId) {
+  if (!sessionId || sessionId === 'null' || sessionId === 'undefined') {
     try {
       const dbRes = await db.query(
-        'SELECT id FROM whatsapp_sessions WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1',
+        `SELECT id FROM whatsapp_sessions 
+         WHERE user_id = $1 
+         ORDER BY CASE WHEN status = 'Connected' THEN 1 ELSE 2 END, updated_at DESC 
+         LIMIT 1`,
         [req.user.id]
       );
       if (dbRes.rows.length > 0) {
@@ -874,7 +877,18 @@ async function resolveWhatsAppSession(req, res, next) {
         [sessionId, req.user.id]
       );
       if (check.rows.length === 0 && sessionId !== `user_${req.user.id}`) {
-        return res.status(403).json({ error: 'Access denied: Session not found or does not belong to you' });
+        const fallbackRes = await db.query(
+          `SELECT id FROM whatsapp_sessions 
+           WHERE user_id = $1 
+           ORDER BY CASE WHEN status = 'Connected' THEN 1 ELSE 2 END, updated_at DESC 
+           LIMIT 1`,
+          [req.user.id]
+        );
+        if (fallbackRes.rows.length > 0) {
+          sessionId = fallbackRes.rows[0].id;
+        } else {
+          sessionId = `user_${req.user.id}`;
+        }
       }
     } catch (err) {
       return res.status(500).json({ error: 'Database error validating session ID' });
@@ -1191,13 +1205,17 @@ app.get('/api/whatsapp/chats', authenticateToken, resolveWhatsAppSession, async 
   const sessionId = req.whatsappSessionId;
   try {
     const chatsRes = await db.query(
-      `SELECT * FROM chats 
-       WHERE session_id = $1 
-         AND LENGTH(sender_phone) <= 15
-       ORDER BY updated_at DESC`, 
-      [sessionId]
+      `SELECT DISTINCT ON (c.id) c.* 
+       FROM chats c
+       LEFT JOIN whatsapp_sessions ws ON c.session_id = ws.id
+       WHERE c.session_id = $1 
+          OR ws.user_id = $2 
+          OR c.session_id = $3
+       ORDER BY c.id, c.updated_at DESC`, 
+      [sessionId, req.user.id, `user_${req.user.id}`]
     );
-    res.json(chatsRes.rows);
+    const sorted = chatsRes.rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    res.json(sorted);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
