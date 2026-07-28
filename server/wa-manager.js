@@ -444,12 +444,13 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       const senderName = chat.name || chat.notify || 'WhatsApp Contact';
       const chatId = `${sessionId}_${senderPhone}`;
       await db.query(
-        `INSERT INTO chats (id, session_id, sender_phone, sender_name, unread_count, updated_at, remote_jid)
-         VALUES ($1, $2, $3, $4, COALESCE($5, 0), CURRENT_TIMESTAMP, $6)
+        `INSERT INTO chats (id, session_id, user_id, sender_phone, sender_name, unread_count, updated_at, remote_jid)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0), CURRENT_TIMESTAMP, $7)
          ON CONFLICT (id) DO UPDATE SET
+           user_id = COALESCE(EXCLUDED.user_id, chats.user_id),
            sender_name = COALESCE(EXCLUDED.sender_name, chats.sender_name),
            updated_at = CURRENT_TIMESTAMP`,
-        [chatId, sessionId, senderPhone, senderName, chat.unreadCount || 0, chat.id]
+        [chatId, sessionId, userId, senderPhone, senderName, chat.unreadCount || 0, chat.id]
       );
     }
   });
@@ -499,10 +500,10 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
         console.log(`Outbound message sent from linked mobile phone on session ${sessionId} to ${senderPhone}: ${text}`);
         
         await db.query(
-          `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
-           VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, $6)
-           ON CONFLICT (id) DO UPDATE SET last_message = $5, updated_at = CURRENT_TIMESTAMP`,
-          [chatId, sessionId, senderPhone, senderName, text, msg.key.remoteJid]
+          `INSERT INTO chats (id, session_id, user_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
+           VALUES ($1, $2, $3, $4, $5, $6, 0, CURRENT_TIMESTAMP, $7)
+           ON CONFLICT (id) DO UPDATE SET user_id = COALESCE(EXCLUDED.user_id, chats.user_id), last_message = $6, updated_at = CURRENT_TIMESTAMP`,
+          [chatId, sessionId, userId, senderPhone, senderName, text, msg.key.remoteJid]
         );
 
         await db.query(
@@ -519,12 +520,13 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
       if (isHistoryBatch) {
         // Log historical message to DB without incrementing unread count or triggering AI
         await db.query(
-          `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
-           VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, $6)
+          `INSERT INTO chats (id, session_id, user_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
+           VALUES ($1, $2, $3, $4, $5, $6, 0, CURRENT_TIMESTAMP, $7)
            ON CONFLICT (id) DO UPDATE SET 
+             user_id = COALESCE(EXCLUDED.user_id, chats.user_id),
              last_message = EXCLUDED.last_message, 
              updated_at = GREATEST(chats.updated_at, EXCLUDED.updated_at)`,
-          [chatId, sessionId, senderPhone, senderName, text, msg.key.remoteJid]
+          [chatId, sessionId, userId, senderPhone, senderName, text, msg.key.remoteJid]
         );
 
         await db.query(
@@ -558,16 +560,17 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
 
       // Log/Create Chat Session in DB
       await db.query(
-        `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, profile_pic_url, remote_jid, ephemeral_expiration)
-         VALUES ($1, $2, $3, $4, $5, 1, CURRENT_TIMESTAMP, $6, $7, COALESCE($8, 0))
+        `INSERT INTO chats (id, session_id, user_id, sender_phone, sender_name, last_message, unread_count, updated_at, profile_pic_url, remote_jid, ephemeral_expiration)
+         VALUES ($1, $2, $3, $4, $5, $6, 1, CURRENT_TIMESTAMP, $7, $8, COALESCE($9, 0))
          ON CONFLICT (id) DO UPDATE 
-           SET last_message = $5, 
+           SET user_id = COALESCE(EXCLUDED.user_id, chats.user_id),
+               last_message = $6, 
                unread_count = chats.unread_count + 1, 
                updated_at = CURRENT_TIMESTAMP,
                sender_name = COALESCE(EXCLUDED.sender_name, chats.sender_name),
-               profile_pic_url = COALESCE($6, chats.profile_pic_url),
-               ephemeral_expiration = COALESCE($8, chats.ephemeral_expiration)`,
-        [chatId, sessionId, senderPhone, senderName, text, profilePicUrl, msg.key.remoteJid, ephemeralExpiration]
+               profile_pic_url = COALESCE($7, chats.profile_pic_url),
+               ephemeral_expiration = COALESCE($9, chats.ephemeral_expiration)`,
+        [chatId, sessionId, userId, senderPhone, senderName, text, profilePicUrl, msg.key.remoteJid, ephemeralExpiration]
       );
 
 

@@ -1210,20 +1210,28 @@ app.get('/api/whatsapp/chats', authenticateToken, resolveWhatsAppSession, async 
   const sessionId = req.whatsappSessionId;
   const userId = req.user.id;
   try {
+    // Get all session IDs and phone numbers belonging to this user
+    const userSessionsRes = await db.query(
+      'SELECT id, phone FROM whatsapp_sessions WHERE user_id = $1',
+      [userId]
+    );
+    const sessionIds = userSessionsRes.rows.map(s => s.id).filter(Boolean);
+    const phones = userSessionsRes.rows.map(s => s.phone).filter(Boolean);
+
     const chatsRes = await db.query(
       `SELECT c.id, c.session_id, c.sender_phone, c.sender_name, c.last_message, 
               COALESCE(c.label, cr.status, 'New') as label, c.unread_count, c.updated_at, c.profile_pic_url, c.remote_jid, c.ephemeral_expiration
        FROM chats c
-       LEFT JOIN whatsapp_sessions ws ON c.session_id = ws.id
+       LEFT JOIN whatsapp_sessions ws ON (c.session_id = ws.id OR c.session_id = ws.phone)
        LEFT JOIN chat_reminders cr ON c.id = cr.chat_id
-       WHERE c.user_id = $2
-          OR c.session_id = $1 
-          OR ws.user_id = $2 
-          OR c.session_id = $3
+       WHERE c.user_id = $1
+          OR ws.user_id = $1
+          OR c.session_id = ANY($2::text[])
+          OR c.session_id = ANY($3::text[])
           OR c.session_id LIKE $4
           OR c.session_id LIKE $5
        ORDER BY c.updated_at DESC`, 
-      [sessionId, userId, `user_${userId}`, `session_${userId}_%`, `%_${userId}`]
+      [userId, sessionIds.length > 0 ? sessionIds : [sessionId], phones.length > 0 ? phones : ['none'], `session_${userId}_%`, `%_${userId}`]
     );
 
     // Deduplicate by chat ID using JS Map
