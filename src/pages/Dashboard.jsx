@@ -1564,35 +1564,40 @@ function WhatsAppInbox({ activeSessionId }) {
     let active = true;
     const fetchChats = async () => {
       try {
-        // First check connection
+        // Fetch chats from database unconditionally so saved conversations are always visible
+        const chatsRes = await fetch(`${API_BASE_URL}/whatsapp/chats`, {
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
+            'x-session-id': activeSessionId
+          }
+        });
+        
+        let chatsData = [];
+        if (chatsRes.ok) {
+          chatsData = await chatsRes.json();
+          if (active) setChats(chatsData);
+        }
+
+        // Check live connection status
         const statusRes = await fetch(`${API_BASE_URL}/whatsapp/status`, {
           headers: { 
             'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
             'x-session-id': activeSessionId
           }
         });
-        if (!statusRes.ok) return;
-        const statusData = await statusRes.json();
-        if (!active) return;
-        
-        setIsConnected(statusData.status === 'Connected');
-
-        if (statusData.status === 'Connected') {
-          const chatsRes = await fetch(`${API_BASE_URL}/whatsapp/chats`, {
-            headers: { 
-              'Authorization': `Bearer ${localStorage.getItem('aura_token')}`,
-              'x-session-id': activeSessionId
-            }
-          });
-          if (chatsRes.ok) {
-            const chatsData = await chatsRes.json();
-            setChats(chatsData);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (active) {
+            // Treat inbox as connected if live socket is Connected OR if user has existing chats
+            setIsConnected(statusData.status === 'Connected' || chatsData.length > 0);
           }
+        } else if (chatsData.length > 0 && active) {
+          setIsConnected(true);
         }
       } catch (err) {
         console.warn('Inbox fetch failed:', err.message);
       } finally {
-        setLoadingChats(false);
+        if (active) setLoadingChats(false);
       }
     };
 

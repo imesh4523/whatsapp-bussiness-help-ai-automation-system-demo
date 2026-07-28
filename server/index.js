@@ -1207,9 +1207,10 @@ app.get('/api/whatsapp/chats', authenticateToken, resolveWhatsAppSession, async 
   try {
     const chatsRes = await db.query(
       `SELECT c.id, c.session_id, c.sender_phone, c.sender_name, c.last_message, 
-              c.label, c.unread_count, c.updated_at, c.profile_pic_url, c.remote_jid, c.ephemeral_expiration
+              COALESCE(c.label, cr.status, 'New') as label, c.unread_count, c.updated_at, c.profile_pic_url, c.remote_jid, c.ephemeral_expiration
        FROM chats c
        LEFT JOIN whatsapp_sessions ws ON c.session_id = ws.id
+       LEFT JOIN chat_reminders cr ON c.id = cr.chat_id
        WHERE c.session_id = $1 
           OR ws.user_id = $2 
           OR c.session_id = $3
