@@ -1203,20 +1203,34 @@ app.post('/api/whatsapp/simulate', authenticateToken, resolveWhatsAppSession, as
 // ── Active Chats & Message history ───────────────────────────────────────────
 app.get('/api/whatsapp/chats', authenticateToken, resolveWhatsAppSession, async (req, res) => {
   const sessionId = req.whatsappSessionId;
+  const userId = req.user.id;
   try {
     const chatsRes = await db.query(
-      `SELECT DISTINCT ON (c.id) c.* 
+      `SELECT c.id, c.session_id, c.sender_phone, c.sender_name, c.last_message, 
+              c.label, c.unread_count, c.updated_at, c.profile_pic_url, c.remote_jid, c.ephemeral_expiration
        FROM chats c
        LEFT JOIN whatsapp_sessions ws ON c.session_id = ws.id
        WHERE c.session_id = $1 
           OR ws.user_id = $2 
           OR c.session_id = $3
-       ORDER BY c.id, c.updated_at DESC`, 
-      [sessionId, req.user.id, `user_${req.user.id}`]
+          OR c.session_id LIKE $4
+          OR c.session_id LIKE $5
+       ORDER BY c.updated_at DESC`, 
+      [sessionId, userId, `user_${userId}`, `session_${userId}_%`, `%_${userId}`]
     );
-    const sorted = chatsRes.rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-    res.json(sorted);
+
+    // Deduplicate by chat ID using JS Map
+    const map = new Map();
+    for (const chat of chatsRes.rows) {
+      if (!map.has(chat.id)) {
+        map.set(chat.id, chat);
+      }
+    }
+    const uniqueChats = Array.from(map.values()).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+
+    res.json(uniqueChats);
   } catch (err) {
+    console.error('Fetch chats error:', err);
     res.status(500).json({ error: err.message });
   }
 });
