@@ -74,6 +74,11 @@ db.query(`
     SET body = 'Hello {{fullName}},\n\nYou requested a password reset. To confirm it''s you, please use the button below to reset your password.\n\nIf you did not request this, please ignore this email.\n\nBest Regards,\nAgentBunny Team'
     WHERE key = 'reset_password' AND body LIKE '%following link%';
   `).catch(err => console.warn('Reset template DB migration check failed:', err.message));
+
+  db.query(`
+    ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT NULL;
+    UPDATE chats c SET user_id = ws.user_id FROM whatsapp_sessions ws WHERE c.session_id = ws.id AND c.user_id IS NULL;
+  `).catch(err => console.warn('Chats user_id migration check failed:', err.message));
 }).catch(err => {
   console.warn('Optional migrations check warning:', err.message);
 });
@@ -1211,7 +1216,8 @@ app.get('/api/whatsapp/chats', authenticateToken, resolveWhatsAppSession, async 
        FROM chats c
        LEFT JOIN whatsapp_sessions ws ON c.session_id = ws.id
        LEFT JOIN chat_reminders cr ON c.id = cr.chat_id
-       WHERE c.session_id = $1 
+       WHERE c.user_id = $2
+          OR c.session_id = $1 
           OR ws.user_id = $2 
           OR c.session_id = $3
           OR c.session_id LIKE $4

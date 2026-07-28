@@ -383,12 +383,13 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
           const chatId = `${sessionId}_${senderPhone}`;
 
           await db.query(
-            `INSERT INTO chats (id, session_id, sender_phone, sender_name, unread_count, updated_at, remote_jid)
-             VALUES ($1, $2, $3, $4, COALESCE($5, 0), CURRENT_TIMESTAMP, $6)
+            `INSERT INTO chats (id, session_id, user_id, sender_phone, sender_name, unread_count, updated_at, remote_jid)
+             VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0), CURRENT_TIMESTAMP, $7)
              ON CONFLICT (id) DO UPDATE SET
+               user_id = COALESCE(EXCLUDED.user_id, chats.user_id),
                sender_name = COALESCE(EXCLUDED.sender_name, chats.sender_name),
                updated_at = CURRENT_TIMESTAMP`,
-            [chatId, sessionId, senderPhone, senderName, chat.unreadCount || 0, chat.id]
+            [chatId, sessionId, userId, senderPhone, senderName, chat.unreadCount || 0, chat.id]
           );
         }
       }
@@ -412,10 +413,10 @@ export async function startWhatsAppSocket(sessionId, userId, pairingPhone = null
           const msgTime = tsNum > 0 ? new Date(tsNum * 1000) : new Date();
 
           await db.query(
-            `INSERT INTO chats (id, session_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
-             VALUES ($1, $2, $3, 'WhatsApp Contact', $4, 0, $5, $6)
-             ON CONFLICT (id) DO NOTHING`,
-            [chatId, sessionId, senderPhone, text, msgTime, remoteJid]
+            `INSERT INTO chats (id, session_id, user_id, sender_phone, sender_name, last_message, unread_count, updated_at, remote_jid)
+             VALUES ($1, $2, $3, $4, 'WhatsApp Contact', $5, 0, $6, $7)
+             ON CONFLICT (id) DO UPDATE SET user_id = COALESCE(EXCLUDED.user_id, chats.user_id)`,
+            [chatId, sessionId, userId, senderPhone, text, msgTime, remoteJid]
           );
 
           await db.query(

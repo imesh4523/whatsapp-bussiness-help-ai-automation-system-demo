@@ -21,6 +21,12 @@ async function init() {
     await db.query(`
       ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS api_key TEXT DEFAULT NULL;
       ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS session_name VARCHAR(255) DEFAULT 'WhatsApp Account';
+      ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT NULL;
+
+      UPDATE chats c
+      SET user_id = ws.user_id
+      FROM whatsapp_sessions ws
+      WHERE c.session_id = ws.id AND c.user_id IS NULL;
       
       CREATE TABLE IF NOT EXISTS system_settings (
         key VARCHAR(255) PRIMARY KEY,
